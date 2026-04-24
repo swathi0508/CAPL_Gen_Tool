@@ -1,8 +1,9 @@
 from logger import log
 
+
 class SignalValidator:
     """Quality gate for parsed signals."""
-    
+
     @staticmethod
     def validate_signal(signal_data: dict) -> bool:
         """Ensures signal has required fields (e.g., length, data type)."""

@@ -1,6 +1,8 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox
+
 from core.logger import log
+
 
 class CaplGenGUI:
     def __init__(self, root):
@@ -9,7 +11,7 @@ class CaplGenGUI:
         self.root.geometry("400x200")
 
         tk.Label(root, text="CAPL Generator", font=("Arial", 16)).pack(pady=10)
-        
+
         self.btn_run = tk.Button(root, text="Select Excel & Generate", command=self.run_generation)
         self.btn_run.pack(pady=20)
 
@@ -22,5 +24,5 @@ class CaplGenGUI:
 
 def launch_gui():
     root = tk.Tk()
-    app = CaplGenGUI(root)
+    CaplGenGUI(root)
     root.mainloop()

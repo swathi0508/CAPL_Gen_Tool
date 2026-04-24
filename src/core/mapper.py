@@ -1,5 +1,7 @@
 import pandas as pd
+
 from capl_gen.core.logger import log
+
 
 class ExcelMapper:
     """Reads Excel requirements and maps them to internal dictionaries/objects."""

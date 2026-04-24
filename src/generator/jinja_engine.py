@@ -1,7 +1,10 @@
 import sys
 from pathlib import Path
+
 from jinja2 import Environment, FileSystemLoader
+
 from core.logger import log
+
 
 class JinjaEngine:
     def __init__(self):
@@ -12,9 +15,9 @@ class JinjaEngine:
         else:
             # Running as a normal Python script
             base_dir = Path(__file__).resolve().parent.parent
-            
+
         self.template_dir = base_dir / "templates"
-        
+
         if not self.template_dir.exists():
             log.error(f"Template directory missing at: {self.template_dir}")
             raise FileNotFoundError(f"Missing templates folder at {self.template_dir}")
