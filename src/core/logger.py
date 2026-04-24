@@ -2,6 +2,7 @@ import logging
 import sys
 from pathlib import Path
 
+
 def setup_logger(log_file: str = "capl_gen.log") -> logging.Logger:
     """Configures console and file logging."""
     logger = logging.getLogger("CAPL_Gen")
@@ -13,7 +14,7 @@ def setup_logger(log_file: str = "capl_gen.log") -> logging.Logger:
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.INFO)
     ch.setFormatter(formatter)
-    
+
     # File Handler
     fh = logging.FileHandler(Path(log_file), mode="w", encoding="utf-8")
     fh.setLevel(logging.DEBUG)
