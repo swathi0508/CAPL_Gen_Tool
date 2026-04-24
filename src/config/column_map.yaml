@@ -1,0 +1,122 @@
+# Maps Excel column headers → internal RequirementRow field names.
+#
+# How it works
+# ------------
+# The left side is the EXACT column header string in the Excel sheet
+# (case-insensitive matching is applied at runtime).
+# The right side is the canonical field name in RequirementRow.
+#
+# Why a YAML file and not hardcoded?
+# -----------------------------------
+# Different teams / customers name their columns differently.
+# ("Signal" vs "Signal Name" vs "SIG_NAME").
+# This file is the only thing that changes when onboarding a new project —
+# the rest of the tool stays untouched.
+#
+# Adding a new alias
+# ------------------
+# If a project uses "Req ID" instead of "Requirement ID", add:
+#   Req ID: requirement_id
+#
+# Aliases (multiple headers → same field)
+# ----------------------------------------
+# List multiple keys pointing to the same value to support legacy sheets.
+
+column_mappings:
+  # --- Identity ---
+  "Requirement ID":       requirement_id
+  "Req ID":               requirement_id
+  "REQ_ID":               requirement_id
+  "ID":                   requirement_id
+
+  "Description":          description
+  "Test Description":     description
+  "Requirement Text":     description
+
+  "Status":               status
+  "Active":               status
+
+  # --- Signal source ---
+  "Bus Type":             bus_type
+  "Protocol":             bus_type
+  "Network Type":         bus_type
+
+  "Signal Name":          signal_name
+  "Signal":               signal_name
+  "SIG_NAME":             signal_name
+
+  "Message Name":         message_name
+  "Message":              message_name
+  "Frame":                message_name
+
+  "Source File":          source_file
+  "DBC File":             source_file
+  "ARXML File":           source_file
+  "Signal DB":            source_file
+  "File Path":            source_file
+
+  # --- CAPL generation ---
+  "Template":             template_name
+  "Template Name":        template_name
+  "CAPL Template":        template_name
+
+  "Output File":          output_file
+  "Output":               output_file
+  "Generated File":       output_file
+
+  # --- CAN-specific ---
+  "Expected Min":         expected_min
+  "Min Value":            expected_min
+  "Min":                  expected_min
+
+  "Expected Max":         expected_max
+  "Max Value":            expected_max
+  "Max":                  expected_max
+
+  "Expected Mid":         expected_mid
+  "Mid Value":            expected_mid
+  "Mid":                  expected_mid
+
+  "Timeout (ms)":         timeout_ms
+  "Timeout":              timeout_ms
+  "Reception Timeout":    timeout_ms
+
+  "Cycle Time (ms)":      cycle_time_ms
+  "Cycle Time":           cycle_time_ms
+  "Period (ms)":          cycle_time_ms
+
+  # --- SOME/IP-specific ---
+  "Event ID":             event_id
+  "Method ID":            event_id
+
+  "Service Version Major": service_version_major
+  "Major Version":        service_version_major
+
+  "Service Version Minor": service_version_minor
+  "Minor Version":        service_version_minor
+
+  # --- Metadata ---
+  "Author":               author
+  "Owner":                author
+  "Created By":           author
+
+  "Tags":                 tags
+  "Labels":               tags
+  "Category":             tags
+
+
+# Columns in this list are silently ignored during mapping.
+# Useful for "helper" columns in the sheet (comments, formatting columns etc.)
+ignored_columns:
+  - "Notes"
+  - "Comments"
+  - "Review Notes"
+  - "TODO"
+  - "#"
+  - ""
+
+
+# If true, any column in the sheet that has NO mapping entry and is NOT
+# in ignored_columns will raise an IngestionError.
+# Set to false to silently skip unknown columns (more lenient).
+strict_unknown_columns: false
