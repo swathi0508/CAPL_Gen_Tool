@@ -8,14 +8,13 @@ from core.logger import log
 
 
 class SomeIPEventParser(BaseParser):
-    """Parses SOME/IP ARXML files to extract signals and Enums, supporting both Dict and DataFrame outputs."""
+    """Parses SOME/IP ARXML files to extract signals, Enums, and Physical Value ranges (Min/Mid/Max)."""
 
     def __init__(self, file_path: str):
         super().__init__(file_path)
         self._parsed_data: Dict[str, Any] = {}
     
     def parse(self) -> Dict[str, Any]:
-        """Parses the ARXML and returns a standard dictionary (satisfies BaseParser contract)."""
         log.info(f"Parsing ETH ARXML: {self.file_path}")
         
         try:
@@ -25,18 +24,27 @@ class SomeIPEventParser(BaseParser):
             log.error(f"Failed to parse ARXML file {self.file_path}: {e}")
             return {}
 
+        # 1. Pre-process Dictionaries
         compu_methods = self._extract_compu_methods(root)
         app_to_compu = self._extract_app_to_compu(root)
 
-        def get_enum_string(app_type_name: str) -> str:
+        def get_compu_data(app_type_name: str) -> Dict[str, Any]:
             compu_name = app_to_compu.get(app_type_name)
-            enum_dict = compu_methods.get(compu_name, {})
-            if not enum_dict:
-                return "No Enums"
-            return " | ".join([f"{k}: {v}" for k, v in enum_dict.items()])
+            # Default empty structure if no CompuMethod is found
+            return compu_methods.get(compu_name, {
+                "enums": {}, "has_enums": False, 
+                "min": None, "max": None, "mid": None
+            })
+
+        def format_val(v):
+            """Helper to format numbers cleanly (e.g., 5.0 -> 5)"""
+            if v is None:
+                return "N/A"
+            return int(v) if float(v).is_integer() else round(v, 4)
 
         self._parsed_data = {}
 
+        # 2. Main Mapping Loop
         for dtms in root.xpath("//*[local-name()='DATA-TYPE-MAPPING-SET']"):
             short_name_elem = dtms.xpath("*[local-name()='SHORT-NAME']")
             if not short_name_elem:
@@ -69,23 +77,38 @@ class SomeIPEventParser(BaseParser):
             
             for clean_method, raw_app_name in valid_methods:
                 
-                # 1. Base Signal
-                base_enums = get_enum_string(raw_app_name)
+                # Retrieve CompuMethod details
+                c_data = get_compu_data(raw_app_name)
+                
+                # Determine state string
+                if c_data["has_enums"]:
+                    states_str = " | ".join([f"{k}: {v}" for k, v in c_data["enums"].items()])
+                elif c_data["min"] is not None:
+                    states_str = "Physical Value" # Used to be "No Enums"
+                else:
+                    states_str = "No Data"
+
                 base_sig_str = f'"EthernetCluster::sif_{sif}::{someip_event}::{clean_method}"'
                 
+                # Add to Dictionary
                 self._parsed_data[base_sig_str] = {
                     "Cluster": "EthernetCluster",
                     "SIF": sif,
                     "Event": someip_event,
                     "Method": clean_method,
-                    "Available_States": base_enums
+                    "Available_States": states_str,
+                    "Min": format_val(c_data["min"]),
+                    "Mid": format_val(c_data["mid"]),
+                    "Max": format_val(c_data["max"])
                 }
                 
-                # 2. Expanded ValueState Signal
+                # Expanded ValueState Signal
                 if valuestate_app_name:
                     vs_event = someip_event[:-1] if someip_event.endswith('s') else someip_event
                     vs_method = f"{clean_method}ValueState"
-                    vs_enums = get_enum_string(valuestate_app_name)
+                    
+                    vs_c_data = get_compu_data(valuestate_app_name)
+                    vs_states = " | ".join([f"{k}: {v}" for k, v in vs_c_data["enums"].items()]) if vs_c_data["has_enums"] else "Physical Value"
                     vs_sig_str = f'"EthernetCluster::sif_{sif}::{vs_event}::{vs_method}"'
                     
                     self._parsed_data[vs_sig_str] = {
@@ -93,7 +116,10 @@ class SomeIPEventParser(BaseParser):
                         "SIF": sif,
                         "Event": vs_event,
                         "Method": vs_method,
-                        "Available_States": vs_enums
+                        "Available_States": vs_states,
+                        "Min": format_val(vs_c_data["min"]),
+                        "Mid": format_val(vs_c_data["mid"]),
+                        "Max": format_val(vs_c_data["max"])
                     }
 
         log.info(f"Successfully extracted {len(self._parsed_data)} signals.")
@@ -101,30 +127,25 @@ class SomeIPEventParser(BaseParser):
 
     def to_dataframe(self) -> pd.DataFrame:
         """Converts the parsed dictionary into a structured Pandas DataFrame."""
-        # Ensure data is parsed before attempting to convert
         if not self._parsed_data:
             self.parse()
-            
-        # If still empty (e.g., parsing failed), return empty DataFrame
         if not self._parsed_data:
             return pd.DataFrame()
 
-        # Build list of rows for the DataFrame, injecting the dictionary Key as a column
         df_rows = []
         for signal_string, properties in self._parsed_data.items():
             row = {"Signal_String": signal_string}
-            row.update(properties) # Merges Cluster, SIF, Event, Method, Available_States
+            row.update(properties)
             df_rows.append(row)
             
         df = pd.DataFrame(df_rows)
-        
-        # Sort values logically for readability/Jinja output
         df = df.sort_values(by=['SIF', 'Event', 'Method']).reset_index(drop=True)
         return df
 
     # --- Private Helper Methods ---
 
-    def _extract_compu_methods(self, root) -> Dict[str, Dict[str, str]]:
+    def _extract_compu_methods(self, root) -> Dict[str, Dict]:
+        """Finds COMPU-METHODS, tracking Enums and numerical Min/Mid/Max boundaries."""
         compu_methods = {}
         for cm in root.xpath("//*[local-name()='COMPU-METHOD']"):
             cm_name_elem = cm.xpath("*[local-name()='SHORT-NAME']")
@@ -133,15 +154,48 @@ class SomeIPEventParser(BaseParser):
             cm_name = cm_name_elem[0].text.strip()
             
             enums = {}
+            min_val = float('inf')
+            max_val = float('-inf')
+            
             for scale in cm.xpath(".//*[local-name()='COMPU-SCALE']"):
-                lower_limit = scale.xpath("*[local-name()='LOWER-LIMIT']")
-                vt = scale.xpath(".//*[local-name()='VT']")
+                ll_node = scale.xpath("*[local-name()='LOWER-LIMIT']")
+                ul_node = scale.xpath("*[local-name()='UPPER-LIMIT']")
+                vt_node = scale.xpath(".//*[local-name()='VT']")
                 
-                if lower_limit and vt and lower_limit[0].text and vt[0].text:
-                    enums[lower_limit[0].text.strip()] = vt[0].text.strip()
-                    
-            if enums:
-                compu_methods[cm_name] = enums
+                ll_text = ll_node[0].text.strip() if ll_node and ll_node[0].text else None
+                # If there is no UPPER-LIMIT, it's usually a single enum mapping, so Max = Min
+                ul_text = ul_node[0].text.strip() if ul_node and ul_node[0].text else ll_text
+                
+                # Check for numerical Min
+                if ll_text is not None:
+                    try:
+                        ll_f = float(ll_text)
+                        if ll_f < min_val: min_val = ll_f
+                    except ValueError:
+                        pass
+                
+                # Check for numerical Max
+                if ul_text is not None:
+                    try:
+                        ul_f = float(ul_text)
+                        if ul_f > max_val: max_val = ul_f
+                    except ValueError:
+                        pass
+                
+                # Check for Enums
+                if ll_text is not None and vt_node and vt_node[0].text:
+                    enums[ll_text] = vt_node[0].text.strip()
+            
+            has_limits = min_val != float('inf') and max_val != float('-inf')
+            
+            compu_methods[cm_name] = {
+                "enums": enums,
+                "has_enums": len(enums) > 0,
+                "min": min_val if has_limits else None,
+                "max": max_val if has_limits else None,
+                "mid": (min_val + max_val) / 2 if has_limits else None
+            }
+            
         return compu_methods
 
     def _extract_app_to_compu(self, root) -> Dict[str, str]:
