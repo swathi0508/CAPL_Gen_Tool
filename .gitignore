@@ -23,6 +23,7 @@ dist/
 *.dbc
 *.arxml
 *.log
+*.csv
 
 # IDE
 .vscode/
