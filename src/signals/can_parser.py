@@ -4,7 +4,7 @@ from typing import Any, Dict, Tuple, List
 from lxml import etree as ET
 from collections import defaultdict
 
-from base_parser import BaseParser
+from signals.base_parser import BaseParser
 from core.logger import log
 
 class CANSignalParser(BaseParser):
