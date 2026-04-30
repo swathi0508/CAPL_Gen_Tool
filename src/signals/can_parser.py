@@ -1,32 +1,21 @@
-import lxml.etree as ET
-from collections import defaultdict
+import os
 import pandas as pd
-import json
-import time
-import sys
-import logging
-from pathlib import Path
+from typing import Any, Dict, Tuple, List
+from lxml import etree as ET
+from collections import defaultdict
 
-# --- LOGGING SETUP ---
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    datefmt='%H:%M:%S'
-)
-logger = logging.getLogger("CAN_Parser")
+from base_parser import BaseParser
+from core.logger import log
 
-def format_time(seconds):
-    """Converts seconds into HH:MM:SS format."""
-    hours = int(seconds // 3600)
-    minutes = int((seconds % 3600) // 60)
-    seconds = int(seconds % 60)
-    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+class CANSignalParser(BaseParser):
+    """Parses CAN ARXML files to extract I-Signals, PDUs, Scaling, and TX/RX nodes."""
 
-class CAN_Parser:
-    def __init__(self, arxml_path: str):
-        self.arxml_path = Path(arxml_path)
-        self.root = None
-        self.ns = {}
+    def __init__(self, file_path: str):
+        super().__init__(file_path)
+        self._parsed_data: Dict[str, Any] = {}
+        self.ns: Dict[str, str] = {}
+        
+        # Internal Parsing Caches
         self.compu_map = {}
         self.sig_attr_data = {}
         self.sig_to_pdu = {}
@@ -35,19 +24,86 @@ class CAN_Parser:
         self.cluster_cache = []
         self.pdu_group_data = []
 
-    def load_and_index(self):
+    def parse(self) -> Dict[str, Any]:
+        """Parses the ARXML and returns a standard dictionary."""
+        log.info(f"Parsing CAN ARXML: {self.file_path}")
+        
+        if not os.path.exists(self.file_path):
+            log.error(f"Error: File '{self.file_path}' not found.")
+            return {}
+
         try:
             parser = ET.XMLParser(huge_tree=True, encoding='utf-8')
-            tree = ET.parse(str(self.arxml_path), parser)
-            self.root = tree.getroot()
-            self.ns = {'as': self.root.tag.split('}')[0].strip('{')}
-            logger.info(f"Loaded ARXML: {self.arxml_path.name}")
+            tree = ET.parse(self.file_path, parser)
+            root = tree.getroot()
+            self.ns = {'as': root.tag.split('}')[0].strip('{')}
         except Exception as e:
-            logger.error(f"ARXML Load Error: {e}")
-            sys.exit(1)
+            log.error(f"Failed to parse ARXML file {self.file_path}: {e}")
+            return {}
 
-        # --- COMPU-METHOD INDEXING ---
-        for cm in self.root.xpath("//as:COMPU-METHOD", namespaces=self.ns):
+        # 1. Build Lookups
+        self._index_compu_methods(root)
+        self._index_signals(root)
+        self._index_topology(root)
+
+        # 2. Filter for CAN Signals (I-Prefix)
+        can_signals = [s for s in self.sig_attr_data.keys() if s.startswith('I')]
+        log.info(f"Filtered for {len(can_signals)} CAN signals (starting with 'I').")
+
+        # 3. Resolve Paths and Attributes
+        self._parsed_data, missing_signals = self._resolve_signals(can_signals)
+        
+        log.info(f"Successfully extracted {len(self._parsed_data)} CAN signals. ({len(missing_signals)} missing topology paths).")
+        return self._parsed_data
+
+    def to_dataframe(self) -> pd.DataFrame:
+        """Converts the nested parsed CAN data into a flattened Pandas DataFrame."""
+        if not self._parsed_data:
+            self.parse()
+        if not self._parsed_data:
+            return pd.DataFrame()
+
+        df_rows = []
+        for signal_name, data in self._parsed_data.items():
+            attrs = data.get("Attributes", {})
+            paths = data.get("signal_paths", [])
+            
+            base_row = {
+                "Signal_Name": signal_name,
+                "Status": data.get("Status", "Unknown"),
+                "Periodicity_ms": attrs.get("periodicity_ms", "N/A"),
+                "Base_Type": attrs.get("Base_Type", "N/A"),
+                "CAPL_Type": attrs.get("CAPL_Suggestions", {}).get("Phys_Type", "N/A"),
+                "Unit": attrs.get("Unit", "N/A"),
+                "Resolution": attrs.get("Resolution", "N/A"),
+                "Offset": attrs.get("Offset", "N/A"),
+                "Min": attrs.get("Phys_Limits", {}).get("Min", "N/A"),
+                "Max": attrs.get("Phys_Limits", {}).get("Max", "N/A"),
+            }
+
+            if not paths:
+                # If no routing paths, append base row with empty cluster info
+                base_row.update({"Cluster": "N/A", "TX_Node": "N/A", "RX_Nodes": "N/A", "Signal_String": "N/A"})
+                df_rows.append(base_row)
+            else:
+                # Explode rows for signals with multiple network paths
+                for path in paths:
+                    row = base_row.copy()
+                    row.update({
+                        "Cluster": path.get("can_cluster", "N/A"),
+                        "TX_Node": path.get("tx", "N/A"),
+                        "RX_Nodes": ", ".join(path.get("rx", [])),
+                        "Signal_String": path.get("signal_name", "N/A")
+                    })
+                    df_rows.append(row)
+
+        df = pd.DataFrame(df_rows)
+        return df
+
+    # --- Private Helper Methods ---
+
+    def _index_compu_methods(self, root):
+        for cm in root.xpath("//as:COMPU-METHOD", namespaces=self.ns):
             cm_name = cm.findtext("as:SHORT-NAME", namespaces=self.ns)
             v_nodes = cm.xpath(".//as:COMPU-NUMERATOR/as:V", namespaces=self.ns)
             v_list = [float(v.text) for v in v_nodes]
@@ -87,11 +143,12 @@ class CAN_Parser:
                 'enums': enums, 'unit': display_unit
             }
 
+    def _index_signals(self, root):
         sys_sig_to_cm = {ss.findtext("as:SHORT-NAME", namespaces=self.ns): 
                          (ss.findtext(".//as:COMPU-METHOD-REF", namespaces=self.ns) or "").split('/')[-1]
-                         for ss in self.root.xpath("//as:SYSTEM-SIGNAL", namespaces=self.ns)}
+                         for ss in root.xpath("//as:SYSTEM-SIGNAL", namespaces=self.ns)}
 
-        for i_sig in self.root.xpath("//as:I-SIGNAL", namespaces=self.ns):
+        for i_sig in root.xpath("//as:I-SIGNAL", namespaces=self.ns):
             name = i_sig.findtext("as:SHORT-NAME", namespaces=self.ns)
             if not name.startswith('I'):
                 continue
@@ -103,15 +160,14 @@ class CAN_Parser:
                 'db_attr': self.compu_map.get(cm_key, {})
             }
 
-        # --- TOPOLOGY & PERIODICITY INDEXING ---
-        for pdu in self.root.xpath("//as:I-SIGNAL-I-PDU", namespaces=self.ns):
+    def _index_topology(self, root):
+        for pdu in root.xpath("//as:I-SIGNAL-I-PDU", namespaces=self.ns):
             p_name = pdu.findtext("as:SHORT-NAME", namespaces=self.ns)
             period_val = pdu.findtext(".//as:CYCLIC-TIMING//as:TIME-PERIOD//as:VALUE", namespaces=self.ns)
             
             if period_val:
                 try:
-                    ms_val = int(float(period_val.strip()) * 1000)
-                    self.pdu_period_map[p_name] = ms_val
+                    self.pdu_period_map[p_name] = int(float(period_val.strip()) * 1000)
                 except ValueError:
                     self.pdu_period_map[p_name] = "N/A"
             else:
@@ -122,24 +178,24 @@ class CAN_Parser:
                 if sig_short_name.startswith('I'):
                     self.sig_to_pdu[sig_short_name] = p_name
 
-        for ecu in self.root.xpath("//as:ECU-INSTANCE", namespaces=self.ns):
+        for ecu in root.xpath("//as:ECU-INSTANCE", namespaces=self.ns):
             e_name = ecu.findtext("as:SHORT-NAME", namespaces=self.ns)
             for port in ecu.xpath(".//*[contains(local-name(), 'PORT') or contains(local-name(), 'CONNECTOR') or contains(local-name(), 'GROUP')]", namespaces=self.ns):
                 direction = port.findtext("as:COMMUNICATION-DIRECTION", namespaces=self.ns)
                 port_text = "".join(port.itertext())
                 self.ecu_port_map[e_name][port_text] = direction
 
-        for cluster in self.root.xpath("//as:CAN-CLUSTER | //as:ETHERNET-CLUSTER", namespaces=self.ns):
+        for cluster in root.xpath("//as:CAN-CLUSTER | //as:ETHERNET-CLUSTER", namespaces=self.ns):
             self.cluster_cache.append({
                 'name': cluster.findtext("as:SHORT-NAME", namespaces=self.ns),
                 'type': "ETHERNET" if "ETHERNET" in cluster.tag.upper() else "CAN",
                 'triggerings': [ET.tostring(t, encoding='unicode') for t in cluster.xpath(".//*[local-name()='PDU-TRIGGERING']", namespaces=self.ns)]
             })
 
-        for group in self.root.xpath("//as:I-SIGNAL-I-PDU-GROUP[as:COMMUNICATION-DIRECTION='OUT']", namespaces=self.ns):
+        for group in root.xpath("//as:I-SIGNAL-I-PDU-GROUP[as:COMMUNICATION-DIRECTION='OUT']", namespaces=self.ns):
             self.pdu_group_data.append({'name': group.findtext("as:SHORT-NAME", namespaces=self.ns), 'text': "".join(group.xpath(".//text()"))})
 
-    def parse_signals(self, signal_list):
+    def _resolve_signals(self, signal_list: List[str]) -> Tuple[Dict[str, Any], List[str]]:
         results = {}
         missing_signals = []
 
@@ -221,49 +277,3 @@ class CAN_Parser:
             results[signal_name] = entry
             
         return results, missing_signals
-
-def main():
-    arxml_in = sys.argv[1] if len(sys.argv) > 1 else r"C:/poc/Autosar/can_parser/ETH_CAN.arxml"
-    json_out = sys.argv[2] if len(sys.argv) > 2 else r"C:/poc/Autosar/can_parser/CAN_Signals_Database.json"
-
-    start_time = time.time()
-
-    parser = CAN_Parser(arxml_in)
-    parser.load_and_index()
-
-    can_signals = sorted([s for s in parser.sig_attr_data.keys() if s.startswith('I')])
-    logger.info(f"Filtered for {len(can_signals)} CAN signals (starting with 'I').")
-
-    results, missing = parser.parse_signals(can_signals)
-    
-    # Calculate and format time
-    raw_duration = time.time() - start_time
-    formatted_duration = format_time(raw_duration)
-    
-    output_payload = {
-        "Summary": {
-            "Total_CAN_Signals_Found": len(can_signals),
-            "Resolved_With_Paths": len(can_signals) - len(missing),
-            "No_Path_Found": len(missing),
-            "Processing_Time_HH_MM_SS": formatted_duration
-        },
-        "ICAN_SIGNAL": results
-    }
-
-    try:
-        out_path = Path(json_out)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(out_path, 'w', encoding='utf-8') as f:
-            json.dump(output_payload, f, indent=4, ensure_ascii=False)
-        logger.info(f"CAN Database JSON saved to: {json_out}")
-    except Exception as e:
-        logger.error(f"Failed to write JSON: {e}")
-
-    logger.info("="*40)
-    logger.info(f"TOTAL TIME:  {formatted_duration}")
-    logger.info(f"CAN SIGNALS: {len(can_signals)}")
-    logger.info("="*40)
-
-if __name__ == "__main__":
-    main()
-    
