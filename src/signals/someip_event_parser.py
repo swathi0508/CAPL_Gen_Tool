@@ -5,7 +5,7 @@ import pandas as pd
 from typing import Any, Dict, List
 from lxml import etree
 
-from base_parser import BaseParser
+from signals.base_parser import BaseParser
 from core.logger import log
 
 class SomeIPEventParser(BaseParser):
