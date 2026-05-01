@@ -173,19 +173,6 @@ class SomeIPEventParser(BaseParser):
         log.info(f"Successfully extracted {len(self._parsed_data)} unique signals.")
         return self._parsed_data
 
-    def to_dataframe(self) -> pd.DataFrame:
-        """Converts the parsed dictionary into a structured Pandas DataFrame."""
-        if not self._parsed_data:
-            self.parse()
-        if not self._parsed_data:
-            return pd.DataFrame()
-
-        df_rows = [{"Signal_String": k, **v} for k, v in self._parsed_data.items()]
-        df = pd.DataFrame(df_rows)
-        # Because we used a dict, duplicates are naturally dropped, but we enforce sorting for neatness
-        df = df.sort_values(by=['SIF', 'Port', 'Method']).reset_index(drop=True)
-        return df
-
     # --- Private Helper Methods ---
 
     def _extract_compu_methods(self, root) -> Dict[str, Dict]:
