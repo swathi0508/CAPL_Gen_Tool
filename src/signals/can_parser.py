@@ -56,50 +56,6 @@ class CANSignalParser(BaseParser):
         log.info(f"Successfully extracted {len(self._parsed_data)} CAN signals. ({len(missing_signals)} missing topology paths).")
         return self._parsed_data
 
-    def to_dataframe(self) -> pd.DataFrame:
-        """Converts the nested parsed CAN data into a flattened Pandas DataFrame."""
-        if not self._parsed_data:
-            self.parse()
-        if not self._parsed_data:
-            return pd.DataFrame()
-
-        df_rows = []
-        for signal_name, data in self._parsed_data.items():
-            attrs = data.get("Attributes", {})
-            paths = data.get("signal_paths", [])
-            
-            base_row = {
-                "Signal_Name": signal_name,
-                "Status": data.get("Status", "Unknown"),
-                "Periodicity_ms": attrs.get("periodicity_ms", "N/A"),
-                "Base_Type": attrs.get("Base_Type", "N/A"),
-                "CAPL_Type": attrs.get("CAPL_Suggestions", {}).get("Phys_Type", "N/A"),
-                "Unit": attrs.get("Unit", "N/A"),
-                "Resolution": attrs.get("Resolution", "N/A"),
-                "Offset": attrs.get("Offset", "N/A"),
-                "Min": attrs.get("Phys_Limits", {}).get("Min", "N/A"),
-                "Max": attrs.get("Phys_Limits", {}).get("Max", "N/A"),
-            }
-
-            if not paths:
-                # If no routing paths, append base row with empty cluster info
-                base_row.update({"Cluster": "N/A", "TX_Node": "N/A", "RX_Nodes": "N/A", "Signal_String": "N/A"})
-                df_rows.append(base_row)
-            else:
-                # Explode rows for signals with multiple network paths
-                for path in paths:
-                    row = base_row.copy()
-                    row.update({
-                        "Cluster": path.get("can_cluster", "N/A"),
-                        "TX_Node": path.get("tx", "N/A"),
-                        "RX_Nodes": ", ".join(path.get("rx", [])),
-                        "Signal_String": path.get("signal_name", "N/A")
-                    })
-                    df_rows.append(row)
-
-        df = pd.DataFrame(df_rows)
-        return df
-
     # --- Private Helper Methods ---
 
     def _index_compu_methods(self, root):
