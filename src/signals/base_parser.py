@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import pandas as pd
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List
@@ -11,93 +12,109 @@ class BaseParser(ABC):
     def __init__(self, file_path: str):
         self.file_path = file_path
         self._parsed_data: Dict[str, Any] = {}
+        self._start_time = time.time()
 
     @abstractmethod
     def parse(self) -> Dict[str, Any]:
         """Parses the input file and returns a standardized dictionary."""
         pass
 
+    def _get_processing_time(self) -> str:
+        """Calculates elapsed time in HH:MM:SS format."""
+        elapsed = time.time() - self._start_time
+        return time.strftime("%H:%M:%S", time.gmtime(elapsed))
+
     def to_json_file(self, output_path: str, indent: int = 4):
-        """Dumps the parsed data to a physical JSON file for caching/debugging."""
+        """Dumps data with a legacy Summary header and ICAN_SIGNAL wrapper."""
         data = self.to_json_dict()
+        
+        # 1. Calculate Statistics
+        total = len(data)
+        # Check for 'signal_paths' to count resolved CAN signals
+        resolved = sum(1 for v in data.values() if isinstance(v, dict) and len(v.get('signal_paths', [])) > 0)
+        no_path = total - resolved
+
+        # 2. Build Legacy Structure
+        output_data = {
+            "Summary": {
+                "Total_Signals_Found": total,
+                "Resolved_With_Paths": resolved,
+                "No_Path_Found": no_path,
+                "Processing_Time_HH_MM_SS": self._get_processing_time()
+            },
+            # We use ICAN_SIGNAL for compatibility with your existing CAN tools
+            "ICAN_SIGNAL": data 
+        }
+
         try:
             with open(output_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=indent, ensure_ascii=False)
-            log.info(f"✅ Database successfully cached to: {output_path}")
+                json.dump(output_data, f, indent=indent, ensure_ascii=False)
+            log.info(f"✅ Database cached with summary to: {output_path}")
         except Exception as e:
-            log.error(f"❌ Failed to write JSON file: {e}")
+            log.error(f"❌ Failed to write JSON: {e}")
 
     def load_from_json(self, input_path: str) -> bool:
-        """Hydrates the parser from a JSON cache, bypassing the ARXML parse tax."""
+        """Hydrates the parser while stripping the Summary/Wrapper layers."""
         if not os.path.exists(input_path):
-            log.warning(f"Cache file not found: {input_path}")
             return False
         try:
             with open(input_path, 'r', encoding='utf-8') as f:
-                self._parsed_data = json.load(f)
-            log.info(f"🚀 Parser hydrated from cache: {input_path} ({len(self._parsed_data)} signals)")
+                raw_cache = json.load(f)
+            
+            # Legacy Stripping: Look for the signal dictionary inside the wrapper
+            if "ICAN_SIGNAL" in raw_cache:
+                self._parsed_data = raw_cache["ICAN_SIGNAL"]
+            elif "SOMEIP_SIGNAL" in raw_cache:
+                self._parsed_data = raw_cache["SOMEIP_SIGNAL"]
+            else:
+                # Fallback: just remove Summary
+                self._parsed_data = {k: v for k, v in raw_cache.items() if k != "Summary"}
+                
+            log.info(f"🚀 Loaded {len(self._parsed_data)} signals from cache.")
             return True
         except Exception as e:
-            log.error(f"❌ Failed to load JSON cache: {e}")
+            log.error(f"❌ Cache load failed: {e}")
             return False
 
     def to_dataframe(self) -> pd.DataFrame:
-        """
-        Universal DataFrame converter with edge-case handling for 
-        nested CAN paths and protocol-specific columns.
-        """
-        # Edge Case 1: Check if data is already loaded (from JSON or Parse)
-        # We only call self.parse() if the dictionary is truly empty.
-        if not self._parsed_data:
-            self.parse()
-        
-        if not self._parsed_data:
-            log.warning("No data available to convert to DataFrame.")
+        """Universal conversion with nested CAN path flattening."""
+        data = self.to_json_dict()
+        if not data:
             return pd.DataFrame()
 
         df_rows = []
-        
-        # Get a sample to detect the structure
-        sample_key = next(iter(self._parsed_data))
-        sample_val = self._parsed_data[sample_key]
+        sample_val = next(iter(data.values()))
 
-        # Edge Case 2: Handle Nested CAN Structures vs Flat SOME/IP
-        # We look for the 'signal_paths' key which is unique to your CAN parser
-        is_can_structure = isinstance(sample_val, dict) and 'signal_paths' in sample_val
-
-        if is_can_structure:
-            for sig_name, content in self._parsed_data.items():
+        # Check if we are dealing with the nested CAN structure
+        if isinstance(sample_val, dict) and 'signal_paths' in sample_val:
+            for sig_name, content in data.items():
                 attrs = content.get('Attributes', {})
                 paths = content.get('signal_paths', [])
                 
+                # Base attributes common to all paths of this signal
+                # We pull everything from attrs (Resolution, Offset, etc.)
+                base_info = {"Signal_Name": sig_name, **attrs}
+                
                 if not paths:
-                    # Handle signals found in ARXML but missing from topology
-                    row = {"Signal_Name": sig_name, "Status": "No Path", **attrs}
-                    df_rows.append(row)
+                    df_rows.append({**base_info, "Status": "No Path"})
                 else:
                     for path in paths:
-                        row = {"Signal_Name": sig_name, "Status": "Resolved", **attrs, **path}
+                        # Explode path-specific info (Cluster, TX, RX)
+                        # and format RX nodes as a string for Excel
+                        row = {**base_info, "Status": "Resolved", **path}
+                        if isinstance(row.get('rx'), list):
+                            row['rx'] = ", ".join(row['rx'])
                         df_rows.append(row)
         else:
-            # Handle standard flat SOME/IP mapping
-            for sig_str, props in self._parsed_data.items():
-                row = {"Signal_String": sig_str, **props}
-                df_rows.append(row)
+            # Flat SOME/IP structure
+            df_rows = [{"Signal_String": k, **v} for k, v in data.items()]
 
         df = pd.DataFrame(df_rows)
-
-        # Edge Case 3: Dynamic "Safe Sorting"
-        # We define a priority list. It sorts by what it finds, and ignores the rest.
-        priority_cols = ['SIF', 'Cluster', 'Port', 'TX_Node', 'Method', 'Signal_Name']
-        available_sort_cols = [c for c in priority_cols if c in df.columns]
         
-        if available_sort_cols:
-            try:
-                df = df.sort_values(by=available_sort_cols).reset_index(drop=True)
-            except Exception as e:
-                log.debug(f"Sorting skipped: {e}")
-            
-        return df
+        # Dynamic safe sorting
+        sort_prio = ['SIF', 'Cluster', 'can_cluster', 'Port', 'tx', 'Method', 'Signal_Name']
+        avail = [c for c in sort_prio if c in df.columns]
+        return df.sort_values(by=avail).reset_index(drop=True) if avail else df
 
     def to_json_dict(self) -> Dict[str, Any]:
         """In-memory dictionary access. Ensures data exists before returning."""
