@@ -24,6 +24,7 @@ dist/
 *.arxml
 *.log
 *.csv
+*.json
 
 # IDE
 .vscode/
