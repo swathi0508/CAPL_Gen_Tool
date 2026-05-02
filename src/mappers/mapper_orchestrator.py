@@ -13,20 +13,28 @@ class MapperOrchestrator:
         self.eth_mapper = SomeIPMapper(eth_cache)
 
     def get_column_mapping(self, sheet_type: str) -> dict:
-        """Returns standard internal column names mapped from the raw Excel."""
+        """Returns {TARGET_INTERNAL_COLUMN : SOURCE_EXCEL_COLUMN}"""
         base_map = {
-            "SWC": "SWC", "TEST_TYPE": "TEST_TYPE", "BASIC_FUNCTION_NAME": "BASIC_FUNCTION_NAME",
+            "SWC": "SWC", 
+            "TEST_TYPE": "TEST_TYPE", 
+            "BASIC_FUNCTION_NAME": "BASIC_FUNCTION_NAME",
             "CAN_CLUSTER": "CAN_CLUSTER"
         }
         if sheet_type == "E2E_ETH":
             base_map.update({
-                "REQ ID": "E2E_ETH_REQ_ID", "Port": "SOMEIP_PORT", "Attribute value": "ATTRIBUTE_VALUE",
-                "CAN_PORT_MAPPING": "CAN_PORT", "CAN_PATH_SYNTHESIS_MAPPING": "PATH_SYNTHESIS"
+                "E2E_ETH_REQ_ID": "REQ ID", 
+                "SOMEIP_PORT": "Port", 
+                "ATTRIBUTE_VALUE": "Attribute value",
+                "CAN_PORT": "CAN_PORT_MAPPING", 
+                "PATH_SYNTHESIS": "CAN_PATH_SYNTHESIS_MAPPING"
             })
         elif sheet_type == "E2E_CAN":
             base_map.update({
-                "REQ ID": "E2E_CAN_REQ_ID", "Port Name": "CAN_PORT", "Path Synthesis": "PATH_SYNTHESIS",
-                "SOMEIP_PORT_MAPPING": "SOMEIP_PORT", "SOMEIP_ATTRIBUTE_VALUE_MAPPING": "ATTRIBUTE_VALUE"
+                "E2E_CAN_REQ_ID": "REQ ID", 
+                "CAN_PORT": "Port Name", 
+                "PATH_SYNTHESIS": "Path Synthesis",
+                "SOMEIP_PORT": "SOMEIP_PORT_MAPPING", 
+                "ATTRIBUTE_VALUE": "SOMEIP_ATTRIBUTE_VALUE_MAPPING"
             })
         return base_map
 
@@ -70,15 +78,27 @@ class MapperOrchestrator:
     def cross_fill_function_names(self, df_list):
         """Cross-references SOMEIP_PORT to fill in missing BASIC_FUNCTION_NAMEs."""
         combined = pd.concat(df_list, ignore_index=True)
+        
+        # Filter to only rows that have a valid function name computed
         valid_pool = combined[~combined['BASIC_FUNCTION_NAME'].isin([None, "FUNCTION_NOT_REQUIRED"])]
         
-        global_map = valid_pool.drop_duplicates('SOMEIP_PORT').set_index('SOMEIP_PORT')['BASIC_FUNCTION_NAME'].to_dict()
+        # Safety check to avoid KeyErrors if the sheet was empty or had no valid SOMEIP_PORT matches
+        global_map = {}
+        if not valid_pool.empty and 'SOMEIP_PORT' in valid_pool.columns:
+            global_map = valid_pool.drop_duplicates('SOMEIP_PORT').set_index('SOMEIP_PORT')['BASIC_FUNCTION_NAME'].to_dict()
 
         for df in df_list:
+            if 'BASIC_FUNCTION_NAME' not in df.columns:
+                df['BASIC_FUNCTION_NAME'] = None
+                
             mask_none = df['BASIC_FUNCTION_NAME'].isna()
-            if mask_none.any() and 'SOMEIP_PORT' in df.columns:
+            
+            # Map if we have a mapping available
+            if mask_none.any() and 'SOMEIP_PORT' in df.columns and global_map:
                 df.loc[mask_none, 'BASIC_FUNCTION_NAME'] = df.loc[mask_none, 'SOMEIP_PORT'].map(global_map)
+                
             df['BASIC_FUNCTION_NAME'] = df['BASIC_FUNCTION_NAME'].fillna("basic_function__UNKNOWN_CONFIG")
+            
         return df_list
 
     def process_file(self, input_excel: str, output_dir: str):
@@ -98,7 +118,7 @@ class MapperOrchestrator:
             df_in = pd.read_excel(xls, sheet_name=sheet)
             df_out = pd.DataFrame()
             
-            # 1. Map Columns
+            # 1. Map Columns (Fixed target/source relationship)
             mapping = self.get_column_mapping(sheet)
             for target, source in mapping.items():
                 df_out[target] = df_in[source] if source in df_in.columns else None
@@ -124,7 +144,8 @@ class MapperOrchestrator:
             processed_dfs.append(df_out)
 
         # 6. Cross-Fill Function Names across all parsed sheets
-        processed_dfs = self.cross_fill_function_names(processed_dfs)
+        if processed_dfs:
+            processed_dfs = self.cross_fill_function_names(processed_dfs)
 
         # 7. Save Output
         log.info(f"Saving to {output_path}...")
