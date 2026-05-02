@@ -1,0 +1,34 @@
+/*@!Encoding:1252*/
+/* 
+ * Target: {{ prefix | default('MISSING_DATA') }} | Type: {{ t_type | default('MISSING_DATA') }}
+ */
+
+includes
+{ 
+  #include "../COMMON_FUNCTIONS/SignalValidation_Lib.cin"
+  #include "../BASIC_FUNCTIONS/{{ prefix | lower | default('MISSING_DATA') }}_basic_functions.cin"
+}
+
+void MainTest()
+{
+  {% for row in rows -%}
+  {% set req_id = row[prefix ~ '_REQ_ID'] | default('MISSING_DATA') -%}
+  {{ req_id }}();
+  {% endfor %}
+}
+
+/* Testcase Definitions */
+{% for row in rows -%}
+{% set req_id = row[prefix ~ '_REQ_ID'] | default('MISSING_DATA') -%}
+testcase {{ req_id }}()
+{
+  startLoggingTestCase("{{ req_id }}");
+  {% if row.SOMEIP_PORT and row.SOMEIP_PORT != "MISSING_DATA" -%}
+  TestCaseTitle("{{ req_id }}", "{{ row.SWC | default('MISSING_DATA') }}__{{ row.SOMEIP_PORT }}__{{ row.ATTRIBUTE_VALUE | default('MISSING_DATA') }}");
+  {%- else -%}
+  TestCaseTitle("{{ req_id }}", "{{ row.SWC | default('MISSING_DATA') }}__{{ row.CAN_PORT_NAME | default('MISSING_DATA') }}");
+  {%- endif %}
+  {{ row.BASIC_FUNCTION_NAME | default('MISSING_DATA') }}();
+  stopLoggingTestCase();
+}
+{% endfor -%}

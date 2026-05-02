@@ -1,0 +1,280 @@
+/*
+ *  Library Name: SignalValidation_Lib.cin
+ *  Description: Unified Physical Validation Framework for CANoe.
+ */
+
+variables
+{
+  const double PHYS_TOLERANCE = 0.0001;
+
+}
+
+// ============================================================================
+// 1. LOGGING CONTROL
+// ============================================================================
+
+void START_LOGGING_TEST_CASE(char logging_file_name[])
+{
+  char buffer[256];
+  snprintf(buffer, elcount(buffer), "/Logs/%s.blf", logging_file_name);
+  setLogFileName("can_logging", buffer);
+  startLogging("can_logging");
+}
+
+void STOP_LOGGING_TEST_CASE()
+{
+  stopLogging("can_logging");
+}
+
+// ============================================================================
+// 2. CAN SIGNAL UTILITIES
+// ============================================================================
+
+void SETCHECK_CAN_SIGNAL(char signalName[], double targetPhys, double offset, double resolution, dword timeoutMs)
+{
+  if(setSignal(signalName, targetPhys) != 0)
+  {
+    testStepFail("CAN_Err", "Critical: Signal <%s> not found or could not be set.", signalName);
+    return;
+  }
+  CHECK_CAN_SIGNAL(signalName, targetPhys, offset, resolution, timeoutMs);
+}
+
+void CHECK_CAN_SIGNAL(char signalName[], double targetPhys, double offset, double resolution, dword timeoutMs)
+{
+  int64 targetRaw;
+  targetRaw = (int64)(((targetPhys - offset) / resolution) + (targetPhys >= offset ? 0.5 : -0.5));
+
+  if(timeoutMs > 0)
+  {
+    if(testWaitForRawSignalMatch(signalName, targetRaw, timeoutMs) == 1) 
+      testStepPass("CAN_Match", "Signal <%s> reached Target (Raw %lld)", signalName, targetRaw);
+    else 
+      testStepFail("CAN_Timeout", "Signal <%s>: Expected Raw %lld, Got %lld", signalName, targetRaw, getRawSignal(signalName));
+  }
+  else
+  {
+    if(getRawSignal(signalName) == targetRaw) 
+      testStepPass("CAN_Match", "Signal <%s> == Raw %lld", signalName, targetRaw);
+    else 
+      testStepFail("CAN_Mismatch", "Signal <%s>: Expected Raw %lld, Got %lld", signalName, targetRaw, getRawSignal(signalName));
+  }
+}
+
+// ============================================================================
+// 3. SOME/IP EVENT UTILITIES
+// ============================================================================
+
+void SETCHECK_SOMEIP_EVENT_SIGNAL(char eventSignalName[], double targetPhys, dword timeoutMs)
+{
+  if(setServiceSignal(eventSignalName, targetPhys) != 0)
+  {
+    testStepFail("SOMEIP_Err", "Critical: SOME/IP Signal <%s> not found or could not be set.", eventSignalName);
+    return;
+  }
+  WAIT_FOR_SOMEIP_EVENT(eventSignalName, targetPhys, timeoutMs);
+}
+
+void WAIT_FOR_SOMEIP_EVENT(char eventSignalName[], double targetPhys, dword timeoutMs)
+{
+  double currentPhys;
+  int64 startTime;
+  startTime = timeNowInt64();
+
+  while (1)
+  {
+    currentPhys = getServiceSignal(eventSignalName);
+    if (abs(currentPhys - targetPhys) <= PHYS_TOLERANCE)
+    {
+      testStepPass("SOMEIP_Wait", "Match: <%s> Physical %.4f", eventSignalName, currentPhys);
+      return;
+    }
+    if (timeoutMs == 0 || ((timeNowInt64() - startTime) / 100000) >= timeoutMs) break;
+    testWaitForTimeoutSilent(10);
+  }
+  testStepFail("SOMEIP_Timeout", "Signal <%s>: Expected Phys %.4f, Got %.4f", eventSignalName, targetPhys, currentPhys);
+}
+
+// ============================================================================
+// 4. ETHERNET UDP SIGNAL UTILITIES
+// ============================================================================
+
+void SET_ETHERNET_UDP_SIGNAL(char udp_signal[], double targetPhys)
+{
+  if(setSignal(udp_signal, targetPhys) != 0)
+  {
+    testStepFail("UDP_Err", "Critical: UDP Signal <%s> not found or could not be set.", udp_signal);
+    return;
+  }
+}
+
+void SETCHECK_ETHERNET_UDP_SIGNAL(char udp_signal[], double targetPhys, double offset, double resolution, dword timeoutMs)
+{
+  if(setSignal(udp_signal, targetPhys) != 0)
+  {
+    testStepFail("UDP_Err", "Critical: UDP Signal <%s> not found or could not be set.", udp_signal);
+    return;
+  }
+  CHECK_ETHERNET_UDP_SIGNAL(udp_signal, targetPhys, offset, resolution, timeoutMs);
+}
+
+void CHECK_ETHERNET_UDP_SIGNAL(char udp_signal[], double targetPhys, double offset, double resolution, dword timeoutMs)
+{
+  int64 targetRaw;
+  targetRaw = (int64)(((targetPhys - offset) / resolution) + (targetPhys >= offset ? 0.5 : -0.5));
+
+  if(timeoutMs > 0)
+  {
+    if(testWaitForRawSignalMatch(udp_signal, targetRaw, timeoutMs) == 1) 
+      testStepPass("UDP_Wait", "Signal <%s> reached Target (Raw %lld)", udp_signal, targetRaw);
+    else 
+      testStepFail("UDP_Timeout", "Signal <%s>: Expected Raw %lld, Got %lld", udp_signal, targetRaw, getRawSignal(udp_signal));
+  }
+  else
+  {
+    if(getRawSignal(udp_signal) == targetRaw) 
+      testStepPass("UDP_Match", "Signal <%s> == Raw %lld", udp_signal, targetRaw);
+    else 
+      testStepFail("UDP_Mismatch", "Signal <%s>: Expected Raw %lld, Got %lld", udp_signal, targetRaw, getRawSignal(udp_signal));
+  }
+}
+
+// ============================================================================
+// 5. SYSTEM VARIABLE UTILITIES
+// ============================================================================
+
+// --- FLOAT ---
+void SETCHECK_SYSVAR_FLOAT(char ns[], char name[], float targetValue, dword timeoutMs)
+{
+  if(sysSetVariableFloat(ns, name, targetValue) != 0)
+  {
+    testStepFail("SysVar_Err", "Critical: SysVar %s::%s not found or could not be set.", ns, name);
+    return;
+  }
+  WAIT_FOR_SYSVAR_FLOAT(ns, name, targetValue, timeoutMs);
+}
+
+void WAIT_FOR_SYSVAR_FLOAT(char ns[], char name[], float targetValue, dword timeoutMs)
+{
+  double cur;
+  int64 startTime = timeNowInt64();
+  while(1) {
+    cur = sysGetVariableFloat(ns, name);
+    if(abs(cur - targetValue) <= PHYS_TOLERANCE) { 
+      testStepPass("SysVar_Wait", "%s::%s Match: %f", ns, name, cur); return; 
+    }
+    if(timeoutMs == 0 || ((timeNowInt64() - startTime) / 100000) >= timeoutMs) break;
+    testWaitForTimeoutSilent(10);
+  }
+  testStepFail("SysVar_Timeout", "%s::%s: Expected %f, Got %f", ns, name, targetValue, cur);
+}
+
+// --- LONG ---
+void SETCHECK_SYSVAR_LONG(char ns[], char name[], long targetValue, dword timeoutMs)
+{
+  if(sysSetVariableLong(ns, name, targetValue) != 0)
+  {
+    testStepFail("SysVar_Err", "Critical: SysVar %s::%s not found or could not be set.", ns, name);
+    return;
+  }
+  WAIT_FOR_SYSVAR_LONG(ns, name, targetValue, timeoutMs);
+}
+
+void WAIT_FOR_SYSVAR_LONG(char ns[], char name[], long targetValue, dword timeoutMs)
+{
+  long cur;
+  int64 startTime = timeNowInt64();
+  while(1) {
+    cur = sysGetVariableLong(ns, name);
+    if(cur == targetValue) { 
+      testStepPass("SysVar_Wait", "%s::%s Match: %ld", ns, name, cur); return; 
+    }
+    if(timeoutMs == 0 || ((timeNowInt64() - startTime) / 100000) >= timeoutMs) break;
+    testWaitForTimeoutSilent(10);
+  }
+  testStepFail("SysVar_Timeout", "%s::%s: Expected %ld, Got %ld", ns, name, targetValue, cur);
+}
+
+// --- LONGLONG ---
+void SETCHECK_SYSVAR_LONGLONG(char ns[], char name[], int64 targetValue, dword timeoutMs)
+{
+  if(sysSetVariableLongLong(ns, name, targetValue) != 0)
+  {
+    testStepFail("SysVar_Err", "Critical: SysVar %s::%s not found or could not be set.", ns, name);
+    return;
+  }
+  WAIT_FOR_SYSVAR_LONGLONG(ns, name, targetValue, timeoutMs);
+}
+
+void WAIT_FOR_SYSVAR_LONGLONG(char ns[], char name[], int64 targetValue, dword timeoutMs)
+{
+  int64 cur;
+  int64 startTime = timeNowInt64();
+  while(1) {
+    cur = sysGetVariableLongLong(ns, name);
+    if(cur == targetValue) { 
+      testStepPass("SysVar_Wait", "%s::%s Match: %lld", ns, name, cur); return; 
+    }
+    if(timeoutMs == 0 || ((timeNowInt64() - startTime) / 100000) >= timeoutMs) break;
+    testWaitForTimeoutSilent(10);
+  }
+  testStepFail("SysVar_Timeout", "%s::%s: Expected %lld, Got %lld", ns, name, targetValue, cur);
+}
+
+// --- DWORD ---
+void SETCHECK_SYSVAR_DWORD(char ns[], char name[], dword targetValue, dword timeoutMs)
+{
+  if(sysSetVariableDWord(ns, name, targetValue) != 0)
+  {
+    testStepFail("SysVar_Err", "Critical: SysVar %s::%s not found or could not be set.", ns, name);
+    return;
+  }
+  WAIT_FOR_SYSVAR_DWORD(ns, name, targetValue, timeoutMs);
+}
+
+void WAIT_FOR_SYSVAR_DWORD(char ns[], char name[], dword targetValue, dword timeoutMs)
+{
+  dword cur;
+  int64 startTime = timeNowInt64();
+  while(1) {
+    cur = sysGetVariableDWord(ns, name);
+    if(cur == targetValue) { 
+      testStepPass("SysVar_Wait", "%s::%s Match: %u", ns, name, cur); return; 
+    }
+    if(timeoutMs == 0 || ((timeNowInt64() - startTime) / 100000) >= timeoutMs) break;
+    testWaitForTimeoutSilent(10);
+  }
+  testStepFail("SysVar_Timeout", "%s::%s: Expected %u, Got %u", ns, name, targetValue, cur);
+}
+
+// ============================================================================
+// 6. FIRE & FORGET CONTROL
+// ============================================================================
+
+void SOMEIP_FF_SENDONCE(char ns[], char name[])
+{
+  if(sysSetVariableLong(ns, name, 1) != 0)
+  {
+    testStepFail("FF_Err", "Critical: Could not trigger PDU %s::%s", ns, name);
+    return;
+  }
+  testWaitForTimeoutSilent(100); 
+  sysSetVariableLong(ns, name, 0);
+  testStepPass("FF_Success", "PDU Trigger %s::%s executed", ns, name);
+}
+
+
+// ============================================================================
+// 7. Define Pre-condition to set the gadeStatus to GADESTATUS_MISSION_MODE_ON
+// ============================================================================
+
+void PRECONDITION__SET_GADESTATUS_TO_GADESTATUS_MISSION_MODE_ON()
+{
+  {%- set s_state = signals.gadeStatusValueState -%}
+  {%- set s_status = signals.gadeStatus %}
+  testStep("#1 Pre condition", "Set {{ s_state.path | default('MISSING_DATA') }} = {{ s_state.enum_name | default('MISSING_DATA') }}");
+  SETCHECK_SOMEIP_EVENT_SIGNAL("{{ s_state.path | default('MISSING_DATA') }}", {{ s_state.enum_value | default('MISSING_DATA') }}, SOMEIP_TIMEOUT);
+ 
+  testStep("#2 Pre condition", "Set {{ s_status.path | default('MISSING_DATA') }} = {{ s_status.enum_name | default('MISSING_DATA') }}");
+  SETCHECK_SOMEIP_EVENT_SIGNAL("{{ s_status.path | default('MISSING_DATA') }}", {{ s_status.enum_value | default('MISSING_DATA') }}, SOMEIP_TIMEOUT);
+}
