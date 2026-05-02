@@ -1,0 +1,43 @@
+import re
+import pandas as pd
+from .base_mapper import BaseMapper
+
+class CANMapper(BaseMapper):
+    def _load_database(self) -> dict:
+        raw_db = super()._load_database()
+        return {re.sub(r'^i', '', str(k).lower()): v for k, v in raw_db.items()}
+
+    def get_signal_data(self, port_name: str, cluster: str) -> dict:
+        cols = ["CAN_DB_SIGNAL_NAME", "CAN_ENUM", "CAN_MIN_RAW", "CAN_MAX_RAW", 
+                "CAN_PERIODICITY", "CAN_OFFSET", "CAN_RESOLUTION"]
+        
+        if pd.isna(port_name) or str(port_name).strip() == "":
+            return {col: None for col in cols}
+
+        search_key = re.sub(r'^i', '', str(port_name).strip().lower())
+        if search_key not in self.db:
+            return {col: "CAN_NOT_FOUND" for col in cols}
+
+        sig_data = self.db[search_key]
+        attr = sig_data.get("Attributes", {})
+        paths = sig_data.get("signal_paths", [])
+        
+        fallback_order = filter(None, [cluster, "CAN_FD_CHASSIS", "CAN_FD_PT", "CAN_ITS3_FD", 
+                                       "CAN_ITS5_FD", "PCU4_CAN", "CAN_EXT", "CAN_FD_ACCESS2"])
+        
+        db_signal_name = "CAN_CLUSTER_NOT_FOUND"
+        for c in fallback_order:
+            match = next((p for p in paths if str(p.get("can_cluster")) == str(c)), None)
+            if match:
+                db_signal_name = match.get("signal_name")
+                break
+
+        return {
+            "CAN_DB_SIGNAL_NAME": db_signal_name, 
+            "CAN_ENUM": self.format_enum_to_string(attr.get("Enums", {})),
+            "CAN_MIN_RAW": attr.get("Raw_Limits", {}).get("Min"),
+            "CAN_MAX_RAW": attr.get("Raw_Limits", {}).get("Max"),
+            "CAN_PERIODICITY": attr.get("periodicity_ms"),
+            "CAN_OFFSET": attr.get("Offset"), 
+            "CAN_RESOLUTION": attr.get("Resolution")
+        }
