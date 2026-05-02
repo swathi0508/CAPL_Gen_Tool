@@ -1,7 +1,6 @@
 import os
 import re
 import math
-import pandas as pd
 from typing import Any, Dict, List
 from lxml import etree
 
@@ -9,11 +8,13 @@ from signals.base_parser import BaseParser
 from core.logger import log
 
 class SomeIPEventParser(BaseParser):
-    """Parses SOME/IP ARXML files to extract signals, Data Types, Ports, Enums, and Scaling boundaries."""
+    """
+    Parses SOME/IP ARXML files to extract signals, Data Types, and Scaling boundaries.
+    Constructs exact CAPL routing strings directly from Data Type Mapping Sets.
+    """
 
     def __init__(self, file_path: str):
         super().__init__(file_path)
-        self._parsed_data: Dict[str, Any] = {}
     
     def parse(self) -> Dict[str, Any]:
         """Parses the ARXML and returns a standard dictionary."""
@@ -30,15 +31,13 @@ class SomeIPEventParser(BaseParser):
             log.error(f"Failed to parse ARXML file {self.file_path}: {e}")
             return {}
 
-        # 1. Pre-process Lookup Dictionaries via Private Methods
+        # 1. Pre-process Lookup Dictionaries
         compu_methods = self._extract_compu_methods(root)
         app_to_compu = self._extract_app_to_compu(root)
         impl_to_basetype = self._extract_impl_to_basetype(root)
         app_to_basetype = self._extract_app_to_basetype(root, impl_to_basetype)
         records_dict = self._extract_records(root)
-        mapping_to_ports = self._extract_mapping_to_ports(root)
 
-        # Nested Data Retrievers
         def get_compu_data(app_type_name: str) -> Dict[str, Any]:
             compu_name = app_to_compu.get(app_type_name, app_type_name)
             return compu_methods.get(compu_name, {
@@ -51,130 +50,69 @@ class SomeIPEventParser(BaseParser):
             if v is None or v == "N/A": return "N/A"
             return int(v) if float(v).is_integer() else round(v, 4)
 
-        def find_best_ports(app_name: str, event_name: str, available_ports: List[str]) -> List[str]:
-            if not available_ports: return ["N/A"]
-            if len(available_ports) == 1: return [available_ports[0]]
-            for p in available_ports:
-                if app_name.lower() in p.lower(): return [p]
-            for p in available_ports:
-                if event_name.lower() in p.lower(): return [p]
-            return available_ports # Explode all if it's a shared primitive
-
         self._parsed_data = {}
 
-        # 2. Main Mapping & Exploding Loop
+        # 2. Main Mapping Loop (Strict Reconstruction - Records Only)
         for dtms in root.xpath("//*[local-name()='DATA-TYPE-MAPPING-SET']"):
             short_name_elem = dtms.xpath("*[local-name()='SHORT-NAME']")
             if not short_name_elem:
                 continue
                 
             mapping_short_name = short_name_elem[0].text.strip()
+            # Extract SIF (e.g., 591) and base event name
             match = re.search(r'^X(\d+)_(.*?)SvcProv', mapping_short_name)
             if not match:
                 continue
                 
             sif = match.group(1)
-            raw_event_name = match.group(2)
-            someip_event = f"SomeIp{raw_event_name}"
             
-            swc_ports = mapping_to_ports.get(mapping_short_name, [])
-            valid_methods = []
-            valuestate_app_name = None
-            valuestate_impl_name = None
-            
-            # Sub-loop: Extract maps from the set
+            # Loop over individual maps within the SIF
             for dt_map in dtms.xpath(".//*[local-name()='DATA-TYPE-MAP']"):
                 app_ref = dt_map.xpath("*[local-name()='APPLICATION-DATA-TYPE-REF']")
-                impl_ref = dt_map.xpath("*[local-name()='IMPLEMENTATION-DATA-TYPE-REF']")
                 
                 if app_ref and app_ref[0].text:
-                    app_path_raw = app_ref[0].text.split("/")[-1].strip()
-                    impl_path_raw = impl_ref[0].text.split("/")[-1].strip() if impl_ref and impl_ref[0].text else None
+                    app_name = app_ref[0].text.split("/")[-1].strip()
                     
-                    if re.match(r'^ValueState\d*$', app_path_raw, re.IGNORECASE):
-                        valuestate_app_name = app_path_raw
-                        valuestate_impl_name = impl_path_raw
-                        continue 
+                    # -----------------------------------------------------
+                    # ONLY PROCESS APPLICATION RECORDS (Struct Unrolling)
+                    # -----------------------------------------------------
+                    if app_name in records_dict:
+                        # The Application Record name becomes the Port/Event Name
+                        someip_port = f"SomeIp{app_name}"
                         
-                    clean_method = app_path_raw[:-1] if app_path_raw.endswith("T") else app_path_raw
-                    valid_methods.append((clean_method, app_path_raw, impl_path_raw))
-            
-            # Sub-loop: Explode Methods into Ports
-            for clean_method, raw_app_name, raw_impl_name in valid_methods:
-                actual_ports = find_best_ports(raw_app_name, raw_event_name, swc_ports)
-                
-                for actual_port_name in actual_ports:
-                    
-                    # Clean the Port Name for the CAPL string (Removes 'Interface' + trailing numbers)
-                    if actual_port_name != "N/A":
-                        clean_port = re.sub(r'Interface\d*$', '', actual_port_name, flags=re.IGNORECASE)
-                    else:
-                        clean_port = someip_event 
-                    
-                    # SCENARIO A: Application Record (Unroll Struct)
-                    if raw_app_name in records_dict:
-                        for element in records_dict[raw_app_name]:
+                        for element in records_dict[app_name]:
                             elem_name = element["name"]
                             tref = element["tref"] 
                             
                             c_data = get_compu_data(tref)
                             datatype = app_to_basetype.get(tref, "N/A")
+                            
                             if datatype == "N/A":
                                 clean_match = re.match(r'^(u?s?int(?:8|16|32|64)|float(?:32|64)|boolean|double)', tref, re.IGNORECASE)
                                 datatype = clean_match.group(1).lower() if clean_match else "N/A"
                             
                             states_str = " | ".join([f"{k}: {v}" for k, v in c_data["enums"].items()]) if c_data["has_enums"] else ("Physical Value" if c_data["min"] is not None else "No Data")
-                            sig_str = f'"EthernetCluster::sif_{sif}::{clean_port}::{elem_name}"'
+                            
+                            # EXACT RECONSTRUCTION: EthernetCluster::sif_591::SomeIpChassisRegulationMalfunctionState::asrMalfunction
+                            sig_str = f"EthernetCluster::sif_{sif}::{someip_port}::{elem_name}"
                             
                             self._parsed_data[sig_str] = {
-                                "Cluster": "EthernetCluster", "SIF": sif, "Event": someip_event,
-                                "Port": actual_port_name, "Method": elem_name, "DataType": datatype,
+                                "Cluster": "EthernetCluster", "SIF": sif, "Event": app_name,
+                                "Attribute_Value": elem_name, "DataType": datatype,
                                 "Available_States": states_str, "Min": format_val(c_data["min"]),
                                 "Mid": format_val(c_data["mid"]), "Max": format_val(c_data["max"]),
                                 "Factor": format_val(c_data["factor"]), "Offset": format_val(c_data["offset"]),
                                 "Unit": c_data["unit"]
                             }
-
-                    # SCENARIO B: Primitive Value
                     else:
-                        c_data = get_compu_data(raw_app_name)
-                        datatype = impl_to_basetype.get(raw_impl_name, "N/A") if raw_impl_name else "N/A"
-                        states_str = " | ".join([f"{k}: {v}" for k, v in c_data["enums"].items()]) if c_data["has_enums"] else ("Physical Value" if c_data["min"] is not None else "No Data")
-                        sig_str = f'"EthernetCluster::sif_{sif}::{clean_port}::{clean_method}"'
-                        
-                        self._parsed_data[sig_str] = {
-                            "Cluster": "EthernetCluster", "SIF": sif, "Event": someip_event,
-                            "Port": actual_port_name, "Method": clean_method, "DataType": datatype,
-                            "Available_States": states_str, "Min": format_val(c_data["min"]),
-                            "Mid": format_val(c_data["mid"]), "Max": format_val(c_data["max"]),
-                            "Factor": format_val(c_data["factor"]), "Offset": format_val(c_data["offset"]),
-                            "Unit": c_data["unit"]
-                        }
-                    
-                    # EXPANSION: ValueState
-                    if valuestate_app_name and raw_app_name not in records_dict:
-                        vs_event = someip_event[:-1] if someip_event.endswith('s') else someip_event
-                        vs_method = f"{clean_method}ValueState"
-                        
-                        vs_c_data = get_compu_data(valuestate_app_name)
-                        vs_datatype = impl_to_basetype.get(valuestate_impl_name, "N/A") if valuestate_impl_name else "N/A"
-                        vs_states = " | ".join([f"{k}: {v}" for k, v in vs_c_data["enums"].items()]) if vs_c_data["has_enums"] else "Physical Value"
-                        vs_sig_str = f'"EthernetCluster::sif_{sif}::{clean_port}::{vs_method}"'
-                        
-                        self._parsed_data[vs_sig_str] = {
-                            "Cluster": "EthernetCluster", "SIF": sif, "Event": vs_event,
-                            "Port": actual_port_name, "Method": vs_method, "DataType": vs_datatype, 
-                            "Available_States": vs_states, "Min": format_val(vs_c_data["min"]), 
-                            "Mid": format_val(vs_c_data["mid"]), "Max": format_val(vs_c_data["max"]), 
-                            "Factor": format_val(vs_c_data["factor"]), "Offset": format_val(vs_c_data["offset"]), 
-                            "Unit": vs_c_data["unit"]
-                        }
+                        # Drop primitives that don't belong to a struct mapping.
+                        continue
 
-        log.info(f"Successfully extracted {len(self._parsed_data)} unique signals.")
+        log.info(f"✅ Successfully extracted {len(self._parsed_data)} valid SOME/IP signals.")
         return self._parsed_data
 
     # --- Private Helper Methods ---
-
+    # Keep these exactly as they were in the previous iteration.
     def _extract_compu_methods(self, root) -> Dict[str, Dict]:
         compu_methods = {}
         for cm in root.xpath("//*[local-name()='COMPU-METHOD']"):
@@ -286,21 +224,3 @@ class SomeIPEventParser(BaseParser):
                     })
             records_dict[rec_name] = elements
         return records_dict
-
-    def _extract_mapping_to_ports(self, root) -> Dict[str, List[str]]:
-        mapping_to_ports = {}
-        for swc in root.xpath("//*[local-name()='APPLICATION-SW-COMPONENT-TYPE']"):
-            swc_ports = []
-            for port in swc.xpath(".//*[local-name()='R-PORT-PROTOTYPE'] | .//*[local-name()='P-PORT-PROTOTYPE']"):
-                p_name_node = port.xpath("*[local-name()='SHORT-NAME']")
-                if p_name_node:
-                    swc_ports.append(p_name_node[0].text.strip())
-
-            for m_ref in swc.xpath(".//*[local-name()='DATA-TYPE-MAPPING-REF']"):
-                if m_ref.text:
-                    m_short_name = m_ref.text.split("/")[-1].strip()
-                    if m_short_name not in mapping_to_ports:
-                        mapping_to_ports[m_short_name] = set()
-                    mapping_to_ports[m_short_name].update(swc_ports)
-                    
-        return {k: list(v) for k, v in mapping_to_ports.items()}
