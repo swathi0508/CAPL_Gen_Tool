@@ -53,7 +53,7 @@ def update_eth_intermediate_sheet(arxml_path: str, excel_path: str, sheet_name: 
     
     # Clean the ARXML database keys
     df_signals['match_sif'] = df_signals['SIF'].astype(str).str.strip()
-    df_signals['match_method'] = df_signals['Method'].astype(str).str.strip().str.lower()
+    df_signals['match_method'] = df_signals['Attribute_Value'].astype(str).str.strip().str.lower()
 
     # Drop duplicates to prevent row-multiplication
     df_signals_unique = df_signals.drop_duplicates(subset=['match_sif', 'match_method'])

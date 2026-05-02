@@ -25,7 +25,7 @@ class BaseParser(ABC):
         return time.strftime("%H:%M:%S", time.gmtime(elapsed))
 
     def to_json_file(self, output_path: str, indent: int = 4):
-        """Dumps data with a legacy Summary header and ICAN_SIGNAL wrapper."""
+        """Dumps data with a legacy Summary header and SIGNAL_LIST wrapper."""
         data = self.to_json_dict()
         
         # 1. Calculate Statistics
@@ -42,8 +42,8 @@ class BaseParser(ABC):
                 "No_Path_Found": no_path,
                 "Processing_Time_HH_MM_SS": self._get_processing_time()
             },
-            # We use ICAN_SIGNAL for compatibility with your existing CAN tools
-            "ICAN_SIGNAL": data 
+            # We use SIGNAL_LIST for compatibility with your existing CAN tools
+            "SIGNAL_LIST": data 
         }
 
         try:
@@ -62,8 +62,8 @@ class BaseParser(ABC):
                 raw_cache = json.load(f)
             
             # Legacy Stripping: Look for the signal dictionary inside the wrapper
-            if "ICAN_SIGNAL" in raw_cache:
-                self._parsed_data = raw_cache["ICAN_SIGNAL"]
+            if "SIGNAL_LIST" in raw_cache:
+                self._parsed_data = raw_cache["SIGNAL_LIST"]
             elif "SOMEIP_SIGNAL" in raw_cache:
                 self._parsed_data = raw_cache["SOMEIP_SIGNAL"]
             else:
