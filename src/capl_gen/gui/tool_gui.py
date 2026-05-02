@@ -186,16 +186,24 @@ class CaplGenGUI:
         self.write_log(f"Sheet: {self.sheet_path_var.get()}")
         self.write_log(f"Type: {self.test_type_var.get()}")
 
-if __name__ == "__main__":
+def launch_gui():
+    """Initializes and launches the Tkinter main loop."""
     root = tk.Tk()
     style = ttk.Style()
+    
+    # Use the clam theme if available for better widget styling
     if "clam" in style.theme_names():
         style.theme_use("clam")
         
-    root.option_add('TComboboxListbox.background', '#ffffff')
-    root.option_add('TComboboxListbox.foreground', 'black')
-    root.option_add('TComboboxListbox.selectBackground', '#a0a0a0')
-    root.option_add('TComboboxListbox.selectForeground', 'black')
+    # Combobox dropdown styling
+    root.option_add('*TCombobox*Listbox.background', '#ffffff')
+    root.option_add('*TCombobox*Listbox.foreground', 'black')
+    root.option_add('*TCombobox*Listbox.selectBackground', '#a0a0a0')
+    root.option_add('*TCombobox*Listbox.selectForeground', 'black')
     
     app = CaplGenGUI(root)
     root.mainloop()
+
+if __name__ == "__main__":
+    # Allows running this file directly for testing UI changes
+    launch_gui()

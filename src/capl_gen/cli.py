@@ -2,7 +2,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from gui.tool_gui import launch_gui
+from capl_gen.gui.tool_gui import launch_gui
 
 from core.logger import log
 
