@@ -1,0 +1,31 @@
+/*@!Encoding:1252*/
+
+variables
+{
+  enum SOMEIP_VALUE_STATE
+  {
+    VALUE_STATE_UNAVAILABLE = 0,
+    VALUE_STATE_VALID = 1,
+    VALUE_STATE_INVALID = 2
+  };
+
+{% for row in standard_vars %}
+  double I{{ row.CAN_PORT | default('MISSING_DATA') }}_Min = {{ row.COMPUTED_CAN_MIN_PHY | default('MISSING_DATA') }};
+  double I{{ row.CAN_PORT | default('MISSING_DATA') }}_Mid = {{ row.COMPUTED_CAN_MID_PHY | default('MISSING_DATA') }};
+  double I{{ row.CAN_PORT | default('MISSING_DATA') }}_Max = {{ row.COMPUTED_CAN_MAX_PHY | default('MISSING_DATA') }};
+  double I{{ row.CAN_PORT | default('MISSING_DATA') }}_Offset = {{ row.CAN_OFFSET | default('MISSING_DATA') }};
+  double I{{ row.CAN_PORT | default('MISSING_DATA') }}_Resolution = {{ row.CAN_RESOLUTION | default('MISSING_DATA') }};
+{% endfor %}
+
+{% for row in enum_vars %}
+  enum I{{ row.CAN_PORT | default('MISSING_DATA') }}__{{ row.SOMEIP_PORT | default('MISSING_DATA') }}_{{ row.ATTRIBUTE_VALUE | default('MISSING_DATA') }}
+  {
+    I{{ row.CAN_PORT | default('MISSING_DATA') }}_Min = {{ row.COMPUTED_CAN_ENUM_MIN | default('MISSING_DATA') }},
+    {{ row.SOMEIP_PORT | default('MISSING_DATA') }}_{{ row.ATTRIBUTE_VALUE | default('MISSING_DATA') }}_Min = {{ row.COMPUTED_SOMEIP_ENUM_MIN | default('MISSING_DATA') }},
+    I{{ row.CAN_PORT | default('MISSING_DATA') }}_Mid = {{ row.COMPUTED_CAN_ENUM_MID | default('MISSING_DATA') }},
+    {{ row.SOMEIP_PORT | default('MISSING_DATA') }}_{{ row.ATTRIBUTE_VALUE | default('MISSING_DATA') }}_Mid = {{ row.COMPUTED_SOMEIP_ENUM_MID | default('MISSING_DATA') }},
+    I{{ row.CAN_PORT | default('MISSING_DATA') }}_Max = {{ row.COMPUTED_CAN_ENUM_MAX | default('MISSING_DATA') }},
+    {{ row.SOMEIP_PORT | default('MISSING_DATA') }}_{{ row.ATTRIBUTE_VALUE | default('MISSING_DATA') }}_Max = {{ row.COMPUTED_SOMEIP_ENUM_MAX | default('MISSING_DATA') }}
+  };
+{% endfor %}
+}
