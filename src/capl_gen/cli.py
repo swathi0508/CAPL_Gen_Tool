@@ -3,11 +3,26 @@ import sys
 import os
 from pathlib import Path
 
-from capl_gen.gui.tool_gui import launch_gui
-from capl_gen.core.logger import log
-from capl_gen.mappers.mapper_orchestrator import MapperOrchestrator
-from capl_gen.validators.cross_validator import CrossValidator
-from capl_gen.generator.jinja_engine import JinjaEngine
+from gui.tool_gui import launch_gui
+from core.logger import log
+from mappers.mapper_orchestrator import MapperOrchestrator
+from validators.cross_validator import CrossValidator
+from generator.jinja_engine import JinjaEngine
+
+from signals.can_parser import CANSignalParser
+from signals.someip_event_parser import SomeIPEventParser
+
+def ensure_databases(can_cache: str, eth_cache: str):
+    """Synchronously builds databases if they don't exist before running the CLI pipeline."""
+    if not os.path.exists(can_cache):
+        log.warning(f"CAN Cache missing. Parsing network now...")
+        can_parser = CANSignalParser("network.dbc")
+        can_parser.to_json_file(can_cache)
+        
+    if not os.path.exists(eth_cache):
+        log.warning(f"ETH Cache missing. Parsing ARXML now...")
+        eth_parser = SomeIPEventParser("ETH_CAN.arxml")
+        eth_parser.to_json_file(eth_cache)
 
 def run_headless_generation(excel_path: Path, output_dir: Path, can_db: str, eth_db: str, category: str, test_type: str):
     """Executes the complete generation pipeline without a GUI (for CI/CD)."""
@@ -27,6 +42,9 @@ def run_headless_generation(excel_path: Path, output_dir: Path, can_db: str, eth
     intermediate_excel = os.path.join(out_dir_str, base_name)
 
     try:
+        
+        ensure_databases(can_db, eth_db)
+        
         # --- PHASE 1: PRE-PROCESS & MAP ---
         log.info("--- PHASE 1: GENERATING INTERMEDIATE SHEETS ---")
         orchestrator = MapperOrchestrator(can_db, eth_db)

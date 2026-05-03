@@ -1,15 +1,19 @@
 import sys
 import os
+import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
 from PIL import Image, ImageTk
 
-# Import our backend engines
-from capl_gen.core.logger import log
-from capl_gen.mappers.mapper_orchestrator import MapperOrchestrator
-from capl_gen.validators.cross_validator import CrossValidator
-from capl_gen.generator.jinja_engine import JinjaEngine
+from core.logger import log
+from mappers.mapper_orchestrator import MapperOrchestrator
+from validators.cross_validator import CrossValidator
+from generator.jinja_engine import JinjaEngine
+
+# Import your parsers here!
+from signals.can_parser import CANSignalParser
+from signals.someip_event_parser import SomeIPEventParser
 
 def get_asset_path(filename: str) -> Path:
     if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
@@ -28,15 +32,17 @@ class CaplGenGUI:
 
         self.sheet_path_var = tk.StringVar(value="Requirements.xlsx")
         self.test_cat_var = tk.StringVar(value="E2E_CAN")
-        # FIXED: Use the exact string keys expected by the Jinja Engine
         self.test_type_var = tk.StringVar(value="CAN->SOMEIP")
         self.output_folder_var = tk.StringVar(value="GeneratedTestScripts")
 
-        # System paths for databases (Hardcoded for now, can be added to UI later if needed)
+        # Database Configuration
         self.can_db_cache = "can_db_cache.json"
         self.eth_db_cache = "someip_db_cache.json"
+        
+        # Define Raw ARXML/DBC Paths (Update these to point to your actual network files)
+        self.raw_can_network = "network.dbc"
+        self.raw_eth_network = "ETH_CAN.arxml"
 
-        # --- COLORS ---
         self.colors = {
             'text_light': '#e0e0e0',   
             'text_title': '#4ba3e3',   
@@ -55,6 +61,9 @@ class CaplGenGUI:
         self._build_input_section()
         self._build_action_buttons()
         self._build_log_section()
+        
+        # --- START BACKGROUND TASKS ---
+        self._start_background_db_build()
 
     def _setup_canvas(self):
         self.bg_image_path = get_asset_path("background.png")
@@ -128,14 +137,12 @@ class CaplGenGUI:
         tk.Entry(self.root, textvariable=self.output_folder_var, bg=self.colors['input_bg'], fg=self.colors['input_fg'], insertbackground='black', relief="flat").place(relx=0.1, rely=0.41, relwidth=0.8, height=30)
 
     def _build_action_buttons(self):
-        # BOUND command to run_preprocess
         self.btn_preprocess = tk.Button(
             self.root, text="PRE - PROCESS", bg=self.colors['btn_preprocess'], fg=self.colors['btn_fg'], 
             font=("Arial", 11, "bold"), relief="flat", cursor="hand2", command=self.run_preprocess
         )
         self.btn_preprocess.place(relx=0.1, rely=0.50, relwidth=0.8, height=38)
 
-        # BOUND command to run_generation
         self.btn_generate = tk.Button(
             self.root, text="GENERATE SCRIPTS", bg=self.colors['btn_generate'], fg=self.colors['btn_fg'], 
             font=("Arial", 11, "bold"), relief="flat", cursor="hand2", command=self.run_generation
@@ -162,7 +169,51 @@ class CaplGenGUI:
 
         self.log_text.grid(row=0, column=0, sticky="nsew")
         scrollbar.grid(row=0, column=1, sticky="ns")
-        self.write_log("System ready...")
+        self.write_log("System UI initialized.")
+
+    # --- DAEMON THREADING LOGIC ---
+    def _start_background_db_build(self):
+        """Checks if caches exist. If not, spawns a background thread to build them."""
+        can_missing = not os.path.exists(self.can_db_cache)
+        eth_missing = not os.path.exists(self.eth_db_cache)
+
+        if can_missing or eth_missing:
+            self.write_log("⚙️ Cache missing. Starting background database parsers...")
+            self.btn_preprocess.config(state="disabled") # Lock preprocess button
+            
+            # Spawn daemon thread so it dies gracefully if the user closes the app early
+            thread = threading.Thread(target=self._run_parsers_in_background, args=(can_missing, eth_missing), daemon=True)
+            thread.start()
+        else:
+            self.write_log("✅ Database caches loaded and ready.")
+
+    def _run_parsers_in_background(self, build_can: bool, build_eth: bool):
+        """Executes the heavy parsing logic without freezing the UI."""
+        try:
+            if build_can:
+                # self.root.after() safely schedules a UI update from a background thread
+                self.root.after(0, lambda: self.write_log("   -> Parsing CAN Network..."))
+                can_parser = CANSignalParser(self.raw_can_network)
+                can_parser.to_json_file(self.can_db_cache)
+                import time; time.sleep(2) # Placeholder for actual parse time
+
+            if build_eth:
+                self.root.after(0, lambda: self.write_log("   -> Parsing SOME/IP Network..."))
+                eth_parser = SomeIPEventParser(self.raw_eth_network)
+                eth_parser.to_json_file(self.eth_db_cache)
+                import time; time.sleep(2) # Placeholder for actual parse time
+
+            # Re-enable the UI
+            self.root.after(0, self._on_parsing_complete)
+
+        except Exception as e:
+            self.root.after(0, lambda: self.write_log(f"❌ Background Parsing Failed: {e}"))
+            self.root.after(0, lambda: self.btn_preprocess.config(state="normal")) # Unlock anyway
+
+    def _on_parsing_complete(self):
+        """Callback when the thread finishes successfully."""
+        self.write_log("✅ Background parsing complete. Ready to Pre-Process.")
+        self.btn_preprocess.config(state="normal")
 
     # --- ACTION METHODS ---
     def _browse_file(self):
