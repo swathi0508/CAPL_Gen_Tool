@@ -4,6 +4,8 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 from core.logger import log
 
+pd.set_option('future.no_silent_downcasting', True)
+
 class CaplCanToSomeipBasicFuncAndVarsGenerator:
     def __init__(self, template_dir):
         self.env = Environment(loader=FileSystemLoader(template_dir))
