@@ -118,7 +118,7 @@ class MapperOrchestrator:
             df_in = pd.read_excel(xls, sheet_name=sheet)
             df_out = pd.DataFrame()
             
-            # 1. Map Columns (Fixed target/source relationship)
+            # 1. Map Columns 
             mapping = self.get_column_mapping(sheet)
             for target, source in mapping.items():
                 df_out[target] = df_in[source] if source in df_in.columns else None
@@ -136,7 +136,8 @@ class MapperOrchestrator:
 
             # 4. Enrich with SOME/IP Data
             if "ATTRIBUTE_VALUE" in df_out.columns:
-                eth_res = df_out.apply(lambda r: self.eth_mapper.get_signal_data(r.get("ATTRIBUTE_VALUE")), axis=1, result_type='expand')
+                # --> CRITICAL UPDATE: Passing SOMEIP_PORT (Event) to prevent ValueState collisions
+                eth_res = df_out.apply(lambda r: self.eth_mapper.get_signal_data(r.get("ATTRIBUTE_VALUE"), r.get("SOMEIP_PORT")), axis=1, result_type='expand')
                 df_out = pd.concat([df_out, eth_res], axis=1)
 
             # 5. Compute Initial Function Names
