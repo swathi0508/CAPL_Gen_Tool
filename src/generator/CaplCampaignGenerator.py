@@ -5,35 +5,35 @@ from jinja2 import Environment, FileSystemLoader
 from core.logger import log
 
 class CaplCampaignGenerator:
-    def __init__(self, excel_path, template_dir):
-        self.excel_path = excel_path
+    def __init__(self, template_dir):
         self.env = Environment(loader=FileSystemLoader(template_dir))
 
-    def generate(self, category, target_type, output_root):
+    def generate(self, data_frames: dict, category: str, target_type: str, output_root: str):
         try:
-            xls = pd.ExcelFile(self.excel_path)
-            sheet_name = next((s for s in xls.sheet_names if s.upper() == f"{category}_intermediate".upper()), None)
+            target_sheet = f"{category}_PARSED"
+            # Find sheet case-insensitively
+            sheet_name = next((s for s in data_frames.keys() if s.upper() == target_sheet.upper()), None)
+            
             if not sheet_name:
-                log.error(f"Campaign Gen: Sheet {category}_intermediate not found.")
+                log.error(f"Campaign Gen: Sheet '{target_sheet}' not found in loaded data.")
                 return
-
-            df = pd.read_excel(xls, sheet_name=sheet_name)
+                
+            df = data_frames[sheet_name].copy()
             df.columns = df.columns.str.strip()
             df['TEST_TYPE'] = df['TEST_TYPE'].astype(str).str.strip()
             df = df[df['TEST_TYPE'] == target_type].copy()
-
-            # Identify if ID column exists based on the prefix (e.g., E2E_CAN_REQ_ID)
-            req_col = f"{category}_REQ_ID"
             
-            # Global check for empty cells in all columns
+            # Aggregate empty cell checks
             for col in df.columns:
-                null_indices = df[df[col].isna()].index.tolist()
-                for idx in null_indices:
-                    log.error(f"Campaign Gen: Row {idx+2} | Col '{col}' is EMPTY in {sheet_name}")
+                empty_mask = df[col].isna() | (df[col].astype(str).str.strip() == "") | (df[col] == "N/A")
+                empty_count = empty_mask.sum()
+                if empty_count > 0:
+                    log.warning(f"Campaign Gen: Col '{col}' has {empty_count} missing cells in {sheet_name}. (Will trigger compile crash)")
 
-            # Prepare data
+            # Replace empty-like items with MISSING_DATA
+            df.replace(["", "N/A", "nan", "None"], pd.NA, inplace=True)
             rows = df.fillna("MISSING_DATA").astype(str).to_dict(orient='records')
-
+            
             target_dir = Path(output_root) / category
             os.makedirs(target_dir, exist_ok=True)
             
