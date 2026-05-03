@@ -7,15 +7,20 @@ class SomeIPMapper(BaseMapper):
     
     def _load_database(self) -> dict:
         raw_db = super()._load_database()
-        # Save a flat list of all records so we can do accurate Event/Attribute filtering
-        self.raw_db_values = list(raw_db.values())
         
-        # We still keep a fast dictionary for fallback lookups
+        self.raw_db_values = []
         clean_db = {}
-        for _, data in raw_db.items():
+        
+        for key, data in raw_db.items():
+            # Inject the fully qualified database key directly into the data payload
+            # so we can easily return the full path later for Jinja templates
+            data["Signal_String"] = key
+            self.raw_db_values.append(data)
+            
             meth = str(data.get('Method', data.get('Attribute_Value', ''))).strip().lower()
             if meth:
                 clean_db[meth] = data
+                
         return clean_db
 
     def get_signal_data(self, attr_value: str, event_name: str = None) -> dict:
@@ -23,7 +28,7 @@ class SomeIPMapper(BaseMapper):
         cols = [
             "SOMEIP_DB_SIGNAL_NAME", "SOMEIP_ENUM", "SOMEIP_MIN_PHY", 
             "SOMEIP_MAX_PHY", "SOMEIP_OFFSET", "SOMEIP_RESOLUTION",
-            "SOMEIP_DB_SIGNAL_VALUESTATE"  # The new target column
+            "SOMEIP_DB_SIGNAL_VALUESTATE"
         ]
         
         if pd.isna(attr_value) or str(attr_value).strip() == "":
@@ -42,11 +47,9 @@ class SomeIPMapper(BaseMapper):
                 db_ev = str(data.get('Event', '')).strip().lower()
                 db_ev = re.sub(r'^someip', '', db_ev)
                 
-                # If Event matches, it's a perfect hit
                 if ev_lower and ev_lower in db_ev:
                     sig_data = data
                     break
-                # Fallback: grab the first matching attribute if no Event context was given
                 elif not sig_data:
                     sig_data = data 
                     
@@ -54,7 +57,7 @@ class SomeIPMapper(BaseMapper):
             return {col: "ETH_NOT_FOUND" for col in cols}
 
         # 2. SIBLING SEARCH: Find the ValueState corresponding to this exact event
-        vs_attr = None
+        vs_attr_full_path = None
         db_event_exact = sig_data.get("Event")
         db_attr_exact = sig_data.get("Attribute_Value", "")
         
@@ -63,23 +66,22 @@ class SomeIPMapper(BaseMapper):
             target_2 = f"{db_attr_exact.lower()}valuestate"
             
             for data in self.raw_db_values:
-                # Must belong to the exact same SOME/IP Event
                 if data.get("Event") == db_event_exact:
                     sibling_attr = data.get("Attribute_Value", "")
                     sibling_lower = sibling_attr.lower()
                     
-                    # Match standard 'valueState' or suffix '...ValueState', ensuring it's not the signal itself
                     if sibling_lower in [target_1, target_2] and sibling_lower != db_attr_exact.lower():
-                        vs_attr = sibling_attr
+                        # Return the FULL Signal_String we injected earlier, not the short name
+                        vs_attr_full_path = data.get("Signal_String")
                         break
 
         # 3. Return the enriched payload
         return {
-            "SOMEIP_DB_SIGNAL_NAME": sig_data.get("Signal_String", attr_lower),
+            "SOMEIP_DB_SIGNAL_NAME": sig_data.get("Signal_String"),
             "SOMEIP_ENUM": self.format_enum_to_string(sig_data.get("Enums", {})),
             "SOMEIP_MIN_PHY": sig_data.get("Min"),
             "SOMEIP_MAX_PHY": sig_data.get("Max"),
             "SOMEIP_OFFSET": sig_data.get("Offset"),
             "SOMEIP_RESOLUTION": sig_data.get("Resolution"),
-            "SOMEIP_DB_SIGNAL_VALUESTATE": vs_attr  # e.g., 'gadeStatusValueState' or 'valueState'
+            "SOMEIP_DB_SIGNAL_VALUESTATE": vs_attr_full_path
         }
