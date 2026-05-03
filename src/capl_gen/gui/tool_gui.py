@@ -311,6 +311,3 @@ def launch_gui():
     
     app = CaplGenGUI(root)
     root.mainloop()
-
-if __name__ == "__main__":
-    launch_gui()

@@ -3,7 +3,7 @@ import sys
 import os
 from pathlib import Path
 
-from gui.tool_gui import launch_gui
+from .gui.tool_gui import launch_gui
 from core.logger import log
 from mappers.mapper_orchestrator import MapperOrchestrator
 from validators.cross_validator import CrossValidator
@@ -42,7 +42,7 @@ def run_headless_generation(excel_path: Path, output_dir: Path, can_db: str, eth
     intermediate_excel = os.path.join(out_dir_str, base_name)
 
     try:
-        
+
         ensure_databases(can_db, eth_db)
         
         # --- PHASE 1: PRE-PROCESS & MAP ---
@@ -73,49 +73,3 @@ def run_headless_generation(excel_path: Path, output_dir: Path, can_db: str, eth
         log.exception(f"Fatal error during headless generation: {e}")
         sys.exit(1)
 
-def main():
-    """Parses command line arguments and routes execution."""
-    parser = argparse.ArgumentParser(
-        prog="capl-gen",
-        description="CAPL Generation Tool Pipeline.",
-        epilog="Run without arguments to launch the GUI."
-    )
-
-    # CLI Flags
-    parser.add_argument("--cli", action="store_true", help="Run in headless mode (requires all flags)")
-    parser.add_argument("--excel", type=Path, help="Path to the input Excel mapping file")
-    parser.add_argument("--out", type=Path, default=Path("./output"), help="Directory to save generated CAPL scripts")
-    
-    # New backend flags
-    parser.add_argument("--can-db", default="can_db_cache.json", help="Path to CAN JSON Cache")
-    parser.add_argument("--eth-db", default="someip_db_cache.json", help="Path to ETH JSON Cache")
-    parser.add_argument("--category", default="E2E_CAN", help="Target Category (e.g. E2E_CAN)")
-    parser.add_argument("--type", default="CAN->SOMEIP", help="Target Test Type (e.g. CAN->SOMEIP)")
-
-    args = parser.parse_args()
-
-    # Route Execution
-    if args.cli:
-        if not args.excel:
-            log.error("Missing argument: --cli mode requires the --excel flag.")
-            log.info("Example: capl-gen --cli --excel Requirements.xlsx --out ./Output_CAPL_Scripts")
-            sys.exit(1)
-
-        run_headless_generation(
-            excel_path=args.excel, 
-            output_dir=args.out, 
-            can_db=args.can_db, 
-            eth_db=args.eth_db, 
-            category=args.category, 
-            test_type=args.type
-        )
-    else:
-        log.info("Starting Graphical User Interface...")
-        try:
-            launch_gui()
-        except Exception as e:
-            log.critical(f"Failed to launch GUI: {e}")
-            sys.exit(1)
-
-if __name__ == "__main__":
-    main()
