@@ -5,12 +5,12 @@ import pandas as pd
 from core.logger import log
 
 class CrossValidator:
-    """Filters garbage enums, performs lexical validation, and computes signal limits."""
+    """Filters garbage enums, performs lexical validation, and computes strictly-typed limits."""
     
+    # 'invalid' and 'failure' are kept for negative testing in CAPL
     INVALID_ENUM_KEYWORDS = ['unavailable', 'not_used', 'notused', 'unknown', 'null', 'sna', 'reserved']
 
     def __init__(self, can_db: dict, eth_db: dict):
-        # Expects dictionaries pre-loaded by the Orchestrator/Parsers
         self.can_lookup = {re.sub(r'^i', '', str(k).lower()): v for k, v in can_db.items()}
         
         self.eth_lookup = {}
@@ -61,7 +61,17 @@ class CrossValidator:
     def compute_phy_stats(min_val, max_val):
         try:
             min_f, max_f = float(min_val), float(max_val)
-            return math.ceil(min_f), math.ceil((min_f + max_f) / 2.0), math.floor(max_f)
+            
+            c_min = int(math.ceil(min_f))
+            c_mid = int(math.ceil((min_f + max_f) / 2.0))
+            c_max = int(math.floor(max_f))
+            
+            # Anti-False-Positive Logic: Shift 0 to 1
+            c_min = 1 if c_min == 0 else c_min
+            c_mid = 1 if c_mid == 0 else c_mid
+            c_max = 1 if c_max == 0 else c_max
+
+            return c_min, c_mid, c_max
         except (ValueError, TypeError):
             return "N/A", "N/A", "N/A"
 
@@ -74,13 +84,14 @@ class CrossValidator:
             return
 
         updated_rows = []
+
         for _, row in df.iterrows():
             new_row = row.to_dict()
             can_sig, eth_sig = None, None
 
-            # Determine keys based on sheet topology
+            # 1. Safely grab lookup keys depending on the sheet topology
             if is_can_sheet:
-                raw_can = str(row.get('CAN_PORT', '')).strip().lower() # From Mapper output
+                raw_can = str(row.get('CAN_PORT', '')).strip().lower() 
                 if raw_can and raw_can != 'nan': can_sig = re.sub(r'^i', '', raw_can)
                 raw_eth = str(row.get('ATTRIBUTE_VALUE', '')).strip().lower()
                 if raw_eth and raw_eth != 'nan': eth_sig = raw_eth
@@ -90,7 +101,7 @@ class CrossValidator:
                 raw_can = str(row.get('CAN_PORT', '')).strip().lower()
                 if raw_can and raw_can != 'nan': can_sig = re.sub(r'^i', '', raw_can)
 
-            # --- Compute CAN Data ---
+            # 2. Compute CAN Data (ALWAYS WRITTEN)
             valid_c_enums = {}
             if can_sig and can_sig in self.can_lookup:
                 c_data = self.can_lookup[can_sig]
@@ -99,13 +110,16 @@ class CrossValidator:
                 new_row.update({'computed_can_enum_min': e_min, 'computed_can_enum_mid': e_mid, 'computed_can_enum_max': e_max})
                 
                 if valid_c_enums:
-                    new_row.update({'computed_can_min_phy': "N/A (Enum)", 'computed_can_mid_phy': "N/A (Enum)", 'computed_can_max_phy': "N/A (Enum)"})
+                    new_row.update({'computed_can_min_phy': "N/A (Is Enum)", 'computed_can_mid_phy': "N/A (Is Enum)", 'computed_can_max_phy': "N/A (Is Enum)"})
                 else:
                     limits = c_data.get('Attributes', {}).get('Phys_Limits', {})
                     p_min, p_mid, p_max = self.compute_phy_stats(limits.get('Min'), limits.get('Max'))
                     new_row.update({'computed_can_min_phy': p_min, 'computed_can_mid_phy': p_mid, 'computed_can_max_phy': p_max})
+            else:
+                for col in ['enum_min', 'enum_mid', 'enum_max', 'min_phy', 'mid_phy', 'max_phy']:
+                    new_row[f'computed_can_{col}'] = "N/A"
 
-            # --- Compute SOME/IP Data ---
+            # 3. Compute SOME/IP Data (ALWAYS WRITTEN)
             valid_e_enums = {}
             if eth_sig and eth_sig in self.eth_lookup:
                 e_data = self.eth_lookup[eth_sig]
@@ -114,12 +128,15 @@ class CrossValidator:
                 new_row.update({'computed_someip_enum_min': e_min, 'computed_someip_enum_mid': e_mid, 'computed_someip_enum_max': e_max})
                 
                 if valid_e_enums:
-                    new_row.update({'computed_someip_min_phy': "N/A (Enum)", 'computed_someip_mid_phy': "N/A (Enum)", 'computed_someip_max_phy': "N/A (Enum)"})
+                    new_row.update({'computed_someip_min_phy': "N/A (Is Enum)", 'computed_someip_mid_phy': "N/A (Is Enum)", 'computed_someip_max_phy': "N/A (Is Enum)"})
                 else:
                     p_min, p_mid, p_max = self.compute_phy_stats(e_data.get('Min'), e_data.get('Max'))
                     new_row.update({'computed_someip_min_phy': p_min, 'computed_someip_mid_phy': p_mid, 'computed_someip_max_phy': p_max})
+            else:
+                for col in ['enum_min', 'enum_mid', 'enum_max', 'min_phy', 'mid_phy', 'max_phy']:
+                    new_row[f'computed_someip_{col}'] = "N/A"
 
-            # --- Lexical Validation ---
+            # 4. Lexical Validation (ALWAYS WRITTEN)
             if valid_c_enums and valid_e_enums:
                 c_strings = [self.clean_string_for_match(v) for v in valid_c_enums.values()]
                 e_strings = [self.clean_string_for_match(v) for v in valid_e_enums.values()]
@@ -129,8 +146,11 @@ class CrossValidator:
 
             updated_rows.append(new_row)
 
-        # Write output back to Excel
         df_final = pd.DataFrame(updated_rows)
+
+        # FINAL STEP: Replace all empty cells, NaN, and None with "N/A" for a clean Excel sheet
+        df_final = df_final.fillna("N/A")
+
         try:
             with pd.ExcelWriter(excel_path, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
                 df_final.to_excel(writer, sheet_name=sheet_name, index=False)
