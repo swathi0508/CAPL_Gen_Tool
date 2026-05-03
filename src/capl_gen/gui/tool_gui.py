@@ -1,14 +1,15 @@
 import sys
+import os
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
 from PIL import Image, ImageTk
 
-# Placeholder logger
-class DummyLogger:
-    def info(self, msg): print(f"INFO: {msg}")
-    def error(self, msg): print(f"ERROR: {msg}")
-log = DummyLogger()
+# Import our backend engines
+from capl_gen.core.logger import log
+from capl_gen.mappers.mapper_orchestrator import MapperOrchestrator
+from capl_gen.validators.cross_validator import CrossValidator
+from capl_gen.generator.jinja_engine import JinjaEngine
 
 def get_asset_path(filename: str) -> Path:
     if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
@@ -26,9 +27,14 @@ class CaplGenGUI:
         self.root.minsize(800, 700)
 
         self.sheet_path_var = tk.StringVar(value="Requirements.xlsx")
-        self.test_cat_var = tk.StringVar(value="-- Select --")
-        self.test_type_var = tk.StringVar(value="-- Select Category First --")
+        self.test_cat_var = tk.StringVar(value="E2E_CAN")
+        # FIXED: Use the exact string keys expected by the Jinja Engine
+        self.test_type_var = tk.StringVar(value="CAN->SOMEIP")
         self.output_folder_var = tk.StringVar(value="GeneratedTestScripts")
+
+        # System paths for databases (Hardcoded for now, can be added to UI later if needed)
+        self.can_db_cache = "can_db_cache.json"
+        self.eth_db_cache = "someip_db_cache.json"
 
         # --- COLORS ---
         self.colors = {
@@ -38,7 +44,7 @@ class CaplGenGUI:
             'input_fg': '#000000',     
             'btn_preprocess': '#3b7a57', 
             'btn_generate': '#a14040',   
-            'btn_browse': '#2c476b',     # Steel Blue for Browse, Clear, and Download
+            'btn_browse': '#2c476b',     
             'btn_fg': 'white',
             'log_bg': '#050a12',       
             'log_fg': '#d1d1d1'        
@@ -76,12 +82,11 @@ class CaplGenGUI:
                 self.canvas.coords("title", width / 2, 90)
                 
                 left_align = width * 0.1
-                # Sync all floating labels dynamically
                 self.canvas.coords("lbl_sheet", left_align, height * 0.16)
                 self.canvas.coords("lbl_cat", left_align, height * 0.24)
                 self.canvas.coords("lbl_type", left_align, height * 0.32)
                 self.canvas.coords("lbl_out", left_align, height * 0.40)
-                self.canvas.coords("lbl_log", left_align, height * 0.67) # Log label right above the box
+                self.canvas.coords("lbl_log", left_align, height * 0.67) 
 
     def _build_header(self):
         logo_path = get_asset_path("logo.png")
@@ -116,18 +121,21 @@ class CaplGenGUI:
         cb_cat = ttk.Combobox(self.root, textvariable=self.test_cat_var, values=["E2E_CAN", "E2E_ETH"], state="readonly")
         cb_cat.place(relx=0.1, rely=0.25, relwidth=0.8, height=30)
 
-        cb_type = ttk.Combobox(self.root, textvariable=self.test_type_var, values=["CAN-SOMEIP", "CAN-SOMEIPFF", "CAN-SWC", "SWC_CAN", "SOMEIP-CAN"], state="readonly")
+        # FIXED: Exact Jinja registry keys
+        cb_type = ttk.Combobox(self.root, textvariable=self.test_type_var, values=["CAN->SOMEIP", "CAN->SOMEIP_FF", "CAN->SWC", "SWC->CAN", "SOMEIP->CAN"], state="readonly")
         cb_type.place(relx=0.1, rely=0.33, relwidth=0.8, height=30)
 
         tk.Entry(self.root, textvariable=self.output_folder_var, bg=self.colors['input_bg'], fg=self.colors['input_fg'], insertbackground='black', relief="flat").place(relx=0.1, rely=0.41, relwidth=0.8, height=30)
 
     def _build_action_buttons(self):
+        # BOUND command to run_preprocess
         self.btn_preprocess = tk.Button(
             self.root, text="PRE - PROCESS", bg=self.colors['btn_preprocess'], fg=self.colors['btn_fg'], 
-            font=("Arial", 11, "bold"), relief="flat", cursor="hand2"
+            font=("Arial", 11, "bold"), relief="flat", cursor="hand2", command=self.run_preprocess
         )
         self.btn_preprocess.place(relx=0.1, rely=0.50, relwidth=0.8, height=38)
 
+        # BOUND command to run_generation
         self.btn_generate = tk.Button(
             self.root, text="GENERATE SCRIPTS", bg=self.colors['btn_generate'], fg=self.colors['btn_fg'], 
             font=("Arial", 11, "bold"), relief="flat", cursor="hand2", command=self.run_generation
@@ -135,16 +143,13 @@ class CaplGenGUI:
         self.btn_generate.place(relx=0.1, rely=0.57, relwidth=0.8, height=38)
 
     def _build_log_section(self):
-        # 1. 100% Transparent Label drawn directly on Canvas
         self.canvas.create_text(0, 0, text="EXECUTION LOGS", font=("Helvetica", 10, "bold"), fill=self.colors['text_light'], anchor="sw", tags="lbl_log")
         
-        # 2. Control Buttons placed cleanly above the log box matching the Browse color
         tk.Button(self.root, text="Clear", bg=self.colors['btn_browse'], fg=self.colors['btn_fg'], relief="flat", cursor="hand2", command=self._clear_log).place(relx=0.90, rely=0.67, relwidth=0.08, height=25, anchor="se")
         tk.Button(self.root, text="Download", bg=self.colors['btn_browse'], fg=self.colors['btn_fg'], relief="flat", cursor="hand2").place(relx=0.81, rely=0.67, relwidth=0.08, height=25, anchor="se")
 
-        # 3. Main Execution Log text box
         log_frame = tk.Frame(self.root, bg=self.colors['log_bg'])
-        log_frame.place(relx=0.1, rely=0.68, relwidth=0.8, relheight=0.28) # Placed right below the label/buttons
+        log_frame.place(relx=0.1, rely=0.68, relwidth=0.8, relheight=0.28) 
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
 
@@ -163,7 +168,7 @@ class CaplGenGUI:
     def _browse_file(self):
         file_path = filedialog.askopenfilename(
             title="Select Requirements Excel",
-            filetypes=[("Excel Files", ".xlsx;.xls"), ("All Files", ".")]
+            filetypes=[("Excel Files", ".xlsx;.xls"), ("All Files", "*.*")]
         )
         if file_path:
             self.sheet_path_var.set(file_path)
@@ -181,21 +186,73 @@ class CaplGenGUI:
         self.log_text.config(state="disabled")
         self.root.update_idletasks()
 
+    def get_intermediate_path(self):
+        input_excel = self.sheet_path_var.get()
+        out_dir = self.output_folder_var.get()
+        base_name = os.path.basename(input_excel).replace(".xlsx", "_Intermediate.xlsx")
+        return os.path.join(out_dir, base_name)
+
+    def run_preprocess(self):
+        input_excel = self.sheet_path_var.get()
+        out_dir = self.output_folder_var.get()
+
+        if not os.path.exists(input_excel):
+            self.write_log(f"❌ Error: File '{input_excel}' not found.")
+            return
+
+        self.write_log("--- Starting Pre-Processing (Mapping & Validation) ---")
+        self.btn_preprocess.config(state="disabled")
+        
+        try:
+            # 1. Map requirements
+            self.write_log("Mapping databases to requirements...")
+            orchestrator = MapperOrchestrator(self.can_db_cache, self.eth_db_cache)
+            orchestrator.process_file(input_excel, out_dir)
+
+            int_excel = self.get_intermediate_path()
+
+            # 2. Compute Limits and Validate
+            self.write_log("Cross-validating signals and computing limits...")
+            validator = CrossValidator(orchestrator.can_mapper.db, orchestrator.eth_mapper.db)
+            validator.process_sheet(int_excel, "E2E_CAN_PARSED", is_can_sheet=True)
+            validator.process_sheet(int_excel, "E2E_ETH_PARSED", is_can_sheet=False)
+
+            self.write_log(f"✅ Pre-Processing Complete! Generated: {int_excel}")
+        except Exception as e:
+            self.write_log(f"❌ Fatal error during Pre-Processing: {e}")
+            log.exception("Pre-process error")
+        finally:
+            self.btn_preprocess.config(state="normal")
+
     def run_generation(self):
-        self.write_log("--- Starting Generation Pipeline ---")
-        self.write_log(f"Sheet: {self.sheet_path_var.get()}")
-        self.write_log(f"Type: {self.test_type_var.get()}")
+        int_excel = self.get_intermediate_path()
+        category = self.test_cat_var.get()
+        test_type = self.test_type_var.get()
+        out_dir = self.output_folder_var.get()
+
+        if not os.path.exists(int_excel):
+            self.write_log("❌ Error: Intermediate sheet not found. Please click 'PRE - PROCESS' first.")
+            return
+
+        self.write_log(f"--- Starting CAPL Generation ({category} | {test_type}) ---")
+        self.btn_generate.config(state="disabled")
+        
+        try:
+            engine = JinjaEngine(output_root=out_dir)
+            engine.run(int_excel, self.eth_db_cache, category, test_type)
+            self.write_log(f"✅ CAPL Scripts Generated in '{out_dir}'!")
+        except Exception as e:
+            self.write_log(f"❌ Generation failed: {e}")
+            log.exception("Generation error")
+        finally:
+            self.btn_generate.config(state="normal")
 
 def launch_gui():
-    """Initializes and launches the Tkinter main loop."""
     root = tk.Tk()
     style = ttk.Style()
-    
-    # Use the clam theme if available for better widget styling
     if "clam" in style.theme_names():
         style.theme_use("clam")
         
-    # Combobox dropdown styling
     root.option_add('*TCombobox*Listbox.background', '#ffffff')
     root.option_add('*TCombobox*Listbox.foreground', 'black')
     root.option_add('*TCombobox*Listbox.selectBackground', '#a0a0a0')
@@ -205,5 +262,4 @@ def launch_gui():
     root.mainloop()
 
 if __name__ == "__main__":
-    # Allows running this file directly for testing UI changes
     launch_gui()
