@@ -61,7 +61,7 @@ def update_eth_intermediate_sheet(arxml_path: str, excel_path: str, sheet_name: 
     # Columns to pull into the sheet
     columns_to_add = [
         'match_sif', 'match_method', 'Signal_String', 'DataType', 
-        'Available_States', 'Min', 'Mid', 'Max', 'Factor', 'Offset', 'Unit'
+        'Enums', 'Min', 'Mid', 'Max', 'Factor', 'Offset', 'Unit'
     ]
 
     # Clean up old ARXML columns from the Excel to prevent duplication suffixes

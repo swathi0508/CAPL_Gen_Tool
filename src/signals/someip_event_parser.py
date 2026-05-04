@@ -90,18 +90,25 @@ class SomeIPEventParser(BaseParser):
                             if datatype == "N/A":
                                 clean_match = re.match(r'^(u?s?int(?:8|16|32|64)|float(?:32|64)|boolean|double)', tref, re.IGNORECASE)
                                 datatype = clean_match.group(1).lower() if clean_match else "N/A"
-                            
-                            states_str = " | ".join([f"{k}: {v}" for k, v in c_data["enums"].items()]) if c_data["has_enums"] else ("Physical Value" if c_data["min"] is not None else "No Data")
-                            
+
+                            # Check if enums exist, otherwise default to an empty dictionary
+                            enums_dict = c_data["enums"] if c_data["has_enums"] else {}
+
                             # EXACT RECONSTRUCTION: EthernetCluster::sif_591::SomeIpChassisRegulationMalfunctionState::asrMalfunction
                             sig_str = f"EthernetCluster::sif_{sif}::{someip_port}::{elem_name}"
-                            
+
                             self._parsed_data[sig_str] = {
-                                "Cluster": "EthernetCluster", "SIF": sif, "Event": app_name,
-                                "Attribute_Value": elem_name, "DataType": datatype,
-                                "Available_States": states_str, "Min": format_val(c_data["min"]),
-                                "Mid": format_val(c_data["mid"]), "Max": format_val(c_data["max"]),
-                                "Factor": format_val(c_data["factor"]), "Offset": format_val(c_data["offset"]),
+                                "Cluster": "EthernetCluster", 
+                                "SIF": sif, 
+                                "Event": app_name,
+                                "Attribute_Value": elem_name, 
+                                "DataType": datatype,
+                                "Enums": enums_dict,
+                                "Min": format_val(c_data["min"]),
+                                "Mid": format_val(c_data["mid"]), 
+                                "Max": format_val(c_data["max"]),
+                                "Factor": format_val(c_data["factor"]), 
+                                "Offset": format_val(c_data["offset"]),
                                 "Unit": c_data["unit"]
                             }
                     else:

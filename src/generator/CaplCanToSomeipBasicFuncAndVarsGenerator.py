@@ -23,60 +23,72 @@ class CaplCanToSomeipBasicFuncAndVarsGenerator:
         ]
 
     def _validate_and_clean(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Aggregates errors to prevent log flooding and enforces MISSING_DATA triggers."""
+        # Fill missing required columns
         missing_cols = [c for c in self.j2_columns if c not in df.columns]
-        if missing_cols:
-            log.error(f"Logic Gen: Missing columns injected as MISSING_DATA -> {missing_cols}")
-            for c in missing_cols: df[c] = pd.NA
+        for c in missing_cols: df[c] = pd.NA
 
-        # Anti-spam logging: count missing cells per column
-        for col in self.j2_columns:
-            empty_mask = df[col].isna() | (df[col].astype(str).str.strip() == "") | (df[col] == "N/A")
-            empty_count = empty_mask.sum()
-            if empty_count > 0:
-                log.warning(f"Logic Gen: Column '{col}' is missing data in {empty_count} rows. (Will trigger compile crash)")
-
-        # Convert empty strings, "N/A" (from validator), and actual nulls to MISSING_DATA
-        df.replace(["", "N/A", "nan", "None"], pd.NA, inplace=True)
+        # Replace variations of nulls
+        df.replace(["", "N/A", "nan", "None", "MISSING_DATA"], pd.NA, inplace=True)
+        
+        # We fill NaNs here so the deduplication logic sees string values
         return df.fillna("MISSING_DATA").astype(str)
 
     def render(self, data_frames: dict, test_type: str, output_root: str):
         try:
-            # Combine all available parsed sheets safely
-            df = pd.concat(data_frames.values(), ignore_index=True)
-            df.columns = df.columns.str.strip()
+            # 1. Pick only the specific parsed sheets
+            target_sheets = ['E2E_CAN_PARSED', 'E2E_ETH_PARSED']
+            available_dfs = [data_frames[s] for s in target_sheets if s in data_frames]
             
-            if 'TEST_TYPE' not in df.columns:
-                log.error("TEST_TYPE column missing from sheets.")
-                return
-                
-            df['TEST_TYPE'] = df['TEST_TYPE'].astype(str).str.strip()
-            df = df[df['TEST_TYPE'] == test_type].copy()
-            
-            if df.empty:
-                log.warning(f"No data found for TEST_TYPE: {test_type}. Skipping generation.")
+            if not available_dfs:
+                log.error(f"Required sheets {target_sheets} not found in data_frames.")
                 return
 
+            df = pd.concat(available_dfs, ignore_index=True)
+            df.columns = df.columns.str.strip()
+            
+            # 2. Filter by TEST_TYPE
+            df = df[df['TEST_TYPE'].astype(str).str.strip() == test_type].copy()
+            
+            if df.empty:
+                log.warning(f"No data for {test_type} in targeted sheets.")
+                return
+
+            # 3. CLEAN DATA (Handles NaNs and "N/A")
             df = self._validate_and_clean(df)
+
+            # 4. FILTER: Exclude rows where Attribute_Value is a ValueState
+            # This prevents generating a basic_function based on the ValueState signal itself
+            df = df[~df['ATTRIBUTE_VALUE'].str.contains("ValueState", case=False)].copy()
+
+            # 5. DEDUPLICATE: Keep only one row per basic function name
+            func_df = df.drop_duplicates(subset=['BASIC_FUNCTION_NAME']).copy()
 
             # --- RENDER BASIC FUNCTIONS ---
             f_dir = Path(output_root) / "BASIC_FUNCTIONS"
             os.makedirs(f_dir, exist_ok=True)
-            with open(f_dir / "can_to_someip_basic_functions.cin", "w") as f:
-                f.write(self.env.get_template(self.func_template).render(functions=df.to_dict(orient='records')))
             
-            # --- RENDER VARIABLES (Deduplicated per Signal) ---
+            # Convert to dict for J2
+            func_records = func_df.to_dict(orient='records')
+            
+            with open(f_dir / "can_to_someip_basic_functions.cin", "w") as f:
+                f.write(self.env.get_template(self.func_template).render(functions=func_records))
+            
+            # --- RENDER VARIABLES ---
             v_dir = Path(output_root) / "VARIABLES"
             os.makedirs(v_dir, exist_ok=True)
-            var_df = df.drop_duplicates(subset=['CAN_PORT'])
             
-            # Split data based on presence of ENUMs
+            # Variables are declared per CAN_PORT
+            var_df = df.drop_duplicates(subset=['CAN_PORT'])
             std_vars = var_df[var_df['CAN_ENUM'] == "MISSING_DATA"].to_dict(orient='records')
             enum_vars = var_df[var_df['CAN_ENUM'] != "MISSING_DATA"].to_dict(orient='records')
             
             with open(v_dir / "can_to_someip_variables.cin", "w") as f:
-                f.write(self.env.get_template(self.var_template).render(standard_vars=std_vars, enum_vars=enum_vars))
+                f.write(self.env.get_template(self.var_template).render(
+                    standard_vars=std_vars, 
+                    enum_vars=enum_vars
+                ))
                 
-            log.info(f"Logic & Variables generation finished for {test_type}.")
+            log.info(f"Generated {len(func_records)} unique basic functions for {test_type}.")
+            
         except Exception as e:
             log.exception(f"Logic Gen failed: {e}")
