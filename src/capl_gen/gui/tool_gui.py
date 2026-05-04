@@ -31,6 +31,7 @@ class CaplGenGUI:
         self.root.minsize(800, 700)
 
         self.sheet_path_var = tk.StringVar(value="Requirements.xlsx")
+        self.arxml_path_var = tk.StringVar(value="") # New ARXML Path Variable
         self.test_cat_var = tk.StringVar(value="E2E_CAN")
         self.test_type_var = tk.StringVar(value="CAN->SOMEIP")
         self.output_folder_var = tk.StringVar(value="GeneratedTestScripts")
@@ -91,10 +92,12 @@ class CaplGenGUI:
                 self.canvas.coords("title", width / 2, 90)
                 
                 left_align = width * 0.1
+                # Adjusted spacing slightly to accommodate the new field seamlessly
                 self.canvas.coords("lbl_sheet", left_align, height * 0.16)
-                self.canvas.coords("lbl_cat", left_align, height * 0.24)
-                self.canvas.coords("lbl_type", left_align, height * 0.32)
-                self.canvas.coords("lbl_out", left_align, height * 0.40)
+                self.canvas.coords("lbl_arxml", left_align, height * 0.23) 
+                self.canvas.coords("lbl_cat", left_align, height * 0.30)
+                self.canvas.coords("lbl_type", left_align, height * 0.37)
+                self.canvas.coords("lbl_out", left_align, height * 0.44)
                 self.canvas.coords("lbl_log", left_align, height * 0.67) 
 
     def _build_header(self):
@@ -119,35 +122,43 @@ class CaplGenGUI:
 
     def _build_input_section(self):
         font_style = ("Helvetica", 10, "bold")
-        self.canvas.create_text(0, 0, text="Input Sheet Link:", font=font_style, fill=self.colors['text_light'], anchor="sw", tags="lbl_sheet")
+        self.canvas.create_text(0, 0, text="Input Requirement Sheet:", font=font_style, fill=self.colors['text_light'], anchor="sw", tags="lbl_sheet")
+        self.canvas.create_text(0, 0, text="Input ARXML Sheet:", font=font_style, fill=self.colors['text_light'], anchor="sw", tags="lbl_arxml")
         self.canvas.create_text(0, 0, text="Test Category:", font=font_style, fill=self.colors['text_light'], anchor="sw", tags="lbl_cat")
         self.canvas.create_text(0, 0, text="Test Type:", font=font_style, fill=self.colors['text_light'], anchor="sw", tags="lbl_type")
         self.canvas.create_text(0, 0, text="Output Folder Name:", font=font_style, fill=self.colors['text_light'], anchor="sw", tags="lbl_out")
 
+        # Row 1: Requirement Sheet
         tk.Entry(self.root, textvariable=self.sheet_path_var, bg=self.colors['input_bg'], fg=self.colors['input_fg'], insertbackground='black', relief="flat").place(relx=0.1, rely=0.17, relwidth=0.68, height=30)
         tk.Button(self.root, text="Browse...", bg=self.colors['btn_browse'], fg=self.colors['btn_fg'], relief="flat", cursor="hand2", command=self._browse_file).place(relx=0.79, rely=0.17, relwidth=0.11, height=30)
 
+        # Row 2: ARXML File (New Field)
+        tk.Entry(self.root, textvariable=self.arxml_path_var, bg=self.colors['input_bg'], fg=self.colors['input_fg'], insertbackground='black', relief="flat").place(relx=0.1, rely=0.24, relwidth=0.68, height=30)
+        tk.Button(self.root, text="Browse...", bg=self.colors['btn_browse'], fg=self.colors['btn_fg'], relief="flat", cursor="hand2", command=self._browse_arxml_file).place(relx=0.79, rely=0.24, relwidth=0.11, height=30)
+
+        # Row 3: Test Category
         cb_cat = ttk.Combobox(self.root, textvariable=self.test_cat_var, values=["E2E_CAN", "E2E_ETH"], state="readonly")
-        cb_cat.place(relx=0.1, rely=0.25, relwidth=0.8, height=30)
+        cb_cat.place(relx=0.1, rely=0.31, relwidth=0.8, height=30)
 
-        # FIXED: Exact Jinja registry keys
+        # Row 4: Test Type
         cb_type = ttk.Combobox(self.root, textvariable=self.test_type_var, values=["CAN->SOMEIP", "CAN->SOMEIP_FF", "CAN->SWC", "SWC->CAN", "SOMEIP->CAN"], state="readonly")
-        cb_type.place(relx=0.1, rely=0.33, relwidth=0.8, height=30)
+        cb_type.place(relx=0.1, rely=0.38, relwidth=0.8, height=30)
 
-        tk.Entry(self.root, textvariable=self.output_folder_var, bg=self.colors['input_bg'], fg=self.colors['input_fg'], insertbackground='black', relief="flat").place(relx=0.1, rely=0.41, relwidth=0.8, height=30)
+        # Row 5: Output Folder Name
+        tk.Entry(self.root, textvariable=self.output_folder_var, bg=self.colors['input_bg'], fg=self.colors['input_fg'], insertbackground='black', relief="flat").place(relx=0.1, rely=0.45, relwidth=0.8, height=30)
 
     def _build_action_buttons(self):
         self.btn_preprocess = tk.Button(
             self.root, text="PRE - PROCESS", bg=self.colors['btn_preprocess'], fg=self.colors['btn_fg'], 
             font=("Arial", 11, "bold"), relief="flat", cursor="hand2", command=self.run_preprocess
         )
-        self.btn_preprocess.place(relx=0.1, rely=0.50, relwidth=0.8, height=38)
+        self.btn_preprocess.place(relx=0.1, rely=0.52, relwidth=0.8, height=38)
 
         self.btn_generate = tk.Button(
             self.root, text="GENERATE SCRIPTS", bg=self.colors['btn_generate'], fg=self.colors['btn_fg'], 
             font=("Arial", 11, "bold"), relief="flat", cursor="hand2", command=self.run_generation
         )
-        self.btn_generate.place(relx=0.1, rely=0.57, relwidth=0.8, height=38)
+        self.btn_generate.place(relx=0.1, rely=0.59, relwidth=0.8, height=38)
 
     def _build_log_section(self):
         self.canvas.create_text(0, 0, text="EXECUTION LOGS", font=("Helvetica", 10, "bold"), fill=self.colors['text_light'], anchor="sw", tags="lbl_log")
@@ -224,6 +235,15 @@ class CaplGenGUI:
         if file_path:
             self.sheet_path_var.set(file_path)
             self.write_log(f"Selected file: {file_path}")
+            
+    def _browse_arxml_file(self):
+        file_path = filedialog.askopenfilename(
+            title="Select ARXML File",
+            filetypes=[("ARXML Files", "*.arxml"), ("All Files", "*.*")]
+        )
+        if file_path:
+            self.arxml_path_var.set(file_path)
+            self.write_log(f"Selected ARXML file: {file_path}")
 
     def _clear_log(self):
         self.log_text.config(state="normal")
