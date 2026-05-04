@@ -4,6 +4,9 @@ import re
 import pandas as pd
 from core.logger import log
 
+# Silence Pandas FutureWarnings regarding .replace() and .fillna() behavior
+pd.set_option('future.no_silent_downcasting', True)
+
 class CrossValidator:
     """Filters garbage enums, performs lexical validation, and computes strictly-typed limits."""
     
@@ -45,12 +48,13 @@ class CrossValidator:
     def get_valid_enums(self, raw_enum_data) -> dict:
         enum_dict = self.parse_enum_data(raw_enum_data)
         valid_enums = {}
-        invalid_tokens = {re.sub(r'[^a-z0-9]', '', kw.lower()) for kw in self.INVALID_ENUM_KEYWORDS}
 
         for k, v in enum_dict.items():
             value = str(v).strip().lower()
-            normalized_value = re.sub(r'[^a-z0-9]', '', value)
-            if normalized_value in invalid_tokens:
+            
+            # FIXED: We use substring check (in) so that 'Unavailable_value' and 'Not_used_10' 
+            # are caught by the 'unavailable' and 'not_used' keywords.
+            if any(kw in value for kw in self.INVALID_ENUM_KEYWORDS):
                 continue
 
             try:
@@ -59,10 +63,66 @@ class CrossValidator:
                 pass
         return valid_enums
 
+    def get_intersected_enum_keys(self, valid_c_enums: dict, valid_e_enums: dict) -> tuple[set, set]:
+        """
+        CROSS-MAP FIX & SMART TOKENIZER: 
+        Strips AUTOSAR prefixes, ignores noise words ('REQUESTED'), and matches exact tokens 
+        or semantic initials (e.g., recognizes that CAN 'P' matches ETH 'PARKING').
+        Prevents false substring matches like 'L' matching 'NEUTRAL'.
+        """
+        matched_c_keys = set()
+        matched_e_keys = set()
+        
+        def extract_core_meaning(s):
+            s = str(s).upper()
+            # Strip standard AUTOSAR SOME/IP prefixes to isolate the actual state
+            if '_T_' in s:
+                s = s.split('_T_')[-1]
+            elif s.startswith('VALUE_STATE_'):
+                s = s.replace('VALUE_STATE_', '')
+            
+            # Tokenize by splitting on non-alphanumeric characters
+            tokens = [t for t in re.split(r'[^A-Z0-9]', s) if t]
+            
+            # Filter out generic noise words that cause false positive overlaps
+            stop_words = {'REQUESTED', 'REQUEST', 'STATUS', 'STATE', 'VALUE', 'IS', 'THE'}
+            filtered = [t for t in tokens if t not in stop_words]
+            
+            return filtered if filtered else tokens
+            
+        if valid_c_enums and valid_e_enums:
+            for c_k, c_v in valid_c_enums.items():
+                c_tokens = extract_core_meaning(c_v)
+                for e_k, e_v in valid_e_enums.items():
+                    e_tokens = extract_core_meaning(e_v)
+                    
+                    is_match = False
+                    if not c_tokens or not e_tokens:
+                        # Fallback to direct substring match if tokenization fails
+                        c_clean = self.clean_string_for_match(c_v)
+                        e_clean = self.clean_string_for_match(e_v)
+                        if c_clean in e_clean or e_clean in c_clean:
+                            is_match = True
+                    else:
+                        for ct in c_tokens:
+                            for et in e_tokens:
+                                # Handles exact token match OR Initial Abbreviation match (e.g. 'P' == 'PARKING')
+                                if ct == et or (len(ct) == 1 and et.startswith(ct)) or (len(et) == 1 and ct.startswith(et)):
+                                    is_match = True
+                                    break
+                            if is_match: break
+                            
+                    if is_match:
+                        matched_c_keys.add(c_k)
+                        matched_e_keys.add(e_k)
+                        
+        return matched_c_keys, matched_e_keys
+
     @staticmethod
-    def compute_enum_stats(valid_enums: dict):
-        if not valid_enums: return "N/A", "N/A", "N/A"
-        sorted_keys = sorted(valid_enums.keys())
+    def compute_enum_stats(keys):
+        """Accepts an iterable list/set of keys and returns Min, Mid, Max."""
+        if not keys: return "N/A", "N/A", "N/A"
+        sorted_keys = sorted(list(keys))
         return sorted_keys[0], sorted_keys[len(sorted_keys) // 2], sorted_keys[-1]
 
     @staticmethod
@@ -106,17 +166,36 @@ class CrossValidator:
                 if raw_can and raw_can != 'nan': 
                     can_sig = ("i" + raw_can).lower()
 
-            # 2. Compute CAN Data (ALWAYS WRITTEN)
+            # 2. Extract Valid Enums (Filters out garbage)
             valid_c_enums = {}
             if can_sig and can_sig in self.can_lookup:
+                valid_c_enums = self.get_valid_enums(self.can_lookup[can_sig].get('Attributes', {}).get('Enums', {}))
+
+            valid_e_enums = {}
+            if eth_sig and eth_sig in self.eth_lookup:
+                valid_e_enums = self.get_valid_enums(self.eth_lookup[eth_sig].get('Enums', {}))
+
+            # 3. INTERSECT ENUMS (The Semantic Cross-Map Fix)
+            matched_c_keys, matched_e_keys = self.get_intersected_enum_keys(valid_c_enums, valid_e_enums)
+            
+            # Record Lexical Match status
+            if valid_c_enums and valid_e_enums:
+                new_row['Enum_Lexical_Match'] = "MATCH" if matched_c_keys else "MISMATCH"
+            else:
+                new_row['Enum_Lexical_Match'] = "N/A"
+
+            # 4. Compute CAN Data Output
+            if can_sig and can_sig in self.can_lookup:
                 c_data = self.can_lookup[can_sig]
-                valid_c_enums = self.get_valid_enums(c_data.get('Attributes', {}).get('Enums', {}))
-                e_min, e_mid, e_max = self.compute_enum_stats(valid_c_enums)
-                new_row.update({'COMPUTED_CAN_ENUM_MIN': e_min, 'COMPUTED_CAN_ENUM_MID': e_mid, 'COMPUTED_CAN_ENUM_MAX': e_max})
-                
                 if valid_c_enums:
+                    # SMART SUBSETTING: Use intersected keys if available, fallback to all valid
+                    keys_to_use = matched_c_keys if matched_c_keys else valid_c_enums.keys()
+                    e_min, e_mid, e_max = self.compute_enum_stats(keys_to_use)
+                    new_row.update({'COMPUTED_CAN_ENUM_MIN': e_min, 'COMPUTED_CAN_ENUM_MID': e_mid, 'COMPUTED_CAN_ENUM_MAX': e_max})
+                    
                     new_row.update({'COMPUTED_CAN_MIN_PHY': "N/A (Is Enum)", 'COMPUTED_CAN_MID_PHY': "N/A (Is Enum)", 'COMPUTED_CAN_MAX_PHY': "N/A (Is Enum)"})
                 else:
+                    for col in ['ENUM_MIN', 'ENUM_MID', 'ENUM_MAX']: new_row[f'COMPUTED_CAN_{col}'] = "N/A"
                     limits = c_data.get('Attributes', {}).get('Phys_Limits', {})
                     p_min, p_mid, p_max = self.compute_phy_stats(limits.get('Min'), limits.get('Max'))
                     new_row.update({'COMPUTED_CAN_MIN_PHY': p_min, 'COMPUTED_CAN_MID_PHY': p_mid, 'COMPUTED_CAN_MAX_PHY': p_max})
@@ -124,17 +203,18 @@ class CrossValidator:
                 for col in ['ENUM_MIN', 'ENUM_MID', 'ENUM_MAX', 'MIN_PHY', 'MID_PHY', 'MAX_PHY']:
                     new_row[f'COMPUTED_CAN_{col}'] = "N/A"
 
-            # 3. Compute SOME/IP Data (ALWAYS WRITTEN)
-            valid_e_enums = {}
+            # 5. Compute SOME/IP Data Output
             if eth_sig and eth_sig in self.eth_lookup:
                 e_data = self.eth_lookup[eth_sig]
-                valid_e_enums = self.get_valid_enums(e_data.get('Enums', {}))
-                e_min, e_mid, e_max = self.compute_enum_stats(valid_e_enums)
-                new_row.update({'COMPUTED_SOMEIP_ENUM_MIN': e_min, 'COMPUTED_SOMEIP_ENUM_MID': e_mid, 'COMPUTED_SOMEIP_ENUM_MAX': e_max})
-                
                 if valid_e_enums:
+                    # SMART SUBSETTING: Use intersected keys if available, fallback to all valid
+                    keys_to_use = matched_e_keys if matched_e_keys else valid_e_enums.keys()
+                    e_min, e_mid, e_max = self.compute_enum_stats(keys_to_use)
+                    new_row.update({'COMPUTED_SOMEIP_ENUM_MIN': e_min, 'COMPUTED_SOMEIP_ENUM_MID': e_mid, 'COMPUTED_SOMEIP_ENUM_MAX': e_max})
+                    
                     new_row.update({'COMPUTED_SOMEIP_MIN_PHY': "N/A (Is Enum)", 'COMPUTED_SOMEIP_MID_PHY': "N/A (Is Enum)", 'COMPUTED_SOMEIP_MAX_PHY': "N/A (Is Enum)"})
                 else:
+                    for col in ['ENUM_MIN', 'ENUM_MID', 'ENUM_MAX']: new_row[f'COMPUTED_SOMEIP_{col}'] = "N/A"
                     p_min, p_mid, p_max = self.compute_phy_stats(e_data.get('Min'), e_data.get('Max'))
                     new_row.update({'COMPUTED_SOMEIP_MIN_PHY': p_min, 'COMPUTED_SOMEIP_MID_PHY': p_mid, 'COMPUTED_SOMEIP_MAX_PHY': p_max})
             else:
@@ -148,14 +228,6 @@ class CrossValidator:
                 someip_val = new_row.get(someip_key)
                 if someip_val in [None, '', 'N/A'] and can_key in new_row:
                     new_row[someip_key] = new_row.get(can_key)
-
-            # 4. Lexical Validation (ALWAYS WRITTEN)
-            if valid_c_enums and valid_e_enums:
-                c_strings = [self.clean_string_for_match(v) for v in valid_c_enums.values()]
-                e_strings = [self.clean_string_for_match(v) for v in valid_e_enums.values()]
-                new_row['Enum_Lexical_Match'] = "MATCH" if any(c in e for c in c_strings for e in e_strings) else "MISMATCH"
-            else:
-                new_row['Enum_Lexical_Match'] = "N/A"
 
             updated_rows.append(new_row)
 
