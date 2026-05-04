@@ -77,8 +77,11 @@ class SomeIPEventParser(BaseParser):
                     # ONLY PROCESS APPLICATION RECORDS (Struct Unrolling)
                     # -----------------------------------------------------
                     if app_name in records_dict:
+                        # REMOVE TRAILING NUMBERS FOR CANONICAL NAMING (e.g., VehicleSpeed2 -> VehicleSpeed)
+                        canonical_event_name = re.sub(r'\d+$', '', app_name)
+                        
                         # The Application Record name becomes the Port/Event Name
-                        someip_port = f"SomeIp{app_name}"
+                        someip_port = f"SomeIp{canonical_event_name}"
                         
                         for element in records_dict[app_name]:
                             elem_name = element["name"]
@@ -94,13 +97,13 @@ class SomeIPEventParser(BaseParser):
                             # Check if enums exist, otherwise default to an empty dictionary
                             enums_dict = c_data["enums"] if c_data["has_enums"] else {}
 
-                            # EXACT RECONSTRUCTION: EthernetCluster::sif_591::SomeIpChassisRegulationMalfunctionState::asrMalfunction
+                            # EXACT RECONSTRUCTION using the clean canonical name
                             sig_str = f"EthernetCluster::sif_{sif}::{someip_port}::{elem_name}"
 
                             self._parsed_data[sig_str] = {
                                 "Cluster": "EthernetCluster", 
                                 "SIF": sif, 
-                                "Event": app_name,
+                                "Event": canonical_event_name,
                                 "Attribute_Value": elem_name, 
                                 "DataType": datatype,
                                 "Enums": enums_dict,
@@ -119,7 +122,6 @@ class SomeIPEventParser(BaseParser):
         return self._parsed_data
 
     # --- Private Helper Methods ---
-    # Keep these exactly as they were in the previous iteration.
     def _extract_compu_methods(self, root) -> Dict[str, Dict]:
         compu_methods = {}
         for cm in root.xpath("//*[local-name()='COMPU-METHOD']"):
