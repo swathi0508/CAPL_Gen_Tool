@@ -48,12 +48,12 @@ class CrossValidator:
     def get_valid_enums(self, raw_enum_data) -> dict:
         enum_dict = self.parse_enum_data(raw_enum_data)
         valid_enums = {}
+        invalid_tokens = {re.sub(r'[^a-z0-9]', '', kw.lower()) for kw in self.INVALID_ENUM_KEYWORDS}
 
         for k, v in enum_dict.items():
             value = str(v).strip().lower()
             
-            # FIXED: We use substring check (in) so that 'Unavailable_value' and 'Not_used_10' 
-            # are caught by the 'unavailable' and 'not_used' keywords.
+            # Using substring match to aggressively catch 'Unavailable_value' and 'Not_used_10'
             if any(kw in value for kw in self.INVALID_ENUM_KEYWORDS):
                 continue
 
@@ -65,53 +65,106 @@ class CrossValidator:
 
     def get_intersected_enum_keys(self, valid_c_enums: dict, valid_e_enums: dict) -> tuple[set, set]:
         """
-        CROSS-MAP FIX & SMART TOKENIZER: 
-        Strips AUTOSAR prefixes, ignores noise words ('REQUESTED'), and matches exact tokens 
-        or semantic initials (e.g., recognizes that CAN 'P' matches ETH 'PARKING').
-        Prevents false substring matches like 'L' matching 'NEUTRAL'.
+        SEMANTIC CROSS-MAP ENGINE: 
+        Uses Tokenization, Synonym mapping, and Polarity (Positive/Negative) logic 
+        to perfectly pair abstract states (e.g. 'Blower_1' with 'LV1', 'No_Request' with 'FALSE').
         """
         matched_c_keys = set()
         matched_e_keys = set()
         
-        def extract_core_meaning(s):
+        GEAR_MAP = {'P': 'PARKING', 'R': 'REVERSE', 'N': 'NEUTRAL', 'D': 'DRIVE', 'B': 'BRAKE', 'M': 'MANUAL', 'L': 'LOW'}
+        
+        NEGATIONS = {'NO', 'NOT', 'OFF', 'DEACTIVATED', 'DISABLE', 'DISABLED', 'WITHOUT', 'NONE', 'FALSE', 'INCORRECT', 'INACTIVE', 'UNSPECIFIED'}
+        POSITIVES = {'ON', 'ACTIVATED', 'ENABLE', 'ENABLED', 'WITH', 'TRUE', 'CORRECT', 'ACTIVE', 'ONGOING', 'AVAILABLE', 'REQUESTED', 'REQUEST'}
+        
+        SYNONYMS = {
+            'LV': 'SPEED',
+            'LEVEL': 'SPEED',
+            'PROGRESS': 'ONGOING',
+            'REQ': 'REQUEST'
+        }
+
+        def extract_tokens(s):
             s = str(s).upper()
-            # Strip standard AUTOSAR SOME/IP prefixes to isolate the actual state
-            if '_T_' in s:
-                s = s.split('_T_')[-1]
-            elif s.startswith('VALUE_STATE_'):
-                s = s.replace('VALUE_STATE_', '')
+            # Preserve prefix nouns by replacing with space instead of deleting them
+            s = s.replace('_T_', ' ')
+            if s.startswith('VALUE_STATE_'): s = s.replace('VALUE_STATE_', ' ')
+            s = s.replace('STATUS', ' ').replace('STATE', ' ')
             
-            # Tokenize by splitting on non-alphanumeric characters
-            tokens = [t for t in re.split(r'[^A-Z0-9]', s) if t]
+            raw_tokens = [t for t in re.split(r'[^A-Z0-9]', s) if t]
             
-            # Filter out generic noise words that cause false positive overlaps
-            stop_words = {'REQUESTED', 'REQUEST', 'STATUS', 'STATE', 'VALUE', 'IS', 'THE'}
-            filtered = [t for t in tokens if t not in stop_words]
-            
-            return filtered if filtered else tokens
-            
+            normalized_tokens = []
+            for t in raw_tokens:
+                # Splits fused letters and numbers (e.g., LV1 -> LV, 1)
+                match = re.match(r'^([A-Z]+)(\d+)$', t)
+                if match:
+                    alpha, num = match.groups()
+                    alpha = SYNONYMS.get(alpha, alpha)
+                    normalized_tokens.extend([alpha, num])
+                else:
+                    normalized_tokens.append(SYNONYMS.get(t, t))
+                    
+            stop_words = {'IS', 'THE', 'OR', 'IN', 'TABLE', 'DESCRIPTION', 'ACTION'}
+            filtered = [t for t in normalized_tokens if t not in stop_words]
+            return filtered if filtered else normalized_tokens
+
         if valid_c_enums and valid_e_enums:
             for c_k, c_v in valid_c_enums.items():
-                c_tokens = extract_core_meaning(c_v)
+                c_tokens = extract_tokens(c_v)
+                c_is_negative = bool(set(c_tokens) & NEGATIONS)
+                c_is_positive = bool(set(c_tokens) & POSITIVES)
+                c_polarity = False if c_is_negative else (True if c_is_positive else None)
+                
+                c_digits = {t for t in c_tokens if t.isdigit()}
+                c_nouns = set(c_tokens) - NEGATIONS - POSITIVES
+
                 for e_k, e_v in valid_e_enums.items():
-                    e_tokens = extract_core_meaning(e_v)
+                    e_tokens = extract_tokens(e_v)
+                    e_is_negative = bool(set(e_tokens) & NEGATIONS)
+                    e_is_positive = bool(set(e_tokens) & POSITIVES)
+                    e_polarity = False if e_is_negative else (True if e_is_positive else None)
+                    
+                    e_digits = {t for t in e_tokens if t.isdigit()}
+                    e_nouns = set(e_tokens) - NEGATIONS - POSITIVES
+
+                    # RULE 1: Strict Polarity Clash (Prevents "Activated" matching "Not_Activated")
+                    if (c_polarity is False and e_polarity is True) or (c_polarity is True and e_polarity is False):
+                        continue
                     
                     is_match = False
-                    if not c_tokens or not e_tokens:
-                        # Fallback to direct substring match if tokenization fails
-                        c_clean = self.clean_string_for_match(c_v)
-                        e_clean = self.clean_string_for_match(e_v)
-                        if c_clean in e_clean or e_clean in c_clean:
-                            is_match = True
-                    else:
-                        for ct in c_tokens:
-                            for et in e_tokens:
-                                # Handles exact token match OR Initial Abbreviation match (e.g. 'P' == 'PARKING')
-                                if ct == et or (len(ct) == 1 and et.startswith(ct)) or (len(et) == 1 and ct.startswith(et)):
+                    
+                    # RULE 2: Number Intersection (Perfect for Blower Speeds and Levels)
+                    if c_digits and e_digits and (c_digits & e_digits):
+                        is_match = True
+                        
+                    # RULE 3: Noun and Gear Overlap
+                    if not is_match:
+                        for ct in c_nouns:
+                            for et in e_nouns:
+                                if ct == et:
+                                    is_match = True
+                                    break
+                                elif ct in GEAR_MAP and et.startswith(GEAR_MAP[ct]):
+                                    is_match = True
+                                    break
+                                elif et in GEAR_MAP and ct.startswith(GEAR_MAP[et]):
                                     is_match = True
                                     break
                             if is_match: break
                             
+                    # RULE 4: Semantic Polarity Fallback (e.g. 'Brake_range_not_available' matching 'false')
+                    if not is_match and c_polarity == e_polarity and c_polarity is not None:
+                        # If one string is purely descriptive with no strong conflicting nouns
+                        if not c_nouns or not e_nouns:
+                            is_match = True
+
+                    # RULE 5: Dumb Fallback (If tokenizer completely misses a weird naming convention)
+                    if not is_match and not c_polarity and not e_polarity:
+                        c_clean = self.clean_string_for_match(c_v)
+                        e_clean = self.clean_string_for_match(e_v)
+                        if c_clean and e_clean and (c_clean in e_clean or e_clean in c_clean):
+                            is_match = True
+
                     if is_match:
                         matched_c_keys.add(c_k)
                         matched_e_keys.add(e_k)
@@ -120,7 +173,6 @@ class CrossValidator:
 
     @staticmethod
     def compute_enum_stats(keys):
-        """Accepts an iterable list/set of keys and returns Min, Mid, Max."""
         if not keys: return "N/A", "N/A", "N/A"
         sorted_keys = sorted(list(keys))
         return sorted_keys[0], sorted_keys[len(sorted_keys) // 2], sorted_keys[-1]
@@ -166,7 +218,7 @@ class CrossValidator:
                 if raw_can and raw_can != 'nan': 
                     can_sig = ("i" + raw_can).lower()
 
-            # 2. Extract Valid Enums (Filters out garbage)
+            # 2. Extract Valid Enums
             valid_c_enums = {}
             if can_sig and can_sig in self.can_lookup:
                 valid_c_enums = self.get_valid_enums(self.can_lookup[can_sig].get('Attributes', {}).get('Enums', {}))
@@ -175,10 +227,9 @@ class CrossValidator:
             if eth_sig and eth_sig in self.eth_lookup:
                 valid_e_enums = self.get_valid_enums(self.eth_lookup[eth_sig].get('Enums', {}))
 
-            # 3. INTERSECT ENUMS (The Semantic Cross-Map Fix)
+            # 3. INTERSECT ENUMS
             matched_c_keys, matched_e_keys = self.get_intersected_enum_keys(valid_c_enums, valid_e_enums)
             
-            # Record Lexical Match status
             if valid_c_enums and valid_e_enums:
                 new_row['Enum_Lexical_Match'] = "MATCH" if matched_c_keys else "MISMATCH"
             else:
@@ -188,11 +239,9 @@ class CrossValidator:
             if can_sig and can_sig in self.can_lookup:
                 c_data = self.can_lookup[can_sig]
                 if valid_c_enums:
-                    # SMART SUBSETTING: Use intersected keys if available, fallback to all valid
                     keys_to_use = matched_c_keys if matched_c_keys else valid_c_enums.keys()
                     e_min, e_mid, e_max = self.compute_enum_stats(keys_to_use)
                     new_row.update({'COMPUTED_CAN_ENUM_MIN': e_min, 'COMPUTED_CAN_ENUM_MID': e_mid, 'COMPUTED_CAN_ENUM_MAX': e_max})
-                    
                     new_row.update({'COMPUTED_CAN_MIN_PHY': "N/A (Is Enum)", 'COMPUTED_CAN_MID_PHY': "N/A (Is Enum)", 'COMPUTED_CAN_MAX_PHY': "N/A (Is Enum)"})
                 else:
                     for col in ['ENUM_MIN', 'ENUM_MID', 'ENUM_MAX']: new_row[f'COMPUTED_CAN_{col}'] = "N/A"
@@ -207,11 +256,9 @@ class CrossValidator:
             if eth_sig and eth_sig in self.eth_lookup:
                 e_data = self.eth_lookup[eth_sig]
                 if valid_e_enums:
-                    # SMART SUBSETTING: Use intersected keys if available, fallback to all valid
                     keys_to_use = matched_e_keys if matched_e_keys else valid_e_enums.keys()
                     e_min, e_mid, e_max = self.compute_enum_stats(keys_to_use)
                     new_row.update({'COMPUTED_SOMEIP_ENUM_MIN': e_min, 'COMPUTED_SOMEIP_ENUM_MID': e_mid, 'COMPUTED_SOMEIP_ENUM_MAX': e_max})
-                    
                     new_row.update({'COMPUTED_SOMEIP_MIN_PHY': "N/A (Is Enum)", 'COMPUTED_SOMEIP_MID_PHY': "N/A (Is Enum)", 'COMPUTED_SOMEIP_MAX_PHY': "N/A (Is Enum)"})
                 else:
                     for col in ['ENUM_MIN', 'ENUM_MID', 'ENUM_MAX']: new_row[f'COMPUTED_SOMEIP_{col}'] = "N/A"
@@ -232,8 +279,6 @@ class CrossValidator:
             updated_rows.append(new_row)
 
         df_final = pd.DataFrame(updated_rows)
-
-        # FINAL STEP: Replace all empty cells, NaN, and None with "N/A" for a clean Excel sheet
         df_final = df_final.fillna("N/A")
 
         expected_computed_cols = [
