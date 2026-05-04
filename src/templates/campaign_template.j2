@@ -11,6 +11,8 @@ includes
 
 void MainTest()
 {
+  PRECONDITION__SET_GADESTATUS_TO_GADESTATUS_MISSION_MODE_ON();
+  
   {% for row in rows -%}
   {% set req_id = row[prefix ~ '_REQ_ID'] | default('MISSING_DATA') -%}
   {{ req_id }}();
