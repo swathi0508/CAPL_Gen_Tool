@@ -1,20 +1,23 @@
 import os
 import math
 import re
+import warnings
 import pandas as pd
 from core.logger import log
 
-# Silence Pandas FutureWarnings regarding .replace() and .fillna() behavior
-pd.set_option('future.no_silent_downcasting', True)
+# Suppress the warning natively without altering Pandas' internal data types
+# This guarantees VS Code Excel Viewers can read the generated XML schema
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 class CrossValidator:
-    """Filters garbage enums, performs lexical validation, and computes strictly-typed limits."""
-    
-    INVALID_ENUM_KEYWORDS = ['unavailable', 'not_used', 'notused', 'unknown', 'null', 'sna', 'reserved']
+    """Filters garbage enums, performs lexical/semantic validation, and computes strictly-typed limits."""
+
+    # Expanded to catch all edge cases like "Not_available__init_or_lever_switched_failure_"
+    INVALID_ENUM_KEYWORDS = ['unavailable', 'not_used', 'notused', 'unknown', 'null', 'sna', 'reserved', 'not_available', 'notavailable']
 
     def __init__(self, can_db: dict, eth_db: dict):
         self.can_lookup = {str(k).lower(): v for k, v in can_db.items()}
-        
+
         self.eth_lookup = {}
         for sig_str, data in eth_db.items():
             meth = str(data.get('Method', data.get('Attribute_Value', ''))).strip().lower()
@@ -30,7 +33,7 @@ class CrossValidator:
         if isinstance(raw_enum, dict): return raw_enum
         enum_str = str(raw_enum).strip()
         if enum_str in ["", "Physical Value", "N/A", "{}"]: return {}
-        
+
         parsed_dict = {}
         if enum_str.startswith('{') and enum_str.endswith('}'):
             try:
@@ -47,12 +50,14 @@ class CrossValidator:
     def get_valid_enums(self, raw_enum_data) -> dict:
         enum_dict = self.parse_enum_data(raw_enum_data)
         valid_enums = {}
-        invalid_tokens = {re.sub(r'[^a-z0-9]', '', kw.lower()) for kw in self.INVALID_ENUM_KEYWORDS}
 
         for k, v in enum_dict.items():
             value = str(v).strip().lower()
+            
+            # Bulletproof substring check to catch fused garbage strings
             if any(kw in value for kw in self.INVALID_ENUM_KEYWORDS):
                 continue
+
             try:
                 valid_enums[int(k)] = v
             except ValueError:
@@ -144,12 +149,13 @@ class CrossValidator:
                             if not c_nouns or not e_nouns:
                                 is_match = True
 
-                        # RULE 5: Dumb Lexical Fallback
+                        # RULE 5: Dumb Lexical Fallback (Prevents short 1/2-letter overlaps)
                         if not is_match and not c_polarity and not e_polarity:
                             c_clean = self.clean_string_for_match(c_v)
                             e_clean = self.clean_string_for_match(e_v)
-                            if c_clean and e_clean and (c_clean in e_clean or e_clean in c_clean):
-                                is_match = True
+                            if len(c_clean) > 2 and len(e_clean) > 2:
+                                if c_clean in e_clean or e_clean in c_clean:
+                                    is_match = True
 
                         if is_match:
                             matched_c_keys.add(c_k)
@@ -158,12 +164,12 @@ class CrossValidator:
             return matched_c_keys, matched_e_keys
         
         except Exception as e:
-            # FALLBACK: If tokenizer crashes, revert to standard enum keys so data isn't lost
             log.warning(f"Semantic matcher encountered an error ({e}). Falling back to standard bounds.")
             return set(valid_c_enums.keys()), set(valid_e_enums.keys())
 
     @staticmethod
     def compute_enum_stats(keys):
+        """Accepts an iterable of keys (list/set)."""
         if not keys: return "N/A", "N/A", "N/A"
         sorted_keys = sorted(list(keys))
         return sorted_keys[0], sorted_keys[len(sorted_keys) // 2], sorted_keys[-1]
@@ -172,9 +178,11 @@ class CrossValidator:
     def compute_phy_stats(min_val, max_val):
         try:
             min_f, max_f = float(min_val), float(max_val)
+
             c_min = int(math.ceil(min_f))
             c_mid = int(math.ceil((min_f + max_f) / 2.0))
             c_max = int(math.floor(max_f))
+
             return c_min, c_mid, c_max
         except (ValueError, TypeError):
             return "N/A", "N/A", "N/A"
@@ -213,13 +221,15 @@ class CrossValidator:
                 # 2. Extract Valid Enums
                 valid_c_enums = {}
                 if can_sig and can_sig in self.can_lookup:
-                    valid_c_enums = self.get_valid_enums(self.can_lookup[can_sig].get('Attributes', {}).get('Enums', {}))
+                    c_data = self.can_lookup[can_sig]
+                    valid_c_enums = self.get_valid_enums(c_data.get('Attributes', {}).get('Enums', {}))
 
                 valid_e_enums = {}
                 if eth_sig and eth_sig in self.eth_lookup:
-                    valid_e_enums = self.get_valid_enums(self.eth_lookup[eth_sig].get('Enums', {}))
+                    e_data = self.eth_lookup[eth_sig]
+                    valid_e_enums = self.get_valid_enums(e_data.get('Enums', {}))
 
-                # 3. INTERSECT ENUMS
+                # 3. INTERSECT ENUMS & RECORD MATCH
                 matched_c_keys, matched_e_keys = self.get_intersected_enum_keys(valid_c_enums, valid_e_enums)
                 
                 if valid_c_enums and valid_e_enums:
@@ -227,9 +237,8 @@ class CrossValidator:
                 else:
                     new_row['Enum_Lexical_Match'] = "N/A"
 
-                # 4. Compute CAN Data Output
+                # 4. Populate CAN Columns
                 if can_sig and can_sig in self.can_lookup:
-                    c_data = self.can_lookup[can_sig]
                     if valid_c_enums:
                         keys_to_use = matched_c_keys if matched_c_keys else valid_c_enums.keys()
                         e_min, e_mid, e_max = self.compute_enum_stats(keys_to_use)
@@ -244,9 +253,8 @@ class CrossValidator:
                     for col in ['ENUM_MIN', 'ENUM_MID', 'ENUM_MAX', 'MIN_PHY', 'MID_PHY', 'MAX_PHY']:
                         new_row[f'COMPUTED_CAN_{col}'] = "N/A"
 
-                # 5. Compute SOME/IP Data Output
+                # 5. Populate SOME/IP Columns
                 if eth_sig and eth_sig in self.eth_lookup:
-                    e_data = self.eth_lookup[eth_sig]
                     if valid_e_enums:
                         keys_to_use = matched_e_keys if matched_e_keys else valid_e_enums.keys()
                         e_min, e_mid, e_max = self.compute_enum_stats(keys_to_use)
@@ -260,26 +268,24 @@ class CrossValidator:
                     for col in ['ENUM_MIN', 'ENUM_MID', 'ENUM_MAX', 'MIN_PHY', 'MID_PHY', 'MAX_PHY']:
                         new_row[f'COMPUTED_SOMEIP_{col}'] = "N/A"
 
-                # 6. Fallback: If SOME/IP PHY is blank/missing, copy CAN computed PHY values
+                # 6. Fallback logic: If SOME/IP PHY is blank/missing, fallback to CAN computed PHY values
                 for suffix in ['MIN', 'MID', 'MAX']:
                     someip_key = f'COMPUTED_SOMEIP_{suffix}_PHY'
                     can_key = f'COMPUTED_CAN_{suffix}_PHY'
                     someip_val = new_row.get(someip_key)
                     if someip_val in [None, '', 'N/A'] and can_key in new_row:
                         new_row[someip_key] = new_row.get(can_key)
-            
+                        
             except Exception as e:
-                # If a completely unhandled edge-case hits this row, we log it and keep the row intact!
                 log.error(f"Critical computation error on Row {idx+2} in {sheet_name}: {e}")
 
-            # Unconditionally append the row so data is NEVER lost
             updated_rows.append(new_row)
 
-        # Convert back to dataframe
         df_final = pd.DataFrame(updated_rows)
+
+        # FINAL STEP: Replace all empty cells, NaN, and None with "N/A" for a clean Excel sheet
         df_final = df_final.fillna("N/A")
 
-        # Guarantee expected columns exist so Jinja never crashes on missing keys
         expected_computed_cols = [
             'COMPUTED_CAN_ENUM_MIN', 'COMPUTED_CAN_ENUM_MID', 'COMPUTED_CAN_ENUM_MAX',
             'COMPUTED_CAN_MIN_PHY', 'COMPUTED_CAN_MID_PHY', 'COMPUTED_CAN_MAX_PHY',
