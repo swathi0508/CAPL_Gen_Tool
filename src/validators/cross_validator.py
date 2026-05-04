@@ -107,17 +107,17 @@ class CrossValidator:
                 c_data = self.can_lookup[can_sig]
                 valid_c_enums = self.get_valid_enums(c_data.get('Attributes', {}).get('Enums', {}))
                 e_min, e_mid, e_max = self.compute_enum_stats(valid_c_enums)
-                new_row.update({'computed_can_enum_min': e_min, 'computed_can_enum_mid': e_mid, 'computed_can_enum_max': e_max})
+                new_row.update({'COMPUTED_CAN_ENUM_MIN': e_min, 'COMPUTED_CAN_ENUM_MID': e_mid, 'COMPUTED_CAN_ENUM_MAX': e_max})
                 
                 if valid_c_enums:
-                    new_row.update({'computed_can_min_phy': "N/A (Is Enum)", 'computed_can_mid_phy': "N/A (Is Enum)", 'computed_can_max_phy': "N/A (Is Enum)"})
+                    new_row.update({'COMPUTED_CAN_MIN_PHY': "N/A (Is Enum)", 'COMPUTED_CAN_MID_PHY': "N/A (Is Enum)", 'COMPUTED_CAN_MAX_PHY': "N/A (Is Enum)"})
                 else:
                     limits = c_data.get('Attributes', {}).get('Phys_Limits', {})
                     p_min, p_mid, p_max = self.compute_phy_stats(limits.get('Min'), limits.get('Max'))
-                    new_row.update({'computed_can_min_phy': p_min, 'computed_can_mid_phy': p_mid, 'computed_can_max_phy': p_max})
+                    new_row.update({'COMPUTED_CAN_MIN_PHY': p_min, 'COMPUTED_CAN_MID_PHY': p_mid, 'COMPUTED_CAN_MAX_PHY': p_max})
             else:
-                for col in ['enum_min', 'enum_mid', 'enum_max', 'min_phy', 'mid_phy', 'max_phy']:
-                    new_row[f'computed_can_{col}'] = "N/A"
+                for col in ['ENUM_MIN', 'ENUM_MID', 'ENUM_MAX', 'MIN_PHY', 'MID_PHY', 'MAX_PHY']:
+                    new_row[f'COMPUTED_CAN_{col}'] = "N/A"
 
             # 3. Compute SOME/IP Data (ALWAYS WRITTEN)
             valid_e_enums = {}
@@ -125,16 +125,16 @@ class CrossValidator:
                 e_data = self.eth_lookup[eth_sig]
                 valid_e_enums = self.get_valid_enums(e_data.get('Enums', {}))
                 e_min, e_mid, e_max = self.compute_enum_stats(valid_e_enums)
-                new_row.update({'computed_someip_enum_min': e_min, 'computed_someip_enum_mid': e_mid, 'computed_someip_enum_max': e_max})
+                new_row.update({'COMPUTED_SOMEIP_ENUM_MIN': e_min, 'COMPUTED_SOMEIP_ENUM_MID': e_mid, 'COMPUTED_SOMEIP_ENUM_MAX': e_max})
                 
                 if valid_e_enums:
-                    new_row.update({'computed_someip_min_phy': "N/A (Is Enum)", 'computed_someip_mid_phy': "N/A (Is Enum)", 'computed_someip_max_phy': "N/A (Is Enum)"})
+                    new_row.update({'COMPUTED_SOMEIP_MIN_PHY': "N/A (Is Enum)", 'COMPUTED_SOMEIP_MID_PHY': "N/A (Is Enum)", 'COMPUTED_SOMEIP_MAX_PHY': "N/A (Is Enum)"})
                 else:
                     p_min, p_mid, p_max = self.compute_phy_stats(e_data.get('Min'), e_data.get('Max'))
-                    new_row.update({'computed_someip_min_phy': p_min, 'computed_someip_mid_phy': p_mid, 'computed_someip_max_phy': p_max})
+                    new_row.update({'COMPUTED_SOMEIP_MIN_PHY': p_min, 'COMPUTED_SOMEIP_MID_PHY': p_mid, 'COMPUTED_SOMEIP_MAX_PHY': p_max})
             else:
-                for col in ['enum_min', 'enum_mid', 'enum_max', 'min_phy', 'mid_phy', 'max_phy']:
-                    new_row[f'computed_someip_{col}'] = "N/A"
+                for col in ['ENUM_MIN', 'ENUM_MID', 'ENUM_MAX', 'MIN_PHY', 'MID_PHY', 'MAX_PHY']:
+                    new_row[f'COMPUTED_SOMEIP_{col}'] = "N/A"
 
             # 4. Lexical Validation (ALWAYS WRITTEN)
             if valid_c_enums and valid_e_enums:
