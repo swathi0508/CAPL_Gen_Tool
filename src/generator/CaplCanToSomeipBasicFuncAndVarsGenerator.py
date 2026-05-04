@@ -16,10 +16,10 @@ class CaplCanToSomeipBasicFuncAndVarsGenerator:
             'CAN_PORT', 'CAN_DB_SIGNAL_NAME', 'SOMEIP_DB_SIGNAL_NAME', 
             'SOMEIP_DB_SIGNAL_VALUESTATE', 'CAN_ENUM', 'SOMEIP_ENUM',
             'SOMEIP_PORT', 'ATTRIBUTE_VALUE', 'BASIC_FUNCTION_NAME',
-            'computed_can_min_phy', 'computed_can_mid_phy', 'computed_can_max_phy',
-            'CAN_OFFSET', 'CAN_RESOLUTION', 'computed_can_enum_min', 
-            'computed_someip_enum_min', 'computed_can_enum_mid', 
-            'computed_someip_enum_mid', 'computed_can_enum_max', 'computed_someip_enum_max'
+            'COMPUTED_CAN_MIN_PHY', 'COMPUTED_CAN_MID_PHY', 'COMPUTED_CAN_MAX_PHY',
+            'CAN_OFFSET', 'CAN_RESOLUTION', 'COMPUTED_CAN_ENUM_MIN', 
+            'COMPUTED_SOMEIP_ENUM_MIN', 'COMPUTED_CAN_ENUM_MID', 
+            'COMPUTED_SOMEIP_ENUM_MID', 'COMPUTED_CAN_ENUM_MAX', 'COMPUTED_SOMEIP_ENUM_MAX'
         ]
 
     def _validate_and_clean(self, df: pd.DataFrame) -> pd.DataFrame:

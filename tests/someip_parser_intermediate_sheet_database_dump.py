@@ -98,7 +98,7 @@ def update_eth_intermediate_sheet(arxml_path: str, excel_path: str, sheet_name: 
 # ==========================================
 if __name__ == "__main__":
     ARXML_FILE = "ETH_CAN.arxml"
-    EXCEL_FILE = "Intermediate_Requirements.xlsx"
+    EXCEL_FILE = "Requirements.xlsx"
     CACHE_FILE = "someip_db_cache.json"
     
     update_eth_intermediate_sheet(ARXML_FILE, EXCEL_FILE, json_cache=CACHE_FILE)
