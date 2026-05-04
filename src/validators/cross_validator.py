@@ -73,11 +73,6 @@ class CrossValidator:
             c_min = int(math.ceil(min_f))
             c_mid = int(math.ceil((min_f + max_f) / 2.0))
             c_max = int(math.floor(max_f))
-            
-            # Anti-False-Positive Logic: Shift 0 to 1
-            c_min = 1 if c_min == 0 else c_min
-            c_mid = 1 if c_mid == 0 else c_mid
-            c_max = 1 if c_max == 0 else c_max
 
             return c_min, c_mid, c_max
         except (ValueError, TypeError):
