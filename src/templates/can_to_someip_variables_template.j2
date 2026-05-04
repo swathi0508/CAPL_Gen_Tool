@@ -20,7 +20,6 @@ variables
 {% for row in enum_vars %}
   enum I{{ row.CAN_PORT | default('MISSING_DATA') }}__{{ row.SOMEIP_PORT | default('MISSING_DATA') }}_{{ row.ATTRIBUTE_VALUE | default('MISSING_DATA') }}
   {
-    {# Use the | int filter to strip decimals and ensure MISSING_DATA is handled #}
     I{{ row.CAN_PORT | default('MISSING_DATA') }}_Min = {{ row.COMPUTED_CAN_ENUM_MIN | int if row.COMPUTED_CAN_ENUM_MIN != 'MISSING_DATA' else 'MISSING_DATA' }},
     {{ row.SOMEIP_PORT | default('MISSING_DATA') }}_{{ row.ATTRIBUTE_VALUE | default('MISSING_DATA') }}_Min = {{ row.COMPUTED_SOMEIP_ENUM_MIN | int if row.COMPUTED_SOMEIP_ENUM_MIN != 'MISSING_DATA' else 'MISSING_DATA' }},
     I{{ row.CAN_PORT | default('MISSING_DATA') }}_Mid = {{ row.COMPUTED_CAN_ENUM_MID | int if row.COMPUTED_CAN_ENUM_MID != 'MISSING_DATA' else 'MISSING_DATA' }},
