@@ -6,13 +6,14 @@
 includes
 { 
   #include "../COMMON_FUNCTIONS/SignalValidation_Lib.cin"
-  #include "../BASIC_FUNCTIONS/{{ prefix | lower | default('MISSING_DATA') }}_basic_functions.cin"
+  #include "../VARIABLES/{{ t_type | replace('->', '_to_') | lower }}_variables.cin"
+  #include "../BASIC_FUNCTIONS/{{ t_type | replace('->', '_to_') | lower }}_basic_functions.cin"
 }
 
 void MainTest()
 {
   PRECONDITION__SET_GADESTATUS_TO_GADESTATUS_MISSION_MODE_ON();
-  
+
   {% for row in rows -%}
   {% set req_id = row[prefix ~ '_REQ_ID'] | default('MISSING_DATA') -%}
   {{ req_id }}();
@@ -24,13 +25,13 @@ void MainTest()
 {% set req_id = row[prefix ~ '_REQ_ID'] | default('MISSING_DATA') -%}
 testcase {{ req_id }}()
 {
-  startLoggingTestCase("{{ req_id }}");
+  START_LOGGING_TEST_CASE("{{ req_id }}");
   {% if row.SOMEIP_PORT and row.SOMEIP_PORT != "MISSING_DATA" -%}
   TestCaseTitle("{{ req_id }}", "{{ row.SWC | default('MISSING_DATA') }}__{{ row.SOMEIP_PORT }}__{{ row.ATTRIBUTE_VALUE | default('MISSING_DATA') }}");
   {%- else -%}
   TestCaseTitle("{{ req_id }}", "{{ row.SWC | default('MISSING_DATA') }}__{{ row.CAN_PORT_NAME | default('MISSING_DATA') }}");
   {%- endif %}
   {{ row.BASIC_FUNCTION_NAME | default('MISSING_DATA') }}();
-  stopLoggingTestCase();
+  STOP_LOGGING_TEST_CASE();
 }
 {% endfor -%}

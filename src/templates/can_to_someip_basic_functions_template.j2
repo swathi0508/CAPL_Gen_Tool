@@ -1,8 +1,4 @@
 /*@!Encoding:1252*/
-includes
-{
-  #include "../Variables/can_to_someip_variables.cin"
-}
 
 {% for row in functions %}
 void {{ row.BASIC_FUNCTION_NAME | default('MISSING_DATA') }}()

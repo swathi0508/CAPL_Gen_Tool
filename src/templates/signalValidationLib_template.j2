@@ -6,7 +6,8 @@
 variables
 {
   const double PHYS_TOLERANCE = 0.0001;
-
+  dword CAN_TIMEOUT = 10000;
+  dword SOMEIP_TIMEOUT = 10000;
 }
 
 // ============================================================================
@@ -83,7 +84,12 @@ void WAIT_FOR_SOMEIP_EVENT(char eventSignalName[], double targetPhys, dword time
 
   while (1)
   {
-    currentPhys = getServiceSignal(eventSignalName);
+    if(getServiceSignal(eventSignalName, currentPhys) == -1)
+    {
+      testStepFail("SOMEIP_Err", "Critical: SOME/IP Signal <%s> not found", eventSignalName);
+      return;
+    }
+
     if (abs(currentPhys - targetPhys) <= PHYS_TOLERANCE)
     {
       testStepPass("SOMEIP_Wait", "Match: <%s> Physical %.4f", eventSignalName, currentPhys);
@@ -156,10 +162,17 @@ void SETCHECK_SYSVAR_FLOAT(char ns[], char name[], float targetValue, dword time
 
 void WAIT_FOR_SYSVAR_FLOAT(char ns[], char name[], float targetValue, dword timeoutMs)
 {
-  double cur;
-  int64 startTime = timeNowInt64();
+  float cur;
+  int64 startTime;
+  startTime = timeNowInt64();
+
   while(1) {
-    cur = sysGetVariableFloat(ns, name);
+    if(sysGetVariableFloat(ns, name, cur) == 2) //Variable not found
+    {
+      testStepFail("SysVar_Err", "Critical: SysVar %s::%s not found", ns, name);
+      return;
+    }
+
     if(abs(cur - targetValue) <= PHYS_TOLERANCE) { 
       testStepPass("SysVar_Wait", "%s::%s Match: %f", ns, name, cur); return; 
     }
@@ -183,9 +196,16 @@ void SETCHECK_SYSVAR_LONG(char ns[], char name[], long targetValue, dword timeou
 void WAIT_FOR_SYSVAR_LONG(char ns[], char name[], long targetValue, dword timeoutMs)
 {
   long cur;
-  int64 startTime = timeNowInt64();
+  int64 startTime;
+  startTime = timeNowInt64();
+
   while(1) {
-    cur = sysGetVariableLong(ns, name);
+    if(sysGetVariableLong(ns, name, cur) == 2) //Variable not found
+    {
+      testStepFail("SysVar_Err", "Critical: SysVar %s::%s not found", ns, name);
+      return;
+    }
+
     if(cur == targetValue) { 
       testStepPass("SysVar_Wait", "%s::%s Match: %ld", ns, name, cur); return; 
     }
@@ -209,9 +229,16 @@ void SETCHECK_SYSVAR_LONGLONG(char ns[], char name[], int64 targetValue, dword t
 void WAIT_FOR_SYSVAR_LONGLONG(char ns[], char name[], int64 targetValue, dword timeoutMs)
 {
   int64 cur;
-  int64 startTime = timeNowInt64();
+  int64 startTime;
+  startTime = timeNowInt64();
+
   while(1) {
-    cur = sysGetVariableLongLong(ns, name);
+    if(sysGetVariableLongLong(ns, name, cur) == 2) //Variable not found
+    {
+      testStepFail("SysVar_Err", "Critical: SysVar %s::%s not found", ns, name);
+      return;
+    }
+
     if(cur == targetValue) { 
       testStepPass("SysVar_Wait", "%s::%s Match: %lld", ns, name, cur); return; 
     }
@@ -235,9 +262,16 @@ void SETCHECK_SYSVAR_DWORD(char ns[], char name[], dword targetValue, dword time
 void WAIT_FOR_SYSVAR_DWORD(char ns[], char name[], dword targetValue, dword timeoutMs)
 {
   dword cur;
-  int64 startTime = timeNowInt64();
+  int64 startTime;
+  startTime = timeNowInt64();
+  
   while(1) {
-    cur = sysGetVariableDWord(ns, name);
+    if(sysGetVariableDWord(ns, name, cur) == 2) //Variable not found
+    {
+      testStepFail("SysVar_Err", "Critical: SysVar %s::%s not found", ns, name);
+      return;
+    }
+
     if(cur == targetValue) { 
       testStepPass("SysVar_Wait", "%s::%s Match: %u", ns, name, cur); return; 
     }
@@ -268,7 +302,7 @@ void SOMEIP_FF_SENDONCE(char ns[], char name[])
 // 7. Define Pre-condition to set the gadeStatus to GADESTATUS_MISSION_MODE_ON
 // ============================================================================
 
-void PRECONDITION__SET_GADESTATUS_TO_GADESTATUS_MISSION_MODE_ON()
+testcase PRECONDITION__SET_GADESTATUS_TO_GADESTATUS_MISSION_MODE_ON()
 {
   {%- set s_state = signals.gadeStatusValueState -%}
   {%- set s_status = signals.gadeStatus %}
