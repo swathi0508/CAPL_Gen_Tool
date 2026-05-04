@@ -5,7 +5,7 @@ from .base_mapper import BaseMapper
 class CANMapper(BaseMapper):
     def _load_database(self) -> dict:
         raw_db = super()._load_database()
-        return {re.sub(r'^i', '', str(k).lower()): v for k, v in raw_db.items()}
+        return {str(k).lower(): v for k, v in raw_db.items()}
 
     def get_signal_data(self, port_name: str, cluster: str) -> dict:
         cols = ["CAN_DB_SIGNAL_NAME", "CAN_ENUM", "CAN_MIN_RAW", "CAN_MAX_RAW", 
@@ -14,7 +14,7 @@ class CANMapper(BaseMapper):
         if pd.isna(port_name) or str(port_name).strip() == "":
             return {col: None for col in cols}
 
-        search_key = re.sub(r'^i', '', str(port_name).strip().lower())
+        search_key = ("i" + str(port_name).strip()).lower()
         if search_key not in self.db:
             return {col: "CAN_NOT_FOUND" for col in cols}
 
@@ -25,15 +25,18 @@ class CANMapper(BaseMapper):
         fallback_order = filter(None, [cluster, "CAN_FD_CHASSIS", "CAN_FD_PT", "CAN_ITS3_FD", 
                                        "CAN_ITS5_FD", "PCU4_CAN", "CAN_EXT", "CAN_FD_ACCESS2"])
         
-        db_signal_name = "CAN_CLUSTER_NOT_FOUND"
+        db_signal_name = None
         for c in fallback_order:
-            match = next((p for p in paths if str(p.get("can_cluster")) == str(c)), None)
+            match = next((p for p in paths if str(p.get("can_cluster")).upper() == str(c).upper()), None)
             if match:
                 db_signal_name = match.get("signal_name")
                 break
 
+        if not db_signal_name and paths:
+            db_signal_name = paths[0].get("signal_name")
+
         return {
-            "CAN_DB_SIGNAL_NAME": db_signal_name, 
+            "CAN_DB_SIGNAL_NAME": db_signal_name or "CAN_CLUSTER_NOT_FOUND", 
             "CAN_ENUM": self.format_enum_to_string(attr.get("Enums", {})),
             "CAN_MIN_RAW": attr.get("Raw_Limits", {}).get("Min"),
             "CAN_MAX_RAW": attr.get("Raw_Limits", {}).get("Max"),
