@@ -27,19 +27,19 @@ void {{ row.BASIC_FUNCTION_NAME | default('MISSING_DATA') }}()
   WAIT_FOR_SOMEIP_EVENT("{{ row.SOMEIP_DB_SIGNAL_NAME | default('MISSING_DATA') }}", {{ row.SOMEIP_PORT | default('MISSING_DATA') }}_{{ row.ATTRIBUTE_VALUE | default('MISSING_DATA') }}_Max, SOMEIP_TIMEOUT);
 {% else %}
   testStep("#1 SET_CAN", "Set {{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ row.CAN_PORT | default('MISSING_DATA') }}_Mid");
-  SETCHECK_CAN_SIGNAL("{{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_PORT | default('MISSING_DATA') }}_Mid, {{ row.CAN_OFFSET | default('MISSING_DATA') }}, {{ row.CAN_RESOLUTION | default('MISSING_DATA') }}, CAN_TIMEOUT);
+  SETCHECK_CAN_SIGNAL("{{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_PORT | default('MISSING_DATA') }}_Mid, I{{ row.CAN_PORT | default('MISSING_DATA') }}_Offset, I{{ row.CAN_PORT | default('MISSING_DATA') }}_Resolution, CAN_TIMEOUT);
   
   testStep("#2 CHECK_SOMEIP", "Check {{ row.SOMEIP_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ row.CAN_PORT | default('MISSING_DATA') }}_Mid");
   WAIT_FOR_SOMEIP_EVENT("{{ row.SOMEIP_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_PORT | default('MISSING_DATA') }}_Mid, SOMEIP_TIMEOUT);
   
   testStep("#3 SET_CAN", "Set {{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ row.CAN_PORT | default('MISSING_DATA') }}_Min");
-  SETCHECK_CAN_SIGNAL("{{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_PORT | default('MISSING_DATA') }}_Min, {{ row.CAN_OFFSET | default('MISSING_DATA') }}, {{ row.CAN_RESOLUTION | default('MISSING_DATA') }}, CAN_TIMEOUT);
+  SETCHECK_CAN_SIGNAL("{{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_PORT | default('MISSING_DATA') }}_Min, I{{ row.CAN_PORT | default('MISSING_DATA') }}_Offset, I{{ row.CAN_PORT | default('MISSING_DATA') }}_Resolution, CAN_TIMEOUT);
   
   testStep("#4 CHECK_SOMEIP", "Check {{ row.SOMEIP_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ row.CAN_PORT | default('MISSING_DATA') }}_Min");
   WAIT_FOR_SOMEIP_EVENT("{{ row.SOMEIP_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_PORT | default('MISSING_DATA') }}_Min, SOMEIP_TIMEOUT);
   
   testStep("#5 SET_CAN", "Set {{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ row.CAN_PORT | default('MISSING_DATA') }}_Max");
-  SETCHECK_CAN_SIGNAL("{{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_PORT | default('MISSING_DATA') }}_Max, {{ row.CAN_OFFSET | default('MISSING_DATA') }}, {{ row.CAN_RESOLUTION | default('MISSING_DATA') }}, CAN_TIMEOUT);
+  SETCHECK_CAN_SIGNAL("{{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_PORT | default('MISSING_DATA') }}_Max, I{{ row.CAN_PORT | default('MISSING_DATA') }}_Offset, I{{ row.CAN_PORT | default('MISSING_DATA') }}_Resolution, CAN_TIMEOUT);
   
   testStep("#6 CHECK_SOMEIP", "Check {{ row.SOMEIP_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ row.CAN_PORT | default('MISSING_DATA') }}_Max");
   WAIT_FOR_SOMEIP_EVENT("{{ row.SOMEIP_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_PORT | default('MISSING_DATA') }}_Max, SOMEIP_TIMEOUT);
