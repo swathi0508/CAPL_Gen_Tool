@@ -1,6 +1,7 @@
 import os
 import re
 import pandas as pd
+from mappers.base_mapper import BaseMapper
 from mappers.can_mapper import CANMapper
 from mappers.someip_mapper import SomeIPMapper
 from core.logger import log
@@ -22,21 +23,84 @@ class MapperOrchestrator:
         }
         if sheet_type == "E2E_ETH":
             base_map.update({
-                "E2E_ETH_REQ_ID": "REQ ID", 
-                "SOMEIP_PORT": "Port", 
-                "ATTRIBUTE_VALUE": "Attribute value",
-                "CAN_PORT": "CAN_PORT_MAPPING", 
-                "PATH_SYNTHESIS": "CAN_PATH_SYNTHESIS_MAPPING"
+                "E2E_ETH_REQ_ID": ["E2E_ETH_REQ_ID", "REQ ID", "REQ_ID", "REQID"],
+                "SOMEIP_PORT": ["SOMEIP_PORT", "Port", "SOMEIP_PORT_MAPPING", "Port Name"],
+                "ATTRIBUTE_VALUE": ["ATTRIBUTE_VALUE", "Attribute value", "SOMEIP_ATTRIBUTE_VALUE_MAPPING"],
+                "CAN_PORT": ["CAN_PORT", "CAN_PORT_MAPPING", "Port Name"],
+                "PATH_SYNTHESIS": ["PATH_SYNTHESIS", "CAN_PATH_SYNTHESIS_MAPPING", "Path Synthesis"],
+                "SOMEIP_TOPIC": ["SOMEIP_TOPIC", "Topic", "Topic Name"],
+                "SOMEIP_TOPIC_ATTRIBUTE": ["SOMEIP_TOPIC_ATTRIBUTE", "Topic Attribute", "Attribute"]
             })
         elif sheet_type == "E2E_CAN":
             base_map.update({
-                "E2E_CAN_REQ_ID": "REQ ID", 
-                "CAN_PORT": "Port Name", 
-                "PATH_SYNTHESIS": "Path Synthesis",
-                "SOMEIP_PORT": "SOMEIP_PORT_MAPPING", 
-                "ATTRIBUTE_VALUE": "SOMEIP_ATTRIBUTE_VALUE_MAPPING"
+                "E2E_CAN_REQ_ID": ["E2E_CAN_REQ_ID", "REQ ID", "REQ_ID", "REQID"],
+                "CAN_PORT": ["CAN_PORT", "Port Name", "CAN_PORT_MAPPING"],
+                "PATH_SYNTHESIS": ["PATH_SYNTHESIS", "Path Synthesis", "CAN_PATH_SYNTHESIS_MAPPING"],
+                "SOMEIP_PORT": ["SOMEIP_PORT", "SOMEIP_PORT_MAPPING", "Port", "Port Name"],
+                "ATTRIBUTE_VALUE": ["ATTRIBUTE_VALUE", "Attribute value", "SOMEIP_ATTRIBUTE_VALUE_MAPPING"],
+                "SOMEIP_TOPIC": ["SOMEIP_TOPIC", "Topic", "Topic Name"],
+                "SOMEIP_TOPIC_ATTRIBUTE": ["SOMEIP_TOPIC_ATTRIBUTE", "Topic Attribute", "Attribute"]
             })
         return base_map
+
+    def get_output_columns(self, sheet_type: str) -> list:
+        base_cols = [
+            "CAN_CLUSTER",
+            "BASIC_FUNCTION_NAME",
+            "CAN_DB_SIGNAL_NAME",
+            "CAN_PERIODICITY",
+            "CAN_ENUM",
+            "CAN_MIN_RAW",
+            "CAN_MAX_RAW",
+            "CAN_OFFSET",
+            "CAN_RESOLUTION",
+            "SOMEIP_DB_SIGNAL_NAME",
+            "SOMEIP_ENUM",
+            "SOMEIP_MIN_PHY",
+            "SOMEIP_MAX_PHY",
+            "SOMEIP_OFFSET",
+            "SOMEIP_RESOLUTION",
+            "COMPUTED_CAN_ENUM_MIN",
+            "COMPUTED_CAN_ENUM_MID",
+            "COMPUTED_CAN_ENUM_MAX",
+            "COMPUTED_CAN_MIN_PHY",
+            "COMPUTED_CAN_MID_PHY",
+            "COMPUTED_CAN_MAX_PHY",
+            "COMPUTED_SOMEIP_ENUM_MIN",
+            "COMPUTED_SOMEIP_ENUM_MID",
+            "COMPUTED_SOMEIP_ENUM_MAX",
+            "COMPUTED_SOMEIP_MIN_PHY",
+            "COMPUTED_SOMEIP_MID_PHY",
+            "COMPUTED_SOMEIP_MAX_PHY"
+        ]
+
+        if sheet_type == "E2E_ETH":
+            return [
+                "E2E_ETH_REQ_ID",
+                "SWC",
+                "SOMEIP_PORT",
+                "ATTRIBUTE_VALUE",
+                "CAN_PORT",
+                "PATH_SYNTHESIS",
+                "SOMEIP_TOPIC",
+                "SOMEIP_TOPIC_ATTRIBUTE",
+                "TEST_TYPE"
+            ] + base_cols
+
+        if sheet_type == "E2E_CAN":
+            return [
+                "E2E_CAN_REQ_ID",
+                "SWC",
+                "CAN_PORT",
+                "PATH_SYNTHESIS",
+                "SOMEIP_PORT",
+                "ATTRIBUTE_VALUE",
+                "SOMEIP_TOPIC",
+                "SOMEIP_TOPIC_ATTRIBUTE",
+                "TEST_TYPE"
+            ] + base_cols
+
+        return ["SWC", "TEST_TYPE"] + base_cols
 
     def clean_test_type(self, val) -> str:
         if pd.isna(val): return "UNKNOWN_TT"
@@ -59,21 +123,38 @@ class MapperOrchestrator:
         cp = f"I{raw_cp}"
         attr = self.can_mapper.normalize_attr(row.get('ATTRIBUTE_VALUE'))
 
-        if attr is None: return None
+        # For valuestate attributes, use the corresponding value attribute for function naming
+        if attr and ("valuestate" in attr.lower() or "value_state" in attr.lower()):
+            attr = re.sub(r'valuestate', '', attr, flags=re.IGNORECASE).strip()
+            attr = re.sub(r'value_state', '', attr, flags=re.IGNORECASE).strip()
 
+        # Extract event name from SOMEIP_PORT (second part after splitting by '_')
+        event_name = sp.split('_')[1] if '_' in sp and len(sp.split('_')) > 1 else sp
+
+        name = None
         if tt in ['CAN->SOMEIP', 'CAN->SOMEIP_FF', 'CAN->SOMEIP_AACP']: 
-            return f"basic_function__{swc}__{cp}__{sp}__{attr}"
-        if tt in ['SOMEIP->CAN', 'SOMEIP_FF->CAN']: 
-            return f"basic_function__{swc}__{sp}__{attr}__{cp}"
-        if tt in ['CAN->SWC', 'CAN->SWC_HVB']: return f"basic_function__{swc}__{cp}__SWC"
-        if tt == 'SWC->CAN': return f"basic_function__{swc}__SWC__{cp}"
-        if tt in ['SOMEIP->SWC', 'SOMEIP_FF->SWC']: return f"basic_function__{swc}__{sp}__{attr}__SWC"
-        if tt in ['SWC->SOMEIP', 'SWC->SOMEIP_FF', 'SWC->SOMEIP_AACP']: 
-            return f"basic_function__{swc}__SWC__{sp}__{attr}"
-        if tt == 'CAROS->SWC': return f"basic_function__{swc}__CarOS__{sp}__{attr}__SWC"
-        if tt == 'CAN->CAN': return f"basic_function__{swc}__{cp}__{cp}"
+            name = f"basic_function_{cp}_{event_name}_{attr}" if attr else None
+        elif tt in ['SOMEIP->CAN', 'SOMEIP_FF->CAN']: 
+            name = f"basic_function_{event_name}_{attr}_{cp}" if attr else None
+        elif tt in ['CAN->SWC', 'CAN->SWC_HVB']: 
+            name = f"basic_function_{cp}_SWC"
+        elif tt == 'SWC->CAN': 
+            name = f"basic_function_SWC_{cp}"
+        elif tt in ['SOMEIP->SWC', 'SOMEIP_FF->SWC']: 
+            name = f"basic_function_{event_name}_{attr}_SWC" if attr else None
+        elif tt in ['SWC->SOMEIP', 'SWC->SOMEIP_FF', 'SWC->SOMEIP_AACP']: 
+            name = f"basic_function_SWC_{event_name}_{attr}" if attr else None
+        elif tt == 'CAROS->SWC': 
+            name = f"basic_function_CarOS_{event_name}_{attr}_SWC" if attr else None
+        elif tt == 'CAN->CAN': 
+            name = f"basic_function_{cp}_{cp}"
+        else:
+            name = f"basic_function_{event_name}_{attr}" if attr else None
 
-        return f"basic_function__{swc}__{sp}__{attr}"
+        if name and len(name) > 128:
+            log.warning(f"Function name exceeds 128 characters: {name} (length: {len(name)})")
+
+        return name
 
     def cross_fill_function_names(self, df_list):
         """Cross-references SOMEIP_PORT to fill in missing BASIC_FUNCTION_NAMEs."""
@@ -95,9 +176,13 @@ class MapperOrchestrator:
             
             # Map if we have a mapping available
             if mask_none.any() and 'SOMEIP_PORT' in df.columns and global_map:
-                df.loc[mask_none, 'BASIC_FUNCTION_NAME'] = df.loc[mask_none, 'SOMEIP_PORT'].map(global_map)
+                # Only fill if SOMEIP_PORT is valid (not NaN, not empty, not 'N/A')
+                valid_sp_mask = df['SOMEIP_PORT'].notna() & (df['SOMEIP_PORT'] != '') & (df['SOMEIP_PORT'] != 'N/A')
+                fill_mask = mask_none & valid_sp_mask
+                if fill_mask.any():
+                    df.loc[fill_mask, 'BASIC_FUNCTION_NAME'] = df.loc[fill_mask, 'SOMEIP_PORT'].map(global_map)
                 
-            df['BASIC_FUNCTION_NAME'] = df['BASIC_FUNCTION_NAME'].fillna("basic_function__UNKNOWN_CONFIG")
+            # df['BASIC_FUNCTION_NAME'] = df['BASIC_FUNCTION_NAME'].fillna("basic_function__UNKNOWN_CONFIG")
             
         return df_list
 
@@ -120,8 +205,10 @@ class MapperOrchestrator:
             
             # 1. Map Columns 
             mapping = self.get_column_mapping(sheet)
-            for target, source in mapping.items():
-                df_out[target] = df_in[source] if source in df_in.columns else None
+            for target, source_candidates in mapping.items():
+                source_candidates = source_candidates if isinstance(source_candidates, list) else [source_candidates]
+                source_column = BaseMapper.resolve_column_name(df_in.columns, source_candidates)
+                df_out[target] = df_in[source_column] if source_column else None
 
             # 2. Clean Core Data
             if "TEST_TYPE" in df_out.columns:
@@ -136,12 +223,16 @@ class MapperOrchestrator:
 
             # 4. Enrich with SOME/IP Data
             if "ATTRIBUTE_VALUE" in df_out.columns:
-                # --> CRITICAL UPDATE: Passing SOMEIP_PORT (Event) to prevent ValueState collisions
                 eth_res = df_out.apply(lambda r: self.eth_mapper.get_signal_data(r.get("ATTRIBUTE_VALUE"), r.get("SOMEIP_PORT")), axis=1, result_type='expand')
                 df_out = pd.concat([df_out, eth_res], axis=1)
 
             # 5. Compute Initial Function Names
             df_out['BASIC_FUNCTION_NAME'] = df_out.apply(self.compute_basic_function_name, axis=1)
+
+            ordered_columns = [c for c in self.get_output_columns(sheet) if c in df_out.columns]
+            extra_columns = [c for c in df_out.columns if c not in ordered_columns]
+            df_out = pd.concat([df_out[ordered_columns], df_out[extra_columns]], axis=1)
+
             processed_dfs.append(df_out)
 
         # 6. Cross-Fill Function Names across all parsed sheets
