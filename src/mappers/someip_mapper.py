@@ -56,24 +56,21 @@ class SomeIPMapper(BaseMapper):
         if not sig_data:
             return {col: "ETH_NOT_FOUND" for col in cols}
 
-        # 2. SIBLING SEARCH: Find the ValueState corresponding to this exact event
+        # 2. SIBLING SEARCH: Find the ValueState corresponding to this exact event+attribute
         vs_attr_full_path = None
         db_event_exact = sig_data.get("Event")
         db_attr_exact = sig_data.get("Attribute_Value", "")
+        db_sif = sig_data.get("SIF")  # Extract SIF for final fallback
         
-        if db_event_exact and db_attr_exact:
-            target_1 = "valuestate"
-            target_2 = f"{db_attr_exact.lower()}valuestate"
-            
+        if db_event_exact:
+            # Search for ANY valuestate in the same event
             for data in self.raw_db_values:
                 if data.get("Event") == db_event_exact:
                     sibling_attr = data.get("Attribute_Value", "")
-                    sibling_lower = sibling_attr.lower()
-                    
-                    if sibling_lower in [target_1, target_2] and sibling_lower != db_attr_exact.lower():
-                        # Return the FULL Signal_String we injected earlier, not the short name
+                    if "valuestate" in sibling_attr.lower():
                         vs_attr_full_path = data.get("Signal_String")
                         break
+
 
         # 3. Return the enriched payload
         return {
