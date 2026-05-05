@@ -17,6 +17,7 @@ class CrossValidator:
 
     def __init__(self, can_db: dict, eth_db: dict):
         self.can_lookup = {str(k).lower(): v for k, v in can_db.items()}
+
         self.eth_lookup = {}
         for sig_str, data in eth_db.items():
             meth = str(data.get('Method', data.get('Attribute_Value', ''))).strip().lower()
@@ -203,17 +204,20 @@ class CrossValidator:
             try:
                 can_sig, eth_sig = None, None
 
-                # 1. Safely grab lookup keys depending on the sheet topology
+                # OS-PROOF FIX: Convert all dictionary keys to strict UPPERCASE for safe extraction on Linux
+                row_upper = {str(k).strip().upper(): v for k, v in new_row.items()}
+
+                # 1. Safely grab lookup keys using row_upper
                 if is_can_sheet:
-                    raw_can = str(row.get('CAN_PORT', '')).strip().lower() 
+                    raw_can = str(row_upper.get('CAN_PORT', '')).strip().lower() 
                     if raw_can and raw_can != 'nan': 
                         can_sig = ("i" + raw_can).lower()
-                    raw_eth = str(row.get('ATTRIBUTE_VALUE', '')).strip().lower()
+                    raw_eth = str(row_upper.get('ATTRIBUTE_VALUE', '')).strip().lower()
                     if raw_eth and raw_eth != 'nan': eth_sig = raw_eth
                 else:
-                    raw_eth = str(row.get('ATTRIBUTE_VALUE', '')).strip().lower()
+                    raw_eth = str(row_upper.get('ATTRIBUTE_VALUE', '')).strip().lower()
                     if raw_eth and raw_eth != 'nan': eth_sig = raw_eth
-                    raw_can = str(row.get('CAN_PORT', '')).strip().lower()
+                    raw_can = str(row_upper.get('CAN_PORT', '')).strip().lower()
                     if raw_can and raw_can != 'nan': 
                         can_sig = ("i" + raw_can).lower()
 
@@ -274,7 +278,7 @@ class CrossValidator:
                     someip_val = new_row.get(someip_key)
                     if someip_val in [None, '', 'N/A'] and can_key in new_row:
                         new_row[someip_key] = new_row.get(can_key)
-                
+                        
                 # 7. Fallback logic: If SOME/IP ENUM is blank/missing, fallback to CAN computed ENUM values
                 for suffix in ['MIN', 'MID', 'MAX']:
                     someip_key = f'COMPUTED_SOMEIP_ENUM_{suffix}'

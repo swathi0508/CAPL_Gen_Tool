@@ -21,12 +21,12 @@ class MapperOrchestrator:
             "CAN_CLUSTER": "CAN_CLUSTER"
         }
         common_cols = {
-            "SOMEIP_PORT": ["SOMEIP_PORT", "Port", "SOMEIP_PORT_MAPPING", "Port Name"],
-            "ATTRIBUTE_VALUE": ["ATTRIBUTE_VALUE", "Attribute value", "SOMEIP_ATTRIBUTE_VALUE_MAPPING"],
-            "CAN_PORT": ["CAN_PORT", "CAN_PORT_MAPPING", "Port Name"],
-            "PATH_SYNTHESIS": ["PATH_SYNTHESIS", "CAN_PATH_SYNTHESIS_MAPPING", "Path Synthesis"],
-            "SOMEIP_TOPIC": ["SOMEIP_TOPIC", "Topic", "Topic Name"],
-            "SOMEIP_TOPIC_ATTRIBUTE": ["SOMEIP_TOPIC_ATTRIBUTE", "Attribute", "Topic Attribute"]
+            "SOMEIP_PORT": ["SOMEIP_PORT", "PORT", "SOMEIP_PORT_MAPPING", "PORT NAME"],
+            "ATTRIBUTE_VALUE": ["ATTRIBUTE_VALUE", "ATTRIBUTE VALUE", "SOMEIP_ATTRIBUTE_VALUE_MAPPING"],
+            "CAN_PORT": ["CAN_PORT", "CAN_PORT_MAPPING", "PORT NAME"],
+            "PATH_SYNTHESIS": ["PATH_SYNTHESIS", "CAN_PATH_SYNTHESIS_MAPPING", "PATH SYNTHESIS"],
+            "SOMEIP_TOPIC": ["SOMEIP_TOPIC", "TOPIC", "TOPIC NAME"],
+            "SOMEIP_TOPIC_ATTRIBUTE": ["SOMEIP_TOPIC_ATTRIBUTE", "ATTRIBUTE", "TOPIC ATTRIBUTE"]
         }
         if sheet_type == "E2E_ETH":
             base_map.update({"E2E_ETH_REQ_ID": ["E2E_ETH_REQ_ID", "REQ ID", "REQ_ID"], **common_cols})
@@ -107,42 +107,82 @@ class MapperOrchestrator:
         
         return generate_name()
 
-    def cross_fill_function_names(self, df_list):
+    def cross_fill_global_data(self, df_list):
+        """
+        SELF-HEALING MODULE:
+        Scans all sheets. If E2E_CAN has the Path/Cluster/BFN, it universally copies 
+        them into the E2E_ETH sheet to heal missing or <NA> cells.
+        """
         combined = pd.concat(df_list, ignore_index=True)
-        lookup_map = {}
-        port_only_map = {}
+        bfn_lookup = {}
+        path_lookup = {}
+        cluster_lookup = {}
+
+        # Safely detect empty values across all Pandas versions
+        def is_empty(val):
+            return pd.isna(val) or str(val).strip() in ["nan", "None", "", "N/A", "<NA>"]
 
         for _, row in combined.iterrows():
-            bfn = str(row['BASIC_FUNCTION_NAME'])
-            if "PENDING_STATE_MATCH" not in bfn and bfn not in ["basic_fn_UNKNOWN", "FUNCTION_NOT_REQUIRED"]:
-                sp = str(row['SOMEIP_PORT']).strip()
-                attr = str(row['ATTRIBUTE_VALUE']).strip()
-                lookup_map[(sp, attr)] = bfn
-                port_only_map[sp] = bfn
+            sp = str(row.get('SOMEIP_PORT', '')).strip()
+            attr = str(row.get('ATTRIBUTE_VALUE', '')).strip()
+            cp = str(row.get('CAN_PORT', '')).strip()
+
+            if not is_empty(row.get('BASIC_FUNCTION_NAME')):
+                bfn = str(row['BASIC_FUNCTION_NAME'])
+                if "PENDING_STATE_MATCH" not in bfn and "UNKNOWN" not in bfn:
+                    bfn_lookup[(sp, attr)] = bfn
+                    bfn_lookup[sp] = bfn
+
+            if not is_empty(cp):
+                if not is_empty(row.get('PATH_SYNTHESIS')):
+                    path_lookup[cp] = str(row['PATH_SYNTHESIS'])
+                if not is_empty(row.get('CAN_CLUSTER')):
+                    cluster_lookup[cp] = str(row['CAN_CLUSTER'])
 
         processed_dfs = []
         for df in df_list:
-            def resolve_state(row):
-                val = row['BASIC_FUNCTION_NAME']
-                if not isinstance(val, str) or not val.startswith("PENDING_STATE_MATCH"):
-                    return val
+            # Heal Path Synthesis
+            if 'PATH_SYNTHESIS' in df.columns:
+                df['PATH_SYNTHESIS'] = df.apply(
+                    lambda r: path_lookup.get(str(r.get('CAN_PORT', '')).strip(), r['PATH_SYNTHESIS']) 
+                    if is_empty(r.get('PATH_SYNTHESIS')) else r['PATH_SYNTHESIS'], axis=1
+                )
+            
+            # Heal CAN Cluster
+            if 'CAN_CLUSTER' in df.columns:
+                df['CAN_CLUSTER'] = df.apply(
+                    lambda r: cluster_lookup.get(str(r.get('CAN_PORT', '')).strip(), r['CAN_CLUSTER']) 
+                    if is_empty(r.get('CAN_CLUSTER')) else r['CAN_CLUSTER'], axis=1
+                )
+
+            # Heal Basic Function Name
+            def resolve_bfn(row):
+                val = str(row.get('BASIC_FUNCTION_NAME', ''))
+                if not val.startswith("PENDING_STATE_MATCH") and "UNKNOWN" not in val:
+                    return val if not is_empty(val) else "basic_fn_UNKNOWN"
                 
                 parts = val.split('|')
-                _, sp, stripped_attr, fallback_name, _ = parts
-                
-                if stripped_attr and (sp, stripped_attr) in lookup_map:
-                    return lookup_map[(sp, stripped_attr)]
-
-                if sp in port_only_map:
-                    return port_only_map[sp]
-                
-                if fallback_name != "basic_fn_UNKNOWN":
+                if len(parts) >= 4:
+                    sp, stripped_attr, fallback_name = parts[1], parts[2], parts[3]
+                    
+                    if stripped_attr and (sp, stripped_attr) in bfn_lookup:
+                        return bfn_lookup[(sp, stripped_attr)]
+                    if sp in bfn_lookup:
+                        return bfn_lookup[sp]
+                        
+                    # Inject the newly healed CAN_CLUSTER into the fallback name!
+                    if fallback_name != "basic_fn_UNKNOWN" and not is_empty(row.get('CAN_CLUSTER')):
+                        fallback_name = fallback_name.replace("__", f"_{row['CAN_CLUSTER']}_")
                     return fallback_name
-
                 return "basic_fn_UNKNOWN"
 
-            df['BASIC_FUNCTION_NAME'] = df.apply(resolve_state, axis=1)
+            if 'BASIC_FUNCTION_NAME' in df.columns:
+                df['BASIC_FUNCTION_NAME'] = df.apply(resolve_bfn, axis=1)
+
+            # Replace any lingering Pandas <NA> artifacts with clean "N/A"
+            df = df.fillna("N/A").replace("<NA>", "N/A")
             processed_dfs.append(df)
+            
         return processed_dfs
 
     def process_file(self, input_excel: str, output_dir: str):
@@ -152,13 +192,15 @@ class MapperOrchestrator:
         os.makedirs(output_dir, exist_ok=True)
 
         xls = pd.ExcelFile(input_excel)
-        sheets_to_process = [s for s in ["E2E_ETH", "E2E_CAN"] if s in xls.sheet_names]
+        sheets_to_process = [s for s in xls.sheet_names if s.strip().upper() in ["E2E_ETH", "E2E_CAN"]]
         results = []
 
         for sheet in sheets_to_process:
             df_in = pd.read_excel(xls, sheet_name=sheet)
+            df_in.columns = df_in.columns.astype(str).str.strip().str.upper()
+            
             df_out = pd.DataFrame()
-            mapping = self.get_column_mapping(sheet)
+            mapping = self.get_column_mapping(sheet.strip().upper())
             
             for target, source in mapping.items():
                 col = BaseMapper.resolve_column_name(df_in.columns, source if isinstance(source, list) else [source])
@@ -178,15 +220,17 @@ class MapperOrchestrator:
 
             df_out['BASIC_FUNCTION_NAME'] = df_out.apply(self.compute_basic_function_name, axis=1)
             
-            ordered = [c for c in self.get_output_columns(sheet) if c in df_out.columns]
+            ordered = [c for c in self.get_output_columns(sheet.strip().upper()) if c in df_out.columns]
             extra = [c for c in df_out.columns if c not in ordered]
             df_out = pd.concat([df_out[ordered], df_out[extra]], axis=1)
             results.append(df_out)
 
+        # Triggers the Self-Healing process
         if results:
-            results = self.cross_fill_function_names(results)
+            results = self.cross_fill_global_data(results)
 
         with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
             for idx, sheet in enumerate(sheets_to_process):
-                results[idx].to_excel(writer, sheet_name=f"{sheets_to_process[idx]}_PARSED", index=False)
+                clean_sheet_name = sheet.strip().upper()
+                results[idx].to_excel(writer, sheet_name=f"{clean_sheet_name}_PARSED", index=False)
         log.info("✅ Final resolution complete.")
