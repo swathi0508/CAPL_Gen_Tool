@@ -49,7 +49,6 @@ class CaplCampaignGenerator:
             rows = df.fillna("MISSING_DATA").astype(str).to_dict(orient='records')
             
             # 3. Final Filename Construction
-            # Result: E2E_CAN_CAN_to_SOMEIP_campaign.can
             file_name = f"{clean_category}_{clean_target_type}_campaign.can"
             
             target_dir = Path(output_root) / clean_category

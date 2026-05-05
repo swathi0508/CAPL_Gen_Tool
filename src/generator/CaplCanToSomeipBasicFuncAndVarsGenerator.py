@@ -23,6 +23,9 @@ class CaplCanToSomeipBasicFuncAndVarsGenerator:
         ]
 
     def _validate_and_clean(self, df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            return df
+            
         # Fill missing required columns
         missing_cols = [c for c in self.j2_columns if c not in df.columns]
         for c in missing_cols: df[c] = pd.NA
@@ -53,8 +56,10 @@ class CaplCanToSomeipBasicFuncAndVarsGenerator:
             full_df = pd.concat(valid_dfs, ignore_index=True)
             full_df = self._validate_and_clean(full_df)
 
+            if full_df.empty:
+                return
+
             # 2. STRICT FILTER: Remove all ValueState metadata rows
-            # This ensures metadata for functions/variables only comes from the 'Actual Value' rows
             actual_value_rows = full_df[~full_df['ATTRIBUTE_VALUE'].str.contains("ValueState", case=False)].copy()
 
             if actual_value_rows.empty:
