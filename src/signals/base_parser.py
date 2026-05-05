@@ -1,3 +1,4 @@
+import sys
 import os
 import json
 import time
@@ -24,8 +25,15 @@ class BaseParser(ABC):
         elapsed = time.time() - self._start_time
         return time.strftime("%H:%M:%S", time.gmtime(elapsed))
 
-    def to_json_file(self, output_path: str, indent: int = 4):
-        """Dumps data with a legacy Summary header and SIGNAL_LIST wrapper."""
+    def to_json_file(self, output_path: str, indent: int = 4, write_allowed: bool = False):
+        """
+        Dumps data with a legacy Summary header and SIGNAL_LIST wrapper.
+        GATED BY PIPELINE: Will only execute if write_allowed is True (Dev Mode).
+        """
+        if not write_allowed:
+            log.debug(f"🛡️ PROD MODE: In-memory cache secured. Disk dump to {output_path} blocked.")
+            return
+
         data = self.to_json_dict()
         
         # 1. Calculate Statistics
@@ -49,7 +57,7 @@ class BaseParser(ABC):
         try:
             with open(output_path, 'w', encoding='utf-8') as f:
                 json.dump(output_data, f, indent=indent, ensure_ascii=False)
-            log.info(f"✅ Database cached with summary to: {output_path}")
+            log.info(f"✅ DEV MODE: Database cached with summary to: {output_path}")
         except Exception as e:
             log.error(f"❌ Failed to write JSON: {e}")
 

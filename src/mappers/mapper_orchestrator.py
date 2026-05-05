@@ -7,11 +7,12 @@ from mappers.someip_mapper import SomeIPMapper
 from core.logger import log
 
 class MapperOrchestrator:
-    """Coordinates the end-to-end creation of Intermediate Excel sheets."""
+    """Coordinates the end-to-end mapping into in-memory DataFrames."""
     
-    def __init__(self, can_cache: str, eth_cache: str):
-        self.can_mapper = CANMapper(can_cache)
-        self.eth_mapper = SomeIPMapper(eth_cache)
+    def __init__(self, can_db_data: dict, eth_db_data: dict):
+        # Now accepts the RAM dictionary directly instead of cache paths
+        self.can_mapper = CANMapper(can_db_data)
+        self.eth_mapper = SomeIPMapper(eth_db_data)
 
     def get_column_mapping(self, sheet_type: str) -> dict:
         base_map = {
@@ -185,15 +186,14 @@ class MapperOrchestrator:
             
         return processed_dfs
 
-    def process_file(self, input_excel: str, output_dir: str):
-        log.info(f"Processing: {os.path.basename(input_excel)}")
-        base_name = os.path.basename(input_excel).replace(".xlsx", "_Intermediate.xlsx")
-        output_path = os.path.join(output_dir, base_name)
-        os.makedirs(output_dir, exist_ok=True)
-
+    def process_to_dataframes(self, input_excel: str) -> dict:
+        """Reads the Excel file, maps the data, and returns a dictionary of DataFrames."""
+        log.info(f"Mapping data from: {os.path.basename(input_excel)}")
         xls = pd.ExcelFile(input_excel)
         sheets_to_process = [s for s in xls.sheet_names if s.strip().upper() in ["E2E_ETH", "E2E_CAN"]]
-        results = []
+        
+        results_list = []
+        sheet_names = []
 
         for sheet in sheets_to_process:
             df_in = pd.read_excel(xls, sheet_name=sheet)
@@ -223,14 +223,12 @@ class MapperOrchestrator:
             ordered = [c for c in self.get_output_columns(sheet.strip().upper()) if c in df_out.columns]
             extra = [c for c in df_out.columns if c not in ordered]
             df_out = pd.concat([df_out[ordered], df_out[extra]], axis=1)
-            results.append(df_out)
+            
+            results_list.append(df_out)
+            sheet_names.append(f"{sheet.strip().upper()}_PARSED")
 
-        # Triggers the Self-Healing process
-        if results:
-            results = self.cross_fill_global_data(results)
+        if results_list:
+            results_list = self.cross_fill_global_data(results_list)
 
-        with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
-            for idx, sheet in enumerate(sheets_to_process):
-                clean_sheet_name = sheet.strip().upper()
-                results[idx].to_excel(writer, sheet_name=f"{clean_sheet_name}_PARSED", index=False)
-        log.info("✅ Final resolution complete.")
+        log.info("✅ Core mapping resolution complete.")
+        return {name: df for name, df in zip(sheet_names, results_list)}
