@@ -95,6 +95,7 @@ class SomeIPMapper(BaseMapper):
             if not vs_attr_full_path:
                 vs_attr_full_path = any_vs_in_event
 
+
         # 3. Return the enriched payload
         return {
             "SOMEIP_DB_SIGNAL_NAME": sig_data.get("Signal_String"),
