@@ -62,26 +62,25 @@ class CaplCanToSomeipBasicFuncAndVarsGenerator:
                 return
 
             # 3. GENERATE UNIQUE MASTER FUNCTIONS
-            # We take the UNION of all unique function names across both files
-            # Sorting ensures that if metadata exists in both, we pick consistently
             actual_value_rows = actual_value_rows.sort_values(by=['BASIC_FUNCTION_NAME', 'CAN_PORT'])
             func_df = actual_value_rows.drop_duplicates(subset=['BASIC_FUNCTION_NAME'])
             func_records = func_df.to_dict(orient='records')
 
-            # 4. GENERATE VARIABLES (Directly tied to the Master Value rows)
-            
+            # 4. GENERATE VARIABLES
             # --- Physical/Standard Variables ---
             std_vars_df = actual_value_rows[actual_value_rows['CAN_ENUM'] == "MISSING_DATA"].copy()
             std_vars = std_vars_df.drop_duplicates(subset=['CAN_PORT']).to_dict(orient='records')
 
             # --- Enum Variables ---
             enum_base = actual_value_rows[actual_value_rows['CAN_ENUM'] != "MISSING_DATA"].copy()
-            
-            # Unique CAN side enum definitions
             can_enums = enum_base.drop_duplicates(subset=['CAN_PORT']).to_dict(orient='records')
-
-            # Unique SOME/IP side enum definitions
             eth_enums = enum_base.drop_duplicates(subset=['SOMEIP_PORT', 'ATTRIBUTE_VALUE']).to_dict(orient='records')
+
+            # --- UNIQUE ETHERNET SIGNALS (NEW LOGIC) ---
+            # Extract all signals from both relevant columns
+            all_signals = pd.concat([full_df['SOMEIP_DB_SIGNAL_NAME'], full_df['SOMEIP_DB_SIGNAL_VALUESTATE']])
+            # Filter out missing data and get unique list
+            unique_signals = sorted([s for s in all_signals.unique() if s != "MISSING_DATA"])
 
             # 5. RENDER OUTPUTS
             f_dir = Path(output_root) / "BASIC_FUNCTIONS"
@@ -98,7 +97,8 @@ class CaplCanToSomeipBasicFuncAndVarsGenerator:
                 f.write(self.env.get_template(self.var_template).render(
                     standard_vars=std_vars, 
                     can_enums=can_enums,
-                    eth_enums=eth_enums
+                    eth_enums=eth_enums,
+                    ethernet_signals=unique_signals  # Passing the new unique signals list
                 ))
 
             log.info(f"Generated {len(func_records)} functions. ValueState metadata excluded.")
