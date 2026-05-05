@@ -19,6 +19,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="CAPL Generation Tool Pipeline.")
     parser.add_argument("--cli", action="store_true", help="Run in headless mode")
+    parser.add_argument("--enable-log", action="store_true", help="DEV ONLY: Saves intermediate files and boosts logging")
     parser.add_argument("--excel", type=Path, required=True, help="Path to input Excel Requirements")
     parser.add_argument("--arxml", type=str, required=True, help="Path to the unified Raw ARXML Network File")
     parser.add_argument("--out", type=Path, default=Path("./Output_CAPL_Scripts"), help="Output directory")
@@ -36,7 +37,8 @@ def main():
         eth_db=args.eth_cache, 
         category=args.category, 
         test_type=args.type,
-        raw_arxml=args.arxml
+        raw_arxml=args.arxml,
+        enable_log=args.enable_log
     )
 
 if __name__ == "__main__":
