@@ -274,6 +274,14 @@ class CrossValidator:
                     someip_val = new_row.get(someip_key)
                     if someip_val in [None, '', 'N/A'] and can_key in new_row:
                         new_row[someip_key] = new_row.get(can_key)
+                
+                # 7. Fallback logic: If SOME/IP ENUM is blank/missing, fallback to CAN computed ENUM values
+                for suffix in ['MIN', 'MID', 'MAX']:
+                    someip_key = f'COMPUTED_SOMEIP_ENUM_{suffix}'
+                    can_key = f'COMPUTED_CAN_ENUM_{suffix}'
+                    someip_val = new_row.get(someip_key)
+                    if someip_val in [None, '', 'N/A'] and can_key in new_row:
+                        new_row[someip_key] = new_row.get(can_key)
                         
             except Exception as e:
                 log.error(f"Critical computation error on Row {idx+2} in {sheet_name}: {e}")
