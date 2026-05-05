@@ -38,3 +38,8 @@ variables
   };
 {% endfor %}
 }
+
+//--- Add on_serviceSignal_update callbacks for all EthernetCluster Signals ---
+{% for signal in ethernet_signals -%}
+on serviceSignal_update {{ signal }} {}
+{% endfor -%}
