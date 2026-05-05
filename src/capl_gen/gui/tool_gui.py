@@ -2,18 +2,12 @@ import sys
 import os
 import threading
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, filedialog
 from pathlib import Path
 from PIL import Image, ImageTk
 
 from core.logger import log
-from mappers.mapper_orchestrator import MapperOrchestrator
-from validators.cross_validator import CrossValidator
-from generator.jinja_engine import JinjaEngine
-
-# Import your parsers here!
-from signals.can_parser import CANSignalParser
-from signals.someip_event_parser import SomeIPEventParser
+from pipeline.main_pipeline import CaplGenerationPipeline
 
 def get_asset_path(filename: str) -> Path:
     if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
@@ -30,31 +24,19 @@ class CaplGenGUI:
         self.root.geometry("1000x800") 
         self.root.minsize(800, 700)
 
+        # UI Variables
         self.sheet_path_var = tk.StringVar(value="Requirements.xlsx")
-        self.arxml_path_var = tk.StringVar(value="") # New ARXML Path Variable
+        self.arxml_path_var = tk.StringVar(value="Network.arxml")  # Unified ARXML path
         self.test_cat_var = tk.StringVar(value="E2E_CAN")
         self.test_type_var = tk.StringVar(value="CAN->SOMEIP")
         self.output_folder_var = tk.StringVar(value="GeneratedTestScripts")
-
-        # Database Configuration
-        self.can_db_cache = "can_db_cache.json"
-        self.eth_db_cache = "someip_db_cache.json"
         
-        # Define Raw ARXML/DBC Paths (Update these to point to your actual network files)
-        self.raw_can_network = "network.dbc"
-        self.raw_eth_network = "ETH_CAN.arxml"
+        self.pipeline = CaplGenerationPipeline()
 
         self.colors = {
-            'text_light': '#e0e0e0',   
-            'text_title': '#4ba3e3',   
-            'input_bg': '#ffffff',     
-            'input_fg': '#000000',     
-            'btn_preprocess': '#3b7a57', 
-            'btn_generate': '#a14040',   
-            'btn_browse': '#2c476b',     
-            'btn_fg': 'white',
-            'log_bg': '#050a12',       
-            'log_fg': '#d1d1d1'        
+            'text_light': '#e0e0e0', 'text_title': '#4ba3e3', 'input_bg': '#ffffff', 
+            'input_fg': '#000000', 'btn_preprocess': '#3b7a57', 'btn_generate': '#a14040', 
+            'btn_browse': '#2c476b', 'btn_fg': 'white', 'log_bg': '#050a12', 'log_fg': '#d1d1d1'
         }
 
         self._setup_canvas()
@@ -63,7 +45,7 @@ class CaplGenGUI:
         self._build_action_buttons()
         self._build_log_section()
         
-        # --- START BACKGROUND TASKS ---
+        # Try to build automatically on startup if ARXML is already present
         self._start_background_db_build()
 
     def _setup_canvas(self):
@@ -92,7 +74,6 @@ class CaplGenGUI:
                 self.canvas.coords("title", width / 2, 90)
                 
                 left_align = width * 0.1
-                # Adjusted spacing slightly to accommodate the new field seamlessly
                 self.canvas.coords("lbl_sheet", left_align, height * 0.16)
                 self.canvas.coords("lbl_arxml", left_align, height * 0.23) 
                 self.canvas.coords("lbl_cat", left_align, height * 0.30)
@@ -123,28 +104,23 @@ class CaplGenGUI:
     def _build_input_section(self):
         font_style = ("Helvetica", 10, "bold")
         self.canvas.create_text(0, 0, text="Input Requirement Sheet:", font=font_style, fill=self.colors['text_light'], anchor="sw", tags="lbl_sheet")
-        self.canvas.create_text(0, 0, text="Input ARXML Sheet:", font=font_style, fill=self.colors['text_light'], anchor="sw", tags="lbl_arxml")
+        self.canvas.create_text(0, 0, text="Input Unified ARXML Network:", font=font_style, fill=self.colors['text_light'], anchor="sw", tags="lbl_arxml")
         self.canvas.create_text(0, 0, text="Test Category:", font=font_style, fill=self.colors['text_light'], anchor="sw", tags="lbl_cat")
         self.canvas.create_text(0, 0, text="Test Type:", font=font_style, fill=self.colors['text_light'], anchor="sw", tags="lbl_type")
         self.canvas.create_text(0, 0, text="Output Folder Name:", font=font_style, fill=self.colors['text_light'], anchor="sw", tags="lbl_out")
 
-        # Row 1: Requirement Sheet
         tk.Entry(self.root, textvariable=self.sheet_path_var, bg=self.colors['input_bg'], fg=self.colors['input_fg'], insertbackground='black', relief="flat").place(relx=0.1, rely=0.17, relwidth=0.68, height=30)
         tk.Button(self.root, text="Browse...", bg=self.colors['btn_browse'], fg=self.colors['btn_fg'], relief="flat", cursor="hand2", command=self._browse_file).place(relx=0.79, rely=0.17, relwidth=0.11, height=30)
 
-        # Row 2: ARXML File (New Field)
         tk.Entry(self.root, textvariable=self.arxml_path_var, bg=self.colors['input_bg'], fg=self.colors['input_fg'], insertbackground='black', relief="flat").place(relx=0.1, rely=0.24, relwidth=0.68, height=30)
         tk.Button(self.root, text="Browse...", bg=self.colors['btn_browse'], fg=self.colors['btn_fg'], relief="flat", cursor="hand2", command=self._browse_arxml_file).place(relx=0.79, rely=0.24, relwidth=0.11, height=30)
 
-        # Row 3: Test Category
         cb_cat = ttk.Combobox(self.root, textvariable=self.test_cat_var, values=["E2E_CAN", "E2E_ETH"], state="readonly")
         cb_cat.place(relx=0.1, rely=0.31, relwidth=0.8, height=30)
 
-        # Row 4: Test Type
         cb_type = ttk.Combobox(self.root, textvariable=self.test_type_var, values=["CAN->SOMEIP", "CAN->SOMEIP_FF", "CAN->SWC", "SWC->CAN", "SOMEIP->CAN"], state="readonly")
         cb_type.place(relx=0.1, rely=0.38, relwidth=0.8, height=30)
 
-        # Row 5: Output Folder Name
         tk.Entry(self.root, textvariable=self.output_folder_var, bg=self.colors['input_bg'], fg=self.colors['input_fg'], insertbackground='black', relief="flat").place(relx=0.1, rely=0.45, relwidth=0.8, height=30)
 
     def _build_action_buttons(self):
@@ -182,68 +158,43 @@ class CaplGenGUI:
         scrollbar.grid(row=0, column=1, sticky="ns")
         self.write_log("System UI initialized.")
 
-    # --- DAEMON THREADING LOGIC ---
     def _start_background_db_build(self):
-        """Checks if caches exist. If not, spawns a background thread to build them."""
-        can_missing = not os.path.exists(self.can_db_cache)
-        eth_missing = not os.path.exists(self.eth_db_cache)
+        can_missing = not os.path.exists(self.pipeline.can_db)
+        eth_missing = not os.path.exists(self.pipeline.eth_db)
 
-        if can_missing or eth_missing:
-            self.write_log("⚙️ Cache missing. Starting background database parsers...")
-            self.btn_preprocess.config(state="disabled") # Lock preprocess button
-            
-            # Spawn daemon thread so it dies gracefully if the user closes the app early
-            thread = threading.Thread(target=self._run_parsers_in_background, args=(can_missing, eth_missing), daemon=True)
+        if (can_missing or eth_missing) and os.path.exists(self.arxml_path_var.get()):
+            self.write_log("⚙️ Starting background database parsers...")
+            self.btn_preprocess.config(state="disabled") 
+            thread = threading.Thread(target=self._run_parsers_in_background, daemon=True)
             thread.start()
-        else:
-            self.write_log("✅ Database caches loaded and ready.")
 
-    def _run_parsers_in_background(self, build_can: bool, build_eth: bool):
-        """Executes the heavy parsing logic without freezing the UI."""
+    def _run_parsers_in_background(self):
         try:
-            if build_can:
-                # self.root.after() safely schedules a UI update from a background thread
-                self.root.after(0, lambda: self.write_log("   -> Parsing CAN Network..."))
-                can_parser = CANSignalParser(self.raw_can_network)
-                can_parser.to_json_file(self.can_db_cache)
-                import time; time.sleep(2) # Placeholder for actual parse time
-
-            if build_eth:
-                self.root.after(0, lambda: self.write_log("   -> Parsing SOME/IP Network..."))
-                eth_parser = SomeIPEventParser(self.raw_eth_network)
-                eth_parser.to_json_file(self.eth_db_cache)
-                import time; time.sleep(2) # Placeholder for actual parse time
-
-            # Re-enable the UI
+            can_built, eth_built = self.pipeline.build_databases(self.arxml_path_var.get())
+            if can_built: self.root.after(0, lambda: self.write_log("✅ CAN Network Parsed."))
+            if eth_built: self.root.after(0, lambda: self.write_log("✅ SOME/IP Network Parsed."))
             self.root.after(0, self._on_parsing_complete)
-
         except Exception as e:
             self.root.after(0, lambda: self.write_log(f"❌ Background Parsing Failed: {e}"))
-            self.root.after(0, lambda: self.btn_preprocess.config(state="normal")) # Unlock anyway
+            self.root.after(0, lambda: self.btn_preprocess.config(state="normal"))
 
     def _on_parsing_complete(self):
-        """Callback when the thread finishes successfully."""
         self.write_log("✅ Background parsing complete. Ready to Pre-Process.")
         self.btn_preprocess.config(state="normal")
 
-    # --- ACTION METHODS ---
     def _browse_file(self):
-        file_path = filedialog.askopenfilename(
-            title="Select Requirements Excel",
-            filetypes=[("Excel Files", ".xlsx;.xls"), ("All Files", "*.*")]
-        )
+        file_path = filedialog.askopenfilename(title="Select Requirements Excel", filetypes=[("Excel Files", ".xlsx;.xls"), ("All Files", "*.*")])
         if file_path:
             self.sheet_path_var.set(file_path)
             self.write_log(f"Selected file: {file_path}")
-            
+
     def _browse_arxml_file(self):
-        file_path = filedialog.askopenfilename(
-            title="Select ARXML File",
-            filetypes=[("ARXML Files", "*.arxml"), ("All Files", "*.*")]
-        )
+        file_path = filedialog.askopenfilename(title="Select Unified ARXML File", filetypes=[("ARXML Files", "*.arxml"), ("All Files", "*.*")])
         if file_path:
             self.arxml_path_var.set(file_path)
             self.write_log(f"Selected ARXML file: {file_path}")
+            # Automatically try to build caches if user selects a new file
+            self._start_background_db_build()
 
     def _clear_log(self):
         self.log_text.config(state="normal")
@@ -257,64 +208,49 @@ class CaplGenGUI:
         self.log_text.config(state="disabled")
         self.root.update_idletasks()
 
-    def get_intermediate_path(self):
-        input_excel = self.sheet_path_var.get()
-        out_dir = self.output_folder_var.get()
-        base_name = os.path.basename(input_excel).replace(".xlsx", "_Intermediate.xlsx")
-        return os.path.join(out_dir, base_name)
-
     def run_preprocess(self):
         input_excel = self.sheet_path_var.get()
         out_dir = self.output_folder_var.get()
+        arxml_path = self.arxml_path_var.get()
 
         if not os.path.exists(input_excel):
-            self.write_log(f"❌ Error: File '{input_excel}' not found.")
+            self.write_log(f"❌ Error: Input Excel '{input_excel}' not found.")
             return
 
         self.write_log("--- Starting Pre-Processing (Mapping & Validation) ---")
         self.btn_preprocess.config(state="disabled")
         
         try:
-            # 1. Map requirements
-            self.write_log("Mapping databases to requirements...")
-            orchestrator = MapperOrchestrator(self.can_db_cache, self.eth_db_cache)
-            orchestrator.process_file(input_excel, out_dir)
-
-            int_excel = self.get_intermediate_path()
-
-            # 2. Compute Limits and Validate
-            self.write_log("Cross-validating signals and computing limits...")
-            validator = CrossValidator(orchestrator.can_mapper.db, orchestrator.eth_mapper.db)
-            validator.process_sheet(int_excel, "E2E_CAN_PARSED", is_can_sheet=True)
-            validator.process_sheet(int_excel, "E2E_ETH_PARSED", is_can_sheet=False)
-
+            # Synchronously catch missing caches just in case the background thread hasn't finished/started
+            self.pipeline.build_databases(arxml_path)
+            int_excel = self.pipeline.run_preprocessing(input_excel, out_dir)
             self.write_log(f"✅ Pre-Processing Complete! Generated: {int_excel}")
         except Exception as e:
             self.write_log(f"❌ Fatal error during Pre-Processing: {e}")
-            log.exception("Pre-process error")
         finally:
             self.btn_preprocess.config(state="normal")
 
     def run_generation(self):
-        int_excel = self.get_intermediate_path()
+        input_excel = self.sheet_path_var.get()
+        out_dir = self.output_folder_var.get()
+        base_name = os.path.basename(input_excel).replace(".xlsx", "_Intermediate.xlsx")
+        int_excel = os.path.join(out_dir, base_name)
+        
         category = self.test_cat_var.get()
         test_type = self.test_type_var.get()
-        out_dir = self.output_folder_var.get()
 
         if not os.path.exists(int_excel):
-            self.write_log("❌ Error: Intermediate sheet not found. Please click 'PRE - PROCESS' first.")
+            self.write_log("❌ Error: Intermediate sheet not found. Please run PRE - PROCESS first.")
             return
 
         self.write_log(f"--- Starting CAPL Generation ({category} | {test_type}) ---")
         self.btn_generate.config(state="disabled")
         
         try:
-            engine = JinjaEngine(output_root=out_dir)
-            engine.run(int_excel, self.eth_db_cache, category, test_type)
+            self.pipeline.run_generation(int_excel, out_dir, category, test_type)
             self.write_log(f"✅ CAPL Scripts Generated in '{out_dir}'!")
         except Exception as e:
             self.write_log(f"❌ Generation failed: {e}")
-            log.exception("Generation error")
         finally:
             self.btn_generate.config(state="normal")
 
