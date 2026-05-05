@@ -80,9 +80,8 @@ void WAIT_FOR_SOMEIP_EVENT(char eventSignalName[], double targetPhys, dword time
 {
   double currentPhys;
   int64 startTime;
-  startTime = timeNowInt64();
 
-  while (1)
+  while(timeoutMs > 0)
   {
     if(getServiceSignal(eventSignalName, currentPhys) == -1)
     {
@@ -95,8 +94,8 @@ void WAIT_FOR_SOMEIP_EVENT(char eventSignalName[], double targetPhys, dword time
       testStepPass("SOMEIP_Wait", "Match: <%s> Physical %.4f", eventSignalName, currentPhys);
       return;
     }
-    if (timeoutMs == 0 || ((timeNowInt64() - startTime) / 100000) >= timeoutMs) break;
     testWaitForTimeoutSilent(10);
+    timeoutMs -= 10;
   }
   testStepFail("SOMEIP_Timeout", "Signal <%s>: Expected Phys %.4f, Got %.4f", eventSignalName, targetPhys, currentPhys);
 }
@@ -164,9 +163,9 @@ void WAIT_FOR_SYSVAR_FLOAT(char ns[], char name[], float targetValue, dword time
 {
   float cur;
   int64 startTime;
-  startTime = timeNowInt64();
 
-  while(1) {
+  while(timeoutMs > 0) 
+  {
     if(sysGetVariableFloat(ns, name, cur) == 2) //Variable not found
     {
       testStepFail("SysVar_Err", "Critical: SysVar %s::%s not found", ns, name);
@@ -176,8 +175,8 @@ void WAIT_FOR_SYSVAR_FLOAT(char ns[], char name[], float targetValue, dword time
     if(abs(cur - targetValue) <= PHYS_TOLERANCE) { 
       testStepPass("SysVar_Wait", "%s::%s Match: %f", ns, name, cur); return; 
     }
-    if(timeoutMs == 0 || ((timeNowInt64() - startTime) / 100000) >= timeoutMs) break;
     testWaitForTimeoutSilent(10);
+    timeoutMs -= 10;
   }
   testStepFail("SysVar_Timeout", "%s::%s: Expected %f, Got %f", ns, name, targetValue, cur);
 }
@@ -197,9 +196,9 @@ void WAIT_FOR_SYSVAR_LONG(char ns[], char name[], long targetValue, dword timeou
 {
   long cur;
   int64 startTime;
-  startTime = timeNowInt64();
 
-  while(1) {
+  while(timeoutMs > 0)
+  {
     if(sysGetVariableLong(ns, name, cur) == 2) //Variable not found
     {
       testStepFail("SysVar_Err", "Critical: SysVar %s::%s not found", ns, name);
@@ -209,8 +208,8 @@ void WAIT_FOR_SYSVAR_LONG(char ns[], char name[], long targetValue, dword timeou
     if(cur == targetValue) { 
       testStepPass("SysVar_Wait", "%s::%s Match: %ld", ns, name, cur); return; 
     }
-    if(timeoutMs == 0 || ((timeNowInt64() - startTime) / 100000) >= timeoutMs) break;
     testWaitForTimeoutSilent(10);
+    timeoutMs -= 10;
   }
   testStepFail("SysVar_Timeout", "%s::%s: Expected %ld, Got %ld", ns, name, targetValue, cur);
 }
@@ -230,9 +229,9 @@ void WAIT_FOR_SYSVAR_LONGLONG(char ns[], char name[], int64 targetValue, dword t
 {
   int64 cur;
   int64 startTime;
-  startTime = timeNowInt64();
 
-  while(1) {
+  while(timeoutMs > 0)
+  {
     if(sysGetVariableLongLong(ns, name, cur) == 2) //Variable not found
     {
       testStepFail("SysVar_Err", "Critical: SysVar %s::%s not found", ns, name);
@@ -242,8 +241,8 @@ void WAIT_FOR_SYSVAR_LONGLONG(char ns[], char name[], int64 targetValue, dword t
     if(cur == targetValue) { 
       testStepPass("SysVar_Wait", "%s::%s Match: %lld", ns, name, cur); return; 
     }
-    if(timeoutMs == 0 || ((timeNowInt64() - startTime) / 100000) >= timeoutMs) break;
     testWaitForTimeoutSilent(10);
+    timeoutMs -= 10;
   }
   testStepFail("SysVar_Timeout", "%s::%s: Expected %lld, Got %lld", ns, name, targetValue, cur);
 }
@@ -263,9 +262,9 @@ void WAIT_FOR_SYSVAR_DWORD(char ns[], char name[], dword targetValue, dword time
 {
   dword cur;
   int64 startTime;
-  startTime = timeNowInt64();
   
-  while(1) {
+  while(timeoutMs > 0)
+  {
     if(sysGetVariableDWord(ns, name, cur) == 2) //Variable not found
     {
       testStepFail("SysVar_Err", "Critical: SysVar %s::%s not found", ns, name);
@@ -275,8 +274,8 @@ void WAIT_FOR_SYSVAR_DWORD(char ns[], char name[], dword targetValue, dword time
     if(cur == targetValue) { 
       testStepPass("SysVar_Wait", "%s::%s Match: %u", ns, name, cur); return; 
     }
-    if(timeoutMs == 0 || ((timeNowInt64() - startTime) / 100000) >= timeoutMs) break;
     testWaitForTimeoutSilent(10);
+    timeoutMs -= 10;
   }
   testStepFail("SysVar_Timeout", "%s::%s: Expected %u, Got %u", ns, name, targetValue, cur);
 }
