@@ -17,7 +17,6 @@ class CrossValidator:
 
     def __init__(self, can_db: dict, eth_db: dict):
         self.can_lookup = {str(k).lower(): v for k, v in can_db.items()}
-
         self.eth_lookup = {}
         for sig_str, data in eth_db.items():
             meth = str(data.get('Method', data.get('Attribute_Value', ''))).strip().lower()

@@ -14,33 +14,24 @@ class MapperOrchestrator:
         self.eth_mapper = SomeIPMapper(eth_cache)
 
     def get_column_mapping(self, sheet_type: str) -> dict:
-        """Returns {TARGET_INTERNAL_COLUMN : SOURCE_EXCEL_COLUMN}"""
         base_map = {
             "SWC": "SWC", 
             "TEST_TYPE": "TEST_TYPE", 
             "BASIC_FUNCTION_NAME": "BASIC_FUNCTION_NAME",
             "CAN_CLUSTER": "CAN_CLUSTER"
         }
+        common_cols = {
+            "SOMEIP_PORT": ["SOMEIP_PORT", "Port", "SOMEIP_PORT_MAPPING", "Port Name"],
+            "ATTRIBUTE_VALUE": ["ATTRIBUTE_VALUE", "Attribute value", "SOMEIP_ATTRIBUTE_VALUE_MAPPING"],
+            "CAN_PORT": ["CAN_PORT", "CAN_PORT_MAPPING", "Port Name"],
+            "PATH_SYNTHESIS": ["PATH_SYNTHESIS", "CAN_PATH_SYNTHESIS_MAPPING", "Path Synthesis"],
+            "SOMEIP_TOPIC": ["SOMEIP_TOPIC", "Topic", "Topic Name"],
+            "SOMEIP_TOPIC_ATTRIBUTE": ["SOMEIP_TOPIC_ATTRIBUTE", "Attribute", "Topic Attribute"]
+        }
         if sheet_type == "E2E_ETH":
-            base_map.update({
-                "E2E_ETH_REQ_ID": ["E2E_ETH_REQ_ID", "REQ ID", "REQ_ID", "REQID"],
-                "SOMEIP_PORT": ["SOMEIP_PORT", "Port", "SOMEIP_PORT_MAPPING", "Port Name"],
-                "ATTRIBUTE_VALUE": ["ATTRIBUTE_VALUE", "Attribute value", "SOMEIP_ATTRIBUTE_VALUE_MAPPING"],
-                "CAN_PORT": ["CAN_PORT", "CAN_PORT_MAPPING", "Port Name"],
-                "PATH_SYNTHESIS": ["PATH_SYNTHESIS", "CAN_PATH_SYNTHESIS_MAPPING", "Path Synthesis"],
-                "SOMEIP_TOPIC": ["SOMEIP_TOPIC", "Topic", "Topic Name"],
-                "SOMEIP_TOPIC_ATTRIBUTE": ["SOMEIP_TOPIC_ATTRIBUTE", "Topic Attribute", "Attribute"]
-            })
+            base_map.update({"E2E_ETH_REQ_ID": ["E2E_ETH_REQ_ID", "REQ ID", "REQ_ID"], **common_cols})
         elif sheet_type == "E2E_CAN":
-            base_map.update({
-                "E2E_CAN_REQ_ID": ["E2E_CAN_REQ_ID", "REQ ID", "REQ_ID", "REQID"],
-                "CAN_PORT": ["CAN_PORT", "Port Name", "CAN_PORT_MAPPING"],
-                "PATH_SYNTHESIS": ["PATH_SYNTHESIS", "Path Synthesis", "CAN_PATH_SYNTHESIS_MAPPING"],
-                "SOMEIP_PORT": ["SOMEIP_PORT", "SOMEIP_PORT_MAPPING", "Port", "Port Name"],
-                "ATTRIBUTE_VALUE": ["ATTRIBUTE_VALUE", "Attribute value", "SOMEIP_ATTRIBUTE_VALUE_MAPPING"],
-                "SOMEIP_TOPIC": ["SOMEIP_TOPIC", "Topic", "Topic Name"],
-                "SOMEIP_TOPIC_ATTRIBUTE": ["SOMEIP_TOPIC_ATTRIBUTE", "Topic Attribute", "Attribute"]
-            })
+            base_map.update({"E2E_CAN_REQ_ID": ["E2E_CAN_REQ_ID", "REQ ID", "REQ_ID"], **common_cols})
         return base_map
 
     def get_output_columns(self, sheet_type: str) -> list:
@@ -66,109 +57,112 @@ class MapperOrchestrator:
         tt = re.sub(r"F&FSOMEIP|SOMEIPF&F", "SOMEIP_FF", tt)
         tt = re.sub(r"[\(\)]", "_", tt)
         tt = re.sub(r"__+", "_", tt).strip("_")
-        if "HVB" in tt: tt = "CAN->SWC_HVB"
         return tt
 
     def compute_basic_function_name(self, row) -> str:
-        tt_raw = str(row.get('TEST_TYPE', '')).upper()
-        if any(x in tt_raw for x in ["NONEED", "ENABLER", "NO_NEED"]):
+        tt = str(row.get('TEST_TYPE', '')).upper()
+        if any(x in tt for x in ["NONEED", "ENABLER", "NO_NEED"]):
             return "FUNCTION_NOT_REQUIRED"
         
-        cluster_map = {
-            "CAN_FD_PT": "PT", "CAN_FD_CHASSIS": "CH", "CAN_ITS3_FD": "ITS3",
-            "CAN_ITS5_FD": "ITS5", "PCU4_CAN": "PCU4", "CAN_EXT": "EXT",
-            "CAN_FD_ACCESS2": "ACC2"
-        }
-        
-        tt = str(row.get('TEST_TYPE', '')).strip()
         sp = str(row.get('SOMEIP_PORT', '')).strip()
-        raw_cp = str(row.get('CAN_PORT', '')).strip() if pd.notna(row.get('CAN_PORT')) else "UnknownPort"
-        cp = f"I{raw_cp}"
-        raw_cc = str(row.get('CAN_CLUSTER', '')).strip()
-        cc = cluster_map.get(raw_cc, raw_cc)
+        attr_raw = str(row.get('ATTRIBUTE_VALUE', '')).strip()
+        topic_attr = str(row.get('SOMEIP_TOPIC_ATTRIBUTE', '')).lower()
         
-        attr_raw = str(row.get('ATTRIBUTE_VALUE', ''))
+        is_state = "value_state" in topic_attr or "valuestate" in topic_attr or \
+                   bool(re.search(r'ValueState|value_state', attr_raw, re.IGNORECASE))
+
+        def generate_name():
+            cluster_map = {
+                "CAN_FD_PT": "PT", "CAN_FD_CHASSIS": "CH", "CAN_ITS3_FD": "ITS3",
+                "CAN_ITS5_FD": "ITS5", "PCU4_CAN": "PCU4", "CAN_EXT": "EXT", "CAN_FD_ACCESS2": "ACC2"
+            }
+            raw_cp = str(row.get('CAN_PORT', '')).strip() if pd.notna(row.get('CAN_PORT')) else "UnknownPort"
+            cp = f"I{raw_cp}"
+            raw_cc = str(row.get('CAN_CLUSTER', '')).strip()
+            cc = cluster_map.get(raw_cc, raw_cc)
+            attr = attr_raw
+            event_name = sp.split('_')[1] if '_' in sp and len(sp.split('_')) > 1 else sp
+
+            if any(x in tt for x in ["CAN->SOMEIP", "CAN->SOMEIP_AACP", "CAN->SOMEIP_FF"]):
+                return f"basic_fn_{cp}_{cc}_{event_name}_{attr}"
+            if any(x in tt for x in ["SOMEIP->CAN", "SOMEIP_FF->CAN"]):
+                return f"basic_fn_{event_name}_{attr}_{cp}_{cc}"
+            if any(x in tt for x in ["CAN->SWC", "CAN->SWC_HVB"]):
+                return f"basic_fn_{cp}_{cc}_SWC"
+            if "SWC->CAN" in tt:
+                return f"basic_fn_SWC_{cp}_{cc}"
+            if any(x in tt for x in ["SOMEIP->SWC", "SOMEIP_FF->SWC"]):
+                return f"basic_fn_{event_name}_{attr}_SWC"
+            if any(x in tt for x in ["SWC->SOMEIP", "SWC->SOMEIP_FF", "SWC->SOMEIP_AACP"]):
+                return f"basic_fn_SWC_{event_name}_{attr}"
+            if "CAROS->SWC" in tt:
+                return f"basic_fn_CAROS_{event_name}_{attr}_SWC"
+            if "CAN->CAN" in tt:
+                return f"basic_fn_{cp}_{cc}_{cp}_{cc}"
+            return "basic_fn_UNKNOWN"
+
+        if is_state:
+            stripped = re.sub(r'ValueState|value_state', '', attr_raw, flags=re.IGNORECASE).strip()
+            return f"PENDING_STATE_MATCH|{sp}|{stripped}|{generate_name()}|{tt}"
         
-        # STEP 1: If ValueState, mark it as PENDING and stop here
-        if any(x in attr_raw.lower() for x in ["valuestate", "value_state"]):
-            return f"STATE_PENDING_LOOKUP|{sp}"
-
-        attr = self.can_mapper.normalize_attr(attr_raw) if attr_raw else ""
-        event_name = sp.split('_')[1] if '_' in sp and len(sp.split('_')) > 1 else sp
-
-        name = None
-        if tt in ['CAN->SOMEIP', 'CAN->SOMEIP_FF', 'CAN->SOMEIP_AACP']: 
-            name = f"basic_fn_{cp}_{cc}_{event_name}_{attr}" if attr else None
-        elif tt in ['SOMEIP->CAN', 'SOMEIP_FF->CAN']: 
-            name = f"basic_fn_{event_name}_{attr}_{cp}_{cc}" if attr else None
-        elif tt in ['CAN->SWC', 'CAN->SWC_HVB']: 
-            name = f"basic_fn_{cp}_{cc}_SWC"
-        elif tt == 'SWC->CAN': 
-            name = f"basic_fn_SWC_{cp}_{cc}"
-        elif tt in ['SOMEIP->SWC', 'SOMEIP_FF->SWC']: 
-            name = f"basic_fn_{event_name}_{attr}_SWC" if attr else None
-        elif tt in ['SWC->SOMEIP', 'SWC->SOMEIP_FF', 'SWC->SOMEIP_AACP']: 
-            name = f"basic_fn_SWC_{event_name}_{attr}" if attr else None
-        elif tt == 'CAROS->SWC': 
-            name = f"basic_fn_CAROS_{event_name}_{attr}_SWC" if attr else None
-        elif tt == 'CAN->CAN': 
-            name = f"basic_fn_{cp}_{cc}_{cp}_{cc}"
-
-        if not name:
-            name = "basic_fn_UNKNOWN"
-
-        if name and len(name) > 128:
-            log.warning(f"Function name exceeds 128 characters: {name} (length: {len(name)})")
-        
-        return name
+        return generate_name()
 
     def cross_fill_function_names(self, df_list):
-        """Pass 2: Force state signals to adopt sibling names via Port lookup."""
-        # Combine all processed data to find siblings across any sheet
         combined = pd.concat(df_list, ignore_index=True)
-        
-        # Create mapping of Port -> Real Function Name (ignoring pending/unknown/not required)
-        lookup_mask = (combined['BASIC_FUNCTION_NAME'].notna()) & \
-                      (~combined['BASIC_FUNCTION_NAME'].str.startswith("STATE_PENDING_LOOKUP", na=False)) & \
-                      (~combined['BASIC_FUNCTION_NAME'].isin(["FUNCTION_NOT_REQUIRED", "basic_fn_UNKNOWN"]))
-        
-        port_to_name_map = combined[lookup_mask].drop_duplicates('SOMEIP_PORT').set_index('SOMEIP_PORT')['BASIC_FUNCTION_NAME'].to_dict()
+        lookup_map = {}
+        port_only_map = {}
 
-        final_dfs = []
+        for _, row in combined.iterrows():
+            bfn = str(row['BASIC_FUNCTION_NAME'])
+            if "PENDING_STATE_MATCH" not in bfn and bfn not in ["basic_fn_UNKNOWN", "FUNCTION_NOT_REQUIRED"]:
+                sp = str(row['SOMEIP_PORT']).strip()
+                attr = str(row['ATTRIBUTE_VALUE']).strip()
+                lookup_map[(sp, attr)] = bfn
+                port_only_map[sp] = bfn
+
+        processed_dfs = []
         for df in df_list:
-            def resolve_state(val):
-                if pd.isna(val): return "basic_fn_UNKNOWN"
-                if str(val).startswith("STATE_PENDING_LOOKUP"):
-                    port = val.split('|')[1]
-                    # Direct sibling lookup - this ignores the TEST_TYPE of the state signal
-                    return port_to_name_map.get(port, "basic_fn_UNKNOWN")
-                return val
+            def resolve_state(row):
+                val = row['BASIC_FUNCTION_NAME']
+                if not isinstance(val, str) or not val.startswith("PENDING_STATE_MATCH"):
+                    return val
+                
+                parts = val.split('|')
+                _, sp, stripped_attr, fallback_name, _ = parts
+                
+                if stripped_attr and (sp, stripped_attr) in lookup_map:
+                    return lookup_map[(sp, stripped_attr)]
 
-            df['BASIC_FUNCTION_NAME'] = df['BASIC_FUNCTION_NAME'].apply(resolve_state)
-            final_dfs.append(df)
-            
-        return final_dfs
+                if sp in port_only_map:
+                    return port_only_map[sp]
+                
+                if fallback_name != "basic_fn_UNKNOWN":
+                    return fallback_name
+
+                return "basic_fn_UNKNOWN"
+
+            df['BASIC_FUNCTION_NAME'] = df.apply(resolve_state, axis=1)
+            processed_dfs.append(df)
+        return processed_dfs
 
     def process_file(self, input_excel: str, output_dir: str):
-        log.info(f"Orchestrating mappings for: {os.path.basename(input_excel)}")
+        log.info(f"Processing: {os.path.basename(input_excel)}")
         base_name = os.path.basename(input_excel).replace(".xlsx", "_Intermediate.xlsx")
         output_path = os.path.join(output_dir, base_name)
         os.makedirs(output_dir, exist_ok=True)
 
         xls = pd.ExcelFile(input_excel)
         sheets_to_process = [s for s in ["E2E_ETH", "E2E_CAN"] if s in xls.sheet_names]
-        processed_dfs = []
+        results = []
 
         for sheet in sheets_to_process:
-            log.info(f"Processing sheet: {sheet}")
             df_in = pd.read_excel(xls, sheet_name=sheet)
             df_out = pd.DataFrame()
-            
             mapping = self.get_column_mapping(sheet)
-            for target, source_candidates in mapping.items():
-                source_candidates = source_candidates if isinstance(source_candidates, list) else [source_candidates]
-                source_column = BaseMapper.resolve_column_name(df_in.columns, source_candidates)
-                df_out[target] = df_in[source_column] if source_column else None
+            
+            for target, source in mapping.items():
+                col = BaseMapper.resolve_column_name(df_in.columns, source if isinstance(source, list) else [source])
+                df_out[target] = df_in[col] if col else None
 
             if "TEST_TYPE" in df_out.columns:
                 df_out["TEST_TYPE"] = df_out["TEST_TYPE"].apply(self.clean_test_type)
@@ -178,25 +172,21 @@ class MapperOrchestrator:
             if "CAN_PORT" in df_out.columns:
                 can_res = df_out.apply(lambda r: self.can_mapper.get_signal_data(r.get("CAN_PORT"), r.get("CAN_CLUSTER")), axis=1, result_type='expand')
                 df_out = pd.concat([df_out, can_res], axis=1)
-
             if "ATTRIBUTE_VALUE" in df_out.columns:
                 eth_res = df_out.apply(lambda r: self.eth_mapper.get_signal_data(r.get("ATTRIBUTE_VALUE"), r.get("SOMEIP_PORT")), axis=1, result_type='expand')
                 df_out = pd.concat([df_out, eth_res], axis=1)
 
-            # Pass 1: Initial Name Generation
             df_out['BASIC_FUNCTION_NAME'] = df_out.apply(self.compute_basic_function_name, axis=1)
             
-            ordered_columns = [c for c in self.get_output_columns(sheet) if c in df_out.columns]
-            extra_columns = [c for c in df_out.columns if c not in ordered_columns]
-            df_out = pd.concat([df_out[ordered_columns], df_out[extra_columns]], axis=1)
-            processed_dfs.append(df_out)
+            ordered = [c for c in self.get_output_columns(sheet) if c in df_out.columns]
+            extra = [c for c in df_out.columns if c not in ordered]
+            df_out = pd.concat([df_out[ordered], df_out[extra]], axis=1)
+            results.append(df_out)
 
-        # Pass 2: Sibling Resolution for ValueStates
-        if processed_dfs:
-            processed_dfs = self.cross_fill_function_names(processed_dfs)
+        if results:
+            results = self.cross_fill_function_names(results)
 
-        log.info(f"Saving to {output_path}...")
         with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
             for idx, sheet in enumerate(sheets_to_process):
-                processed_dfs[idx].to_excel(writer, sheet_name=f"{sheet}_PARSED", index=False)
-        log.info("✅ Intermediate Generation Complete.")
+                results[idx].to_excel(writer, sheet_name=f"{sheets_to_process[idx]}_PARSED", index=False)
+        log.info("✅ Final resolution complete.")

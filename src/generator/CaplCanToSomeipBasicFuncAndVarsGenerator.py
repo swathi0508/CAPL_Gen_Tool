@@ -35,72 +35,73 @@ class CaplCanToSomeipBasicFuncAndVarsGenerator:
 
     def render(self, data_frames: dict, test_type: str, output_root: str):
         try:
-            # 1. Pick and Combine Sheets
+            # 1. Combine and Clean Sheets
             target_sheets = ['E2E_CAN_PARSED', 'E2E_ETH_PARSED']
-            available_dfs = [data_frames[s] for s in target_sheets if s in data_frames]
+            valid_dfs = []
+            for s in target_sheets:
+                if s in data_frames:
+                    df_temp = data_frames[s].copy()
+                    df_temp.columns = df_temp.columns.str.strip()
+                    # Apply test_type filter immediately per sheet
+                    df_filtered = df_temp[df_temp['TEST_TYPE'].astype(str).str.strip() == test_type]
+                    valid_dfs.append(df_filtered)
             
-            if not available_dfs:
-                log.error(f"Required sheets {target_sheets} not found.")
+            if not valid_dfs:
+                log.warning(f"No data for {test_type} in {target_sheets}")
                 return
 
-            df = pd.concat(available_dfs, ignore_index=True)
-            df.columns = df.columns.str.strip()
-            
-            # 2. Filter by TEST_TYPE
-            df = df[df['TEST_TYPE'].astype(str).str.strip() == test_type].copy()
-            
-            if df.empty:
-                log.warning(f"No data for {test_type} in targeted sheets.")
+            full_df = pd.concat(valid_dfs, ignore_index=True)
+            full_df = self._validate_and_clean(full_df)
+
+            # 2. STRICT FILTER: Remove all ValueState metadata rows
+            # This ensures metadata for functions/variables only comes from the 'Actual Value' rows
+            actual_value_rows = full_df[~full_df['ATTRIBUTE_VALUE'].str.contains("ValueState", case=False)].copy()
+
+            if actual_value_rows.empty:
+                log.error(f"No actual value rows found after filtering ValueState for {test_type}.")
                 return
 
-            # 3. CLEAN DATA (Preserving your specific null handling)
-            df = self._validate_and_clean(df)
-
-            # 4. BASIC FUNCTIONS: Filter out ValueState rows and deduplicate by Function Name
-            func_df = df[~df['ATTRIBUTE_VALUE'].str.contains("ValueState", case=False)].copy()
-            func_df = func_df.drop_duplicates(subset=['BASIC_FUNCTION_NAME'])
+            # 3. GENERATE UNIQUE MASTER FUNCTIONS
+            # We take the UNION of all unique function names across both files
+            # Sorting ensures that if metadata exists in both, we pick consistently
+            actual_value_rows = actual_value_rows.sort_values(by=['BASIC_FUNCTION_NAME', 'CAN_PORT'])
+            func_df = actual_value_rows.drop_duplicates(subset=['BASIC_FUNCTION_NAME'])
             func_records = func_df.to_dict(orient='records')
 
-            # 5. VARIABLES: Strictly separate Standard (Physical) and Enum variables
+            # 4. GENERATE VARIABLES (Directly tied to the Master Value rows)
             
-            # --- Collection A: Physical/Standard Variables Only ---
-            # Filter for rows that DO NOT have an Enum defined
-            std_mask = (df['CAN_ENUM'] == "MISSING_DATA")
-            std_vars_df = df[std_mask].copy()
-            std_vars_df = std_vars_df.drop_duplicates(subset=['CAN_PORT'])
-            std_vars = std_vars_df.to_dict(orient='records')
+            # --- Physical/Standard Variables ---
+            std_vars_df = actual_value_rows[actual_value_rows['CAN_ENUM'] == "MISSING_DATA"].copy()
+            std_vars = std_vars_df.drop_duplicates(subset=['CAN_PORT']).to_dict(orient='records')
 
-            # --- Collection B: Enum Variables (Decoupled) ---
-            enum_mask = (df['CAN_ENUM'] != "MISSING_DATA") & (~df['ATTRIBUTE_VALUE'].str.contains("ValueState", case=False))
-            enum_rows_df = df[enum_mask].copy()
+            # --- Enum Variables ---
+            enum_base = actual_value_rows[actual_value_rows['CAN_ENUM'] != "MISSING_DATA"].copy()
+            
+            # Unique CAN side enum definitions
+            can_enums = enum_base.drop_duplicates(subset=['CAN_PORT']).to_dict(orient='records')
 
-            # 1. Unique CAN Enums: Keyed by CAN_PORT
-            can_enums_df = enum_rows_df.drop_duplicates(subset=['CAN_PORT'])
-            can_enums = can_enums_df.to_dict(orient='records')
+            # Unique SOME/IP side enum definitions
+            eth_enums = enum_base.drop_duplicates(subset=['SOMEIP_PORT', 'ATTRIBUTE_VALUE']).to_dict(orient='records')
 
-            # 2. Unique SOME/IP Enums: Keyed by SOMEIP_PORT + ATTRIBUTE_VALUE
-            eth_enums_df = enum_rows_df.drop_duplicates(subset=['SOMEIP_PORT', 'ATTRIBUTE_VALUE'])
-            eth_enums = eth_enums_df.to_dict(orient='records')
-
-            # --- RENDER ---
+            # 5. RENDER OUTPUTS
             f_dir = Path(output_root) / "BASIC_FUNCTIONS"
             v_dir = Path(output_root) / "VARIABLES"
             os.makedirs(f_dir, exist_ok=True)
             os.makedirs(v_dir, exist_ok=True)
-            
-            # Render Functions
+
+            # Render Functions File
             with open(f_dir / "can_to_someip_basic_functions.cin", "w") as f:
                 f.write(self.env.get_template(self.func_template).render(functions=func_records))
-            
-            # Render Variables - CRITICAL: Passing can_enums and eth_enums keys correctly
+
+            # Render Variables File
             with open(v_dir / "can_to_someip_variables.cin", "w") as f:
                 f.write(self.env.get_template(self.var_template).render(
                     standard_vars=std_vars, 
                     can_enums=can_enums,
                     eth_enums=eth_enums
                 ))
-                
-            log.info(f"Generated {len(func_records)} functions and {len(std_vars) + len(can_enums) + len(eth_enums)} variables for {test_type}.")
-            
+
+            log.info(f"Generated {len(func_records)} functions. ValueState metadata excluded.")
+
         except Exception as e:
             log.exception(f"Logic Gen failed: {e}")
