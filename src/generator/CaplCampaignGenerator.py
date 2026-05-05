@@ -30,9 +30,13 @@ class CaplCampaignGenerator:
             df = data_frames[sheet_name].copy()
             df.columns = df.columns.str.strip()
             
-            # Filter rows based on original target_type
+            # --- FIX STARTS HERE ---
+            # Strictly filter rows: ensure both column data and input target_type are stripped of whitespace
+            # and compared for an exact match.
             df['TEST_TYPE'] = df['TEST_TYPE'].astype(str).str.strip()
-            df = df[df['TEST_TYPE'] == target_type].copy()
+            normalized_target = str(target_type).strip()
+            df = df[df['TEST_TYPE'] == normalized_target].copy()
+            # --- FIX ENDS HERE ---
             
             if df.empty:
                 log.warning(f"Campaign Gen: No rows found for {target_type} in {sheet_name}.")
