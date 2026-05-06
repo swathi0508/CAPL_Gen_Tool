@@ -45,8 +45,46 @@ class CaplGenerationPipeline:
         else:
             log.setLevel(logging.INFO)
 
+    def _is_cache_valid(self, cache_path: str, source_arxml: str) -> bool:
+        """Determines if the JSON cache is stale, belongs to a different ARXML, or size mismatched."""
+        if not os.path.exists(cache_path) or not os.path.exists(source_arxml):
+            return False
+            
+        # 1. Timestamp Check (Fastest check)
+        if os.path.getmtime(source_arxml) > os.path.getmtime(cache_path):
+            log.info(f"🔄 ARXML timestamp modified. Cache '{os.path.basename(cache_path)}' is stale.")
+            return False
+            
+        # 2. Deep Integrity Check: Name & File Size
+        try:
+            import re
+            current_size = os.path.getsize(source_arxml)
+            
+            with open(cache_path, 'r', encoding='utf-8') as f:
+                # Still reading only the first 1KB for O(1) lightning speed
+                head = f.read(1024) 
+                
+                # Check A: Did the filename change?
+                if os.path.basename(source_arxml) not in head:
+                    log.info(f"🔄 Different ARXML selected. Invalidating cache '{os.path.basename(cache_path)}'.")
+                    return False
+                    
+                # Check B: Did the file size change? (Extract size from the JSON string)
+                size_match = re.search(r'"Source_File_Size_Bytes":\s*(\d+)', head)
+                if size_match:
+                    cached_size = int(size_match.group(1))
+                    if cached_size != current_size:
+                        log.info(f"🔄 ARXML file size changed ({cached_size}b -> {current_size}b). Invalidating cache.")
+                        return False
+                        
+        except Exception as e:
+            log.debug(f"Cache validation check failed, defaulting to re-parse: {e}")
+            return False
+            
+        return True
+
     def build_databases(self, raw_arxml_path: str) -> tuple[bool, bool]:
-        """Loads databases from JSON cache if available, otherwise parses from ARXML."""
+        """Loads databases from JSON cache if valid, otherwise parses from ARXML."""
         self._configure_logging()
         can_built, eth_built = False, False
         
@@ -55,14 +93,14 @@ class CaplGenerationPipeline:
             if not self.can_db_data:
                 can_parser = CANSignalParser(raw_arxml_path)
                 
-                # 1. Try to load from disk cache first
-                if os.path.exists(self.can_db) and can_parser.load_from_json(self.can_db):
+                # Check if the cache is valid AND loads successfully
+                if self._is_cache_valid(self.can_db, raw_arxml_path) and can_parser.load_from_json(self.can_db):
                     log.info(f"✅ Loaded CAN Network from fast cache: {self.can_db}")
                     self.can_db_data = can_parser.to_json_dict()
                 
-                # 2. Fallback to heavy ARXML parsing if cache is missing
+                # Fallback to ARXML parsing
                 elif os.path.exists(raw_arxml_path):
-                    log.info(f"⚙️ Cache missing. Parsing CAN Network from ARXML...")
+                    log.info(f"⚙️ Parsing CAN Network from ARXML (Cache invalid or missing)...")
                     self.can_db_data = can_parser.parse() 
                     can_parser.to_json_file(self.can_db, write_allowed=self.write_to_disk)
                     can_built = True
@@ -71,14 +109,14 @@ class CaplGenerationPipeline:
             if not self.eth_db_data:
                 eth_parser = SomeIPEventParser(raw_arxml_path)
                 
-                # 1. Try to load from disk cache first
-                if os.path.exists(self.eth_db) and eth_parser.load_from_json(self.eth_db):
+                # Check if the cache is valid AND loads successfully
+                if self._is_cache_valid(self.eth_db, raw_arxml_path) and eth_parser.load_from_json(self.eth_db):
                     log.info(f"✅ Loaded SOME/IP Network from fast cache: {self.eth_db}")
                     self.eth_db_data = eth_parser.to_json_dict()
                 
-                # 2. Fallback to heavy ARXML parsing if cache is missing
+                # Fallback to ARXML parsing
                 elif os.path.exists(raw_arxml_path):
-                    log.info(f"⚙️ Cache missing. Parsing SOME/IP Network from ARXML...")
+                    log.info(f"⚙️ Parsing SOME/IP Network from ARXML (Cache invalid or missing)...")
                     self.eth_db_data = eth_parser.parse()
                     eth_parser.to_json_file(self.eth_db, write_allowed=self.write_to_disk)
                     eth_built = True
