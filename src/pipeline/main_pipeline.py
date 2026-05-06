@@ -46,27 +46,45 @@ class CaplGenerationPipeline:
             log.setLevel(logging.INFO)
 
     def build_databases(self, raw_arxml_path: str) -> tuple[bool, bool]:
-        """Parses the unified Raw ARXML into memory. Dumps to JSON only if Dev Mode is active."""
+        """Loads databases from JSON cache if available, otherwise parses from ARXML."""
         self._configure_logging()
         can_built, eth_built = False, False
         
         try:
-            if not self.can_db_data and os.path.exists(raw_arxml_path):
-                log.info(f"⚙️ Parsing CAN Network from ARXML in-memory...")
+            # --- CAN DATABASE ---
+            if not self.can_db_data:
                 can_parser = CANSignalParser(raw_arxml_path)
-                self.can_db_data = can_parser.parse() 
-                can_parser.to_json_file(self.can_db, write_allowed=self.write_to_disk)
-                can_built = True
+                
+                # 1. Try to load from disk cache first
+                if os.path.exists(self.can_db) and can_parser.load_from_json(self.can_db):
+                    log.info(f"✅ Loaded CAN Network from fast cache: {self.can_db}")
+                    self.can_db_data = can_parser.to_json_dict()
+                
+                # 2. Fallback to heavy ARXML parsing if cache is missing
+                elif os.path.exists(raw_arxml_path):
+                    log.info(f"⚙️ Cache missing. Parsing CAN Network from ARXML...")
+                    self.can_db_data = can_parser.parse() 
+                    can_parser.to_json_file(self.can_db, write_allowed=self.write_to_disk)
+                    can_built = True
 
-            if not self.eth_db_data and os.path.exists(raw_arxml_path):
-                log.info(f"⚙️ Parsing SOME/IP Network from ARXML in-memory...")
+            # --- SOME/IP DATABASE ---
+            if not self.eth_db_data:
                 eth_parser = SomeIPEventParser(raw_arxml_path)
-                self.eth_db_data = eth_parser.parse()
-                eth_parser.to_json_file(self.eth_db, write_allowed=self.write_to_disk)
-                eth_built = True
+                
+                # 1. Try to load from disk cache first
+                if os.path.exists(self.eth_db) and eth_parser.load_from_json(self.eth_db):
+                    log.info(f"✅ Loaded SOME/IP Network from fast cache: {self.eth_db}")
+                    self.eth_db_data = eth_parser.to_json_dict()
+                
+                # 2. Fallback to heavy ARXML parsing if cache is missing
+                elif os.path.exists(raw_arxml_path):
+                    log.info(f"⚙️ Cache missing. Parsing SOME/IP Network from ARXML...")
+                    self.eth_db_data = eth_parser.parse()
+                    eth_parser.to_json_file(self.eth_db, write_allowed=self.write_to_disk)
+                    eth_built = True
                 
         except Exception as e:
-            log.error(f"Failed to build database caches: {e}")
+            log.error(f"Failed to build or load database caches: {e}")
             raise
             
         return can_built, eth_built
