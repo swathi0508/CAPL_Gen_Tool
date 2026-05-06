@@ -1,6 +1,6 @@
 import re
 import pandas as pd
-from .base_mapper import BaseMapper
+from mappers.base_mapper import BaseMapper
 
 class CANMapper(BaseMapper):
     def _load_database(self) -> dict:
