@@ -5,7 +5,7 @@ from PyInstaller.utils.hooks import collect_data_files
 
 # Clean any stale Python bytecode caches before every build.
 # This prevents old __pycache__ folders from affecting packaging.
-project_root = os.path.dirname(__file__)
+project_root = os.path.dirname('src')
 for dirpath, dirnames, _ in os.walk(project_root):
     if '__pycache__' in dirnames:
         cache_path = os.path.join(dirpath, '__pycache__')
@@ -14,24 +14,29 @@ for dirpath, dirnames, _ in os.walk(project_root):
 
 block_cipher = None
 
-# --- CRITICAL: Bundle Jinja2 Templates ---
-# The format is ('source_path', 'destination_folder_in_exe')
+# --- CRITICAL: Bundle Templates and GUI Images safely ---
+# Destination must be relative (no leading slash) so it unpacks inside the temporary _MEIPASS folder
 bundled_datas = [
-    ('src/capl_gen/templates', 'capl_gen/templates'),
+    # Assuming templates are in src/templates. We unpack them to 'templates' inside the exe.
+    ('src/templates', 'templates'), 
+    
+    # We must bundle the images your GUI is looking for!
+    ('src/capl_gen/gui/images', 'gui/images'), 
 ]
 
 a = Analysis(
-    ['src/capl_gen/__main__.py'],          # The entry point we created
-    pathex=['src'],                        # Ensure 'src' is in the Python path
+    ['src/capl_gen/__main__.py'],          
+    pathex=['src'],                        
     binaries=[],
-    datas=bundled_datas,                   # Include our templates
-    hiddenimports=[                        # Force inclusion of heavy/dynamic libraries
+    datas=bundled_datas,                   
+    hiddenimports=[                        
         'pandas',
         'openpyxl',
         'cantools',
         'lxml',
         'jinja2',
-        'capl_gen.cli'
+        'capl_gen.cli',
+        'capl_gen.gui.tool_gui' # Ensure the GUI module isn't missed by the tree-shaker
     ],
     hookspath=[],
     hooksconfig={},
@@ -56,17 +61,15 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,                  # Compresses the executable (requires UPX installed, otherwise ignored)
+    upx=True,                  
     upx_exclude=[],
     runtime_tmpdir=None,
-    # --- IMPORTANT TRADEOFF ---
-    # True = Shows a background console (Required for your CLI mode to output text).
-    # False = Hides the console (Great for pure GUIs, but breaks CLI standard output).
+    # True = Shows a background console (Required for CLI to output text).
     console=True,              
-    disable_windowed_traceback=False,
+    disable_windowed_traceback=True,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    # icon='assets/tool_icon.ico'  # Uncomment and point to an .ico file to add an app icon
+    # icon='assets/tool_icon.ico'  
 )

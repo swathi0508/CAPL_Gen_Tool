@@ -1,9 +1,13 @@
 import sys
 import argparse
 from pathlib import Path
+
+# core is at the root, so it stays the same
 from core.logger import log
-from .gui.tool_gui import launch_gui
-from .cli import run_headless_generation
+
+# gui and cli are inside capl_gen, so we must explicitly name the parent package
+from capl_gen.gui.tool_gui import launch_gui
+from capl_gen.cli import run_headless_generation
 
 def main():
     """Universal Entry Point for the CAPL Gen Tool."""

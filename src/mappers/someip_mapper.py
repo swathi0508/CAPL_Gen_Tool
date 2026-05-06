@@ -1,6 +1,6 @@
 import re
 import pandas as pd
-from .base_mapper import BaseMapper
+from mappers.base_mapper import BaseMapper
 
 class SomeIPMapper(BaseMapper):
     """Handles SOME/IP specific database lookups and sibling value state extraction."""
