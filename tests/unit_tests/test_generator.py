@@ -4,6 +4,10 @@ import pandas as pd
 from pathlib import Path
 from core.logger import log
 from generator.jinja_engine import JinjaEngine
+from cache_cleanup import cleanup_pycache
+
+# Clean __pycache__ at test start
+cleanup_pycache()
 
 def test_generator(excel_path: str, eth_json_path: str, category: str, test_type: str, output_root: str):
     """Executes the CAPL Code Generation pipeline from RAM DataFrames."""

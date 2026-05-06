@@ -6,6 +6,10 @@ from pathlib import Path
 from core.logger import log
 from mappers.mapper_orchestrator import MapperOrchestrator
 from validators.cross_validator import CrossValidator
+from cache_cleanup import cleanup_pycache
+
+# Clean __pycache__ at test start
+cleanup_pycache()
 
 def load_json_cache(path: str) -> dict:
     """Helper to mock the pipeline loading caches for testing."""

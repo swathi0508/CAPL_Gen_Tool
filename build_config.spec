@@ -1,6 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
+import shutil
 from PyInstaller.utils.hooks import collect_data_files
+
+# Clean any stale Python bytecode caches before every build.
+# This prevents old __pycache__ folders from affecting packaging.
+project_root = os.path.dirname(__file__)
+for dirpath, dirnames, _ in os.walk(project_root):
+    if '__pycache__' in dirnames:
+        cache_path = os.path.join(dirpath, '__pycache__')
+        shutil.rmtree(cache_path, ignore_errors=True)
+        dirnames.remove('__pycache__')
 
 block_cipher = None
 

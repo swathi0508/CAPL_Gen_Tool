@@ -2,6 +2,10 @@ import os
 from pathlib import Path
 from core.logger import log
 from pipeline.main_pipeline import CaplGenerationPipeline
+from cache_cleanup import cleanup_pycache
+
+# Clean __pycache__ at test start
+cleanup_pycache()
 
 def test_full_pipeline(input_excel: str, output_dir: str, category: str, test_type: str, raw_arxml: str):
     """Tests the entire unified, in-memory pipeline."""

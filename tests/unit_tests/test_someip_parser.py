@@ -1,6 +1,10 @@
 import os
 from signals.someip_event_parser import SomeIPEventParser
 from core.logger import log
+from cache_cleanup import cleanup_pycache
+
+# Clean __pycache__ at test start
+cleanup_pycache()
 
 def test_someip_parsing(arxml_path: str, json_cache: str):
     """Tests the SOME/IP Parser's ability to extract data from the Unified ARXML."""
