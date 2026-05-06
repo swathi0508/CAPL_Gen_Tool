@@ -31,12 +31,16 @@ class CaplGenGUI:
         self.output_folder_var = tk.StringVar(value="GeneratedTestScripts")
         self.enable_log_var = tk.BooleanVar(value=False)
         
+        # State control flag for the async background parser
+        self._is_parsing_active = False
+        
         self.pipeline = CaplGenerationPipeline()
 
         self.colors = {
             'text_light': '#e0e0e0', 'text_title': '#4ba3e3', 'input_bg': '#ffffff', 
             'input_fg': '#000000', 'btn_preprocess': '#3b7a57', 'btn_generate': '#a14040', 
-            'btn_browse': '#2c476b', 'btn_fg': 'white', 'log_bg': '#050a12', 'log_fg': '#d1d1d1'
+            'btn_browse': '#2c476b', 'btn_fg': 'white', 'log_bg': '#050a12', 'log_fg': '#d1d1d1',
+            'btn_busy': '#5c5c5c' # Gray color when async tasks are running
         }
 
         self._setup_canvas()
@@ -87,7 +91,7 @@ class CaplGenGUI:
                 resized_logo = original_logo.resize((w_size, h_size), Image.LANCZOS)
                 self.logo_img = ImageTk.PhotoImage(resized_logo) 
                 self.canvas.create_image(500, 40, image=self.logo_img, anchor="center", tags="logo") 
-            except Exception as e:
+            except Exception:
                 pass
         self.canvas.create_text(
             500, 90, text="INTERFACE TEST- CAPL SCRIPT GENERATOR TOOL",
@@ -112,9 +116,13 @@ class CaplGenGUI:
         ttk.Combobox(self.root, textvariable=self.test_type_var, values=["CAN->SOMEIP", "CAN->SOMEIP_FF", "CAN->SWC", "SWC->CAN", "SOMEIP->CAN"], state="readonly").place(relx=0.1, rely=0.38, relwidth=0.8, height=30)
         tk.Entry(self.root, textvariable=self.output_folder_var, bg=self.colors['input_bg'], fg=self.colors['input_fg'], relief="flat").place(relx=0.1, rely=0.45, relwidth=0.8, height=30)
         
-        tk.Checkbutton(self.root, text="Enable Verbose Log / Dev Mode", variable=self.enable_log_var, bg=self.colors['log_bg'], fg=self.colors['text_title'], selectcolor=self.colors['log_bg'], activebackground=self.colors['log_bg']).place(relx=0.1, rely=0.50)
+        # SECURITY LOCK: Only show Dev Mode checkbox if NOT compiled into an .exe
+        is_production = getattr(sys, 'frozen', False)
+        if not is_production:
+            tk.Checkbutton(self.root, text="Enable Verbose Log / Dev Mode", variable=self.enable_log_var, bg=self.colors['log_bg'], fg=self.colors['text_title'], selectcolor=self.colors['log_bg'], activebackground=self.colors['log_bg']).place(relx=0.1, rely=0.50)
 
     def _build_action_buttons(self):
+        # Note: We do NOT use state="disabled" natively, we manage state via self._is_parsing_active
         self.btn_preprocess = tk.Button(self.root, text="PRE - PROCESS", bg=self.colors['btn_preprocess'], fg=self.colors['btn_fg'], font=("Arial", 11, "bold"), relief="flat", cursor="hand2", command=self.run_preprocess)
         self.btn_preprocess.place(relx=0.1, rely=0.55, relwidth=0.8, height=38)
 
@@ -137,24 +145,37 @@ class CaplGenGUI:
         self.write_log("System UI initialized.")
 
     def _start_background_db_build(self):
-        if not self.pipeline.can_db_data and os.path.exists(self.arxml_path_var.get()):
-            self.write_log("⚙️ Starting background database parsers...")
-            self.btn_preprocess.config(state="disabled") 
-            thread = threading.Thread(target=self._run_parsers_in_background, daemon=True)
-            thread.start()
+        arxml_path = self.arxml_path_var.get()
+        if not os.path.exists(arxml_path):
+            return
 
-    def _run_parsers_in_background(self):
+        # Lock the UI buttons safely
+        self._is_parsing_active = True
+        self.btn_preprocess.config(bg=self.colors['btn_busy'], text="PRE - PROCESS (Validating Cache...)")
+        
+        self.write_log("⚙️ Validating ARXML cache and preparing network databases in background...")
+        
+        thread = threading.Thread(target=self._run_parsers_in_background, args=(arxml_path,), daemon=True)
+        thread.start()
+
+    def _run_parsers_in_background(self, arxml_path):
         try:
             self.pipeline.enable_log = self.enable_log_var.get()
-            self.pipeline.build_databases(self.arxml_path_var.get())
-            self.root.after(0, lambda: self.write_log("✅ Network Databases Parsed successfully."))
-            self.root.after(0, self._on_parsing_complete)
-        except Exception as e:
-            self.root.after(0, lambda: self.write_log(f"❌ Background Parsing Failed: {e}"))
-            self.root.after(0, lambda: self.btn_preprocess.config(state="normal"))
+            
+            # The pipeline automatically handles checking the cache size/timestamp.
+            # If it's valid, it loads instantly. If not, it re-parses.
+            self.pipeline.build_databases(arxml_path)
+            
+            self.root.after(0, self._on_parsing_complete, True, "✅ Network Databases ready. You may now start Pre-Processing.")
+        except Exception:
+            # Hide raw exception details for security
+            self.root.after(0, self._on_parsing_complete, False, "❌ Background Validation Failed. Please verify the ARXML file format.")
 
-    def _on_parsing_complete(self):
-        self.btn_preprocess.config(state="normal")
+    def _on_parsing_complete(self, success: bool, message: str):
+        """Unlocks the GUI after the async thread finishes."""
+        self._is_parsing_active = False
+        self.btn_preprocess.config(bg=self.colors['btn_preprocess'], text="PRE - PROCESS")
+        self.write_log(message)
 
     def _browse_file(self):
         file_path = filedialog.askopenfilename(title="Select Requirements Excel", filetypes=[("Excel Files", ".xlsx;.xls"), ("All Files", "*.*")])
@@ -164,6 +185,12 @@ class CaplGenGUI:
         file_path = filedialog.askopenfilename(title="Select Unified ARXML File", filetypes=[("ARXML Files", "*.arxml"), ("All Files", "*.*")])
         if file_path:
             self.arxml_path_var.set(file_path)
+            
+            # FORCE CLEAR RAM: Since they picked a new file, we wipe the memory so 
+            # build_databases() is forced to run the file size/timestamp checks again!
+            self.pipeline.can_db_data = {}
+            self.pipeline.eth_db_data = {}
+            
             self._start_background_db_build()
 
     def _clear_log(self):
@@ -179,6 +206,11 @@ class CaplGenGUI:
         self.root.update_idletasks()
 
     def run_preprocess(self):
+        # 1. SOFT LOCK: Intercept clicks while async thread is parsing
+        if self._is_parsing_active:
+            self.write_log("⏳ Please wait: A background process is currently parsing the ARXML network...")
+            return
+
         self.pipeline.enable_log = self.enable_log_var.get()
         input_excel = self.sheet_path_var.get()
         out_dir = self.output_folder_var.get()
@@ -189,21 +221,29 @@ class CaplGenGUI:
             return
 
         self.write_log("--- Starting Pre-Processing (Mapping & Validation) ---")
+        
+        # Hard lock the buttons during synchronous preprocessing
         self.btn_preprocess.config(state="disabled")
+        self.btn_generate.config(state="disabled")
         
         try:
+            # Fallback in case memory is empty and thread didn't run
             if not self.pipeline.can_db_data:
                 self.pipeline.build_databases(arxml_path)
             
-            # Now runs purely in memory!
             self.pipeline.run_preprocessing_memory(input_excel, out_dir)
-            self.write_log(f"✅ Pre-Processing Complete. Memory mapping secured.")
+            self.write_log(f"✅ Pre-Processing Complete. Phase 1 & 2 mapped into memory securely.")
         except Exception as e:
-            self.write_log(f"❌ Fatal error during Pre-Processing: {e}")
+            self.write_log("❌ Fatal error during Pre-Processing. Please verify input formats.")
         finally:
             self.btn_preprocess.config(state="normal")
+            self.btn_generate.config(state="normal")
 
     def run_generation(self):
+        if self._is_parsing_active:
+            self.write_log("⏳ Please wait: A background process is currently running...")
+            return
+
         out_dir = self.output_folder_var.get()
         category = self.test_cat_var.get()
         test_type = self.test_type_var.get()
@@ -213,14 +253,20 @@ class CaplGenGUI:
             return
 
         self.write_log(f"--- Starting CAPL Generation ({category} | {test_type}) ---")
+        self.btn_preprocess.config(state="disabled")
         self.btn_generate.config(state="disabled")
         
         try:
             self.pipeline.run_generation(out_dir, category, test_type)
-            self.write_log(f"✅ CAPL Scripts Generated in '{out_dir}'!")
-        except Exception as e:
-            self.write_log(f"❌ Generation failed: {e}")
+            
+            # Print the explicit Absolute Path so the user knows exactly where to look
+            abs_out_path = os.path.abspath(out_dir)
+            self.write_log(f"✅ CAPL Scripts successfully generated!")
+            self.write_log(f"📂 Output Location: {abs_out_path}")
+        except Exception:
+            self.write_log("❌ Generation failed. An internal error occurred during template formatting.")
         finally:
+            self.btn_preprocess.config(state="normal")
             self.btn_generate.config(state="normal")
 
 def launch_gui():
