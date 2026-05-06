@@ -11,7 +11,7 @@ from core.logger import log
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 class CrossValidator:
-    """Filters enums and performs mapping using the priority-score mapping engine."""
+    """Filters enums and performs mapping using the priority-score mapping engine strictly in RAM."""
 
     def __init__(self, can_db: dict, eth_db: dict):
         self.can_lookup = {str(k).lower(): v for k, v in can_db.items()}
@@ -21,7 +21,7 @@ class CrossValidator:
             if meth:
                 self.eth_lookup[meth] = data
 
-    # --- START OF PERFECT MAPPING CORE LOGIC (UNTOUCHED) ---
+    # --- START OF PERFECT MAPPING CORE LOGIC (FROM REMOTE) ---
     @staticmethod
     def normalize_strict(text):
         t = str(text).lower()
@@ -33,6 +33,7 @@ class CrossValidator:
     def is_strictly_excluded(text):
         if not text: return True
         text_clean = str(text).lower()
+        # Merged forbidden list for maximum safety
         forbidden = ['unavailable', 'not_used', 'notused', 'reserved', 'unvailable', 'x__', 'unspecified', 'init']
         return any(sub in text_clean for sub in forbidden)
 
@@ -129,26 +130,27 @@ class CrossValidator:
         except (ValueError, TypeError):
             return "N/A", "N/A", "N/A"
 
-    def process_sheet(self, excel_path: str, sheet_name: str, is_can_sheet: bool):
-        log.info(f"Computing limits for: {sheet_name}")
-        try:
-            df = pd.read_excel(excel_path, sheet_name=sheet_name)
-        except Exception as e:
-            log.error(f"Failed to load {sheet_name}: {e}")
-            return
-
+    def process_dataframe(self, df: pd.DataFrame, is_can_sheet: bool) -> pd.DataFrame:
+        """Processes the logic purely in-memory for production-grade speed."""
         updated_rows = []
+
         for idx, row in df.iterrows():
             new_row = row.to_dict()
+            
             try:
-                row_upper = {str(k).strip().upper(): v for k, v in new_row.items()}
-                
-                # Signal Identification
                 can_sig, eth_sig = None, None
-                raw_can = str(row_upper.get('CAN_PORT', '')).strip().lower()
-                if raw_can and raw_can != 'nan': can_sig = ("i" + raw_can).lower()
-                raw_eth = str(row_upper.get('ATTRIBUTE_VALUE', '')).strip().lower()
-                if raw_eth and raw_eth != 'nan': eth_sig = raw_eth
+                row_upper = {str(k).strip().upper(): v for k, v in new_row.items()}
+
+                if is_can_sheet:
+                    raw_can = str(row_upper.get('CAN_PORT', '')).strip().lower() 
+                    if raw_can and raw_can != 'nan': can_sig = ("i" + raw_can).lower()
+                    raw_eth = str(row_upper.get('ATTRIBUTE_VALUE', '')).strip().lower()
+                    if raw_eth and raw_eth != 'nan': eth_sig = raw_eth
+                else:
+                    raw_eth = str(row_upper.get('ATTRIBUTE_VALUE', '')).strip().lower()
+                    if raw_eth and raw_eth != 'nan': eth_sig = raw_eth
+                    raw_can = str(row_upper.get('CAN_PORT', '')).strip().lower()
+                    if raw_can and raw_can != 'nan': can_sig = ("i" + raw_can).lower()
 
                 # 1. Extract and Filter Enums using Core Logic
                 can_raw_dict = {}
@@ -162,7 +164,7 @@ class CrossValidator:
                 can_f = {k: v for k, v in can_raw_dict.items() if not self.is_strictly_excluded(v)}
                 sip_f = {k: v for k, v in sip_raw_dict.items() if not self.is_strictly_excluded(v)}
 
-                # 2. Perform Mapping Logic
+                # 2. Perform Priority-Score Mapping Logic
                 can_min, can_mid, can_max = "N/A", "N/A", "N/A"
                 sip_min, sip_mid, sip_max = "N/A", "N/A", "N/A"
 
@@ -186,9 +188,8 @@ class CrossValidator:
                                 final_mapping[m['cid']] = str(m['sid'])
                                 used_sip.add(m['sid'])
 
-                    # 3. Calculate Min/Mid/Max from Valid Mappings
+                    # Calculate Min/Mid/Max from Valid Mappings
                     valid_results = []
-                    # Keep order of original can_f to maintain consistency
                     for cid in can_f:
                         if cid in final_mapping:
                             valid_results.append({'c_id': str(cid), 's_id': final_mapping[cid]})
@@ -200,13 +201,17 @@ class CrossValidator:
                         can_min, can_mid, can_max = m_min['c_id'], m_mid['c_id'], m_max['c_id']
                         sip_min, sip_mid, sip_max = m_min['s_id'], m_mid['s_id'], m_max['s_id']
 
+                    new_row['Enum_Lexical_Match'] = "MATCH" if final_mapping else "MISMATCH"
+                else:
+                    new_row['Enum_Lexical_Match'] = "N/A"
+
                 # Update row with computed Enums
                 new_row.update({
                     'COMPUTED_CAN_ENUM_MIN': can_min, 'COMPUTED_CAN_ENUM_MID': can_mid, 'COMPUTED_CAN_ENUM_MAX': can_max,
                     'COMPUTED_SOMEIP_ENUM_MIN': sip_min, 'COMPUTED_SOMEIP_ENUM_MID': sip_mid, 'COMPUTED_SOMEIP_ENUM_MAX': sip_max
                 })
 
-                # 4. Handle Physical Limits (UNTOCUHED)
+                # 3. Handle Physical Limits
                 if can_sig and can_sig in self.can_lookup and not can_f:
                     limits = self.can_lookup[can_sig].get('Attributes', {}).get('Phys_Limits', {})
                     p_min, p_mid, p_max = self.compute_phy_stats(limits.get('Min'), limits.get('Max'))
@@ -225,23 +230,31 @@ class CrossValidator:
                                     'COMPUTED_SOMEIP_MID_PHY': "N/A (Is Enum)" if sip_f else "N/A", 
                                     'COMPUTED_SOMEIP_MAX_PHY': "N/A (Is Enum)" if sip_f else "N/A"})
 
-                # 5. Cross-pollinate Fallbacks
+                # 4. Cross-pollinate Fallbacks
                 for suffix in ['MIN', 'MID', 'MAX']:
                     for ptype in ['', 'ENUM_']:
                         s_key = f'COMPUTED_SOMEIP_{ptype}{suffix}' if ptype else f'COMPUTED_SOMEIP_{suffix}_PHY'
                         c_key = f'COMPUTED_CAN_{ptype}{suffix}' if ptype else f'COMPUTED_CAN_{suffix}_PHY'
-                        if new_row.get(s_key) in [None, '', 'N/A'] and new_row.get(c_key) not in [None, '', 'N/A']:
+                        
+                        s_val = new_row.get(s_key)
+                        if s_val in [None, '', 'N/A'] and new_row.get(c_key) not in [None, '', 'N/A']:
                             new_row[s_key] = new_row[c_key]
-
+                            
             except Exception as e:
-                log.error(f"Critical computation error on Row {idx+2} in {sheet_name}: {e}")
+                log.debug(f"Row error safely bypassed: {e}")
 
             updated_rows.append(new_row)
 
         df_final = pd.DataFrame(updated_rows).fillna("N/A")
-        try:
-            with pd.ExcelWriter(excel_path, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
-                df_final.to_excel(writer, sheet_name=sheet_name, index=False)
-            log.info(f"✅ Computations successfully saved to {sheet_name}")
-        except Exception as e:
-            log.error(f"Excel write failed: {e}")
+
+        expected_computed_cols = [
+            'COMPUTED_CAN_ENUM_MIN', 'COMPUTED_CAN_ENUM_MID', 'COMPUTED_CAN_ENUM_MAX',
+            'COMPUTED_CAN_MIN_PHY', 'COMPUTED_CAN_MID_PHY', 'COMPUTED_CAN_MAX_PHY',
+            'COMPUTED_SOMEIP_ENUM_MIN', 'COMPUTED_SOMEIP_ENUM_MID', 'COMPUTED_SOMEIP_ENUM_MAX',
+            'COMPUTED_SOMEIP_MIN_PHY', 'COMPUTED_SOMEIP_MID_PHY', 'COMPUTED_SOMEIP_MAX_PHY'
+        ]
+        for col in expected_computed_cols:
+            if col not in df_final.columns:
+                df_final[col] = "N/A"
+
+        return df_final

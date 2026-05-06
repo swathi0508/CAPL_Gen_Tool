@@ -7,22 +7,45 @@ from core.logger import log
 class BaseMapper:
     """Base class providing shared utilities for protocol mappers."""
     
-    def __init__(self, cache_path: str):
-        self.cache_path = cache_path
+    def __init__(self, db_source):
+        # Save the raw input (can be a string path OR a dictionary)
+        self._raw_source = db_source
+        
+        # Keep cache_path for legacy disk compatibility. If it's a dict, this becomes None.
+        self.cache_path = db_source if isinstance(db_source, str) else None
+        
+        # Trigger the load (which now handles both RAM and Disk)
         self.db = self._load_database()
 
     def _load_database(self) -> dict:
-        """Loads the JSON cache. Overridden by child classes for key formatting."""
+        """Loads data from disk, or returns the RAM dictionary directly."""
+        
+        # 1. IN-MEMORY PIPELINE: If we were passed a dictionary, return it instantly!
+        if isinstance(self._raw_source, dict):
+            return self._raw_source
+            
+        # 2. LEGACY DISK PIPELINE: If it's a file path, load it from the JSON.
         if not self.cache_path or not os.path.exists(self.cache_path):
-            log.warning(f"Database cache not found: {self.cache_path}")
+            log.warning(f"Database cache not found at: {self.cache_path}")
             return {}
+            
         try:
             with open(self.cache_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                return data.get("SIGNAL_LIST", data.get("ICAN_SIGNAL", data))
+                return json.load(f)
         except Exception as e:
-            log.error(f"Failed to load database {self.cache_path}: {e}")
+            log.error(f"Failed to load Database Cache '{self.cache_path}': {e}")
             return {}
+
+    @staticmethod
+    def resolve_column_name(available_columns, possible_names):
+        """Helper function to find a column name ignoring case and whitespace."""
+        avail_upper = [str(c).strip().upper() for c in available_columns]
+        for name in possible_names:
+            name_upper = str(name).strip().upper()
+            if name_upper in avail_upper:
+                idx = avail_upper.index(name_upper)
+                return available_columns[idx]
+        return None
 
     @staticmethod
     def normalize_attr(val) -> str:
@@ -35,13 +58,6 @@ class BaseMapper:
         if not clean_val or clean_val.lower() in ["nan", "unknown"]:
             return None
         return clean_val
-
-    @staticmethod
-    def resolve_column_name(columns, candidates):
-        for candidate in candidates:
-            if candidate in columns:
-                return candidate
-        return None
 
     @staticmethod
     def extract_cluster(path_val) -> str:

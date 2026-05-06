@@ -1,3 +1,4 @@
+import sys
 import os
 import json
 import time
@@ -24,32 +25,40 @@ class BaseParser(ABC):
         elapsed = time.time() - self._start_time
         return time.strftime("%H:%M:%S", time.gmtime(elapsed))
 
-    def to_json_file(self, output_path: str, indent: int = 4):
-        """Dumps data with a legacy Summary header and SIGNAL_LIST wrapper."""
+    def to_json_file(self, output_path: str, indent: int = 4, write_allowed: bool = False):
+        """GATED BY PIPELINE: Will only execute if write_allowed is True (Dev Mode)."""
+        if not write_allowed:
+            log.debug(f"🛡️ PROD MODE: In-memory cache secured. Disk dump to {output_path} blocked.")
+            return
+
         data = self.to_json_dict()
-        
-        # 1. Calculate Statistics
         total = len(data)
-        # Check for 'signal_paths' to count resolved CAN signals
         resolved = sum(1 for v in data.values() if isinstance(v, dict) and len(v.get('signal_paths', [])) > 0)
         no_path = total - resolved
 
-        # 2. Build Legacy Structure
+        # Safely grab the exact file size of the ARXML
+        try:
+            file_size_bytes = os.path.getsize(self.file_path)
+        except OSError:
+            file_size_bytes = 0
+
+        # We now stamp the cache with both the NAME and SIZE of the source ARXML
         output_data = {
             "Summary": {
+                "Source_File_Name": os.path.basename(self.file_path),
+                "Source_File_Size_Bytes": file_size_bytes,
                 "Total_Signals_Found": total,
                 "Resolved_With_Paths": resolved,
                 "No_Path_Found": no_path,
                 "Processing_Time_HH_MM_SS": self._get_processing_time()
             },
-            # We use SIGNAL_LIST for compatibility with your existing CAN tools
             "SIGNAL_LIST": data 
         }
 
         try:
             with open(output_path, 'w', encoding='utf-8') as f:
                 json.dump(output_data, f, indent=indent, ensure_ascii=False)
-            log.info(f"✅ Database cached with summary to: {output_path}")
+            log.info(f"✅ DEV MODE: Database cached with summary to: {output_path}")
         except Exception as e:
             log.error(f"❌ Failed to write JSON: {e}")
 
