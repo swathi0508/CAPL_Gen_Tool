@@ -1,6 +1,10 @@
 import os
 from signals.can_parser import CANSignalParser
 from core.logger import log
+from cache_cleanup import cleanup_pycache
+
+# Clean __pycache__ at test start
+cleanup_pycache()
 
 def test_can_parsing(arxml_path: str, json_cache: str):
     """Tests the CAN Parser's ability to extract data from the Unified ARXML."""
