@@ -34,7 +34,7 @@ class CrossValidator:
         if not text: return True
         text_clean = str(text).lower()
         # Merged forbidden list for maximum safety
-        forbidden = ['unavailable', 'not_used', 'notused', 'reserved', 'unvailable', 'x__', 'unspecified', 'init', 'not_available', 'notavailable', 'null', 'sna']
+        forbidden = ['unavailable', 'not_used', 'notused', 'reserved', 'unvailable', 'x__', 'unspecified', 'init']
         return any(sub in text_clean for sub in forbidden)
 
     @staticmethod

@@ -30,11 +30,38 @@ class CaplCanToSomeipBasicFuncAndVarsGenerator:
         missing_cols = [c for c in self.j2_columns if c not in df.columns]
         for c in missing_cols: df[c] = pd.NA
 
-        # Replace variations of nulls
-        df.replace(["", " ", "N/A", "nan", "None", "MISSING_DATA"], pd.NA, inplace=True)
-        
-        # We fill NaNs here so the deduplication logic sees string values
-        return df.fillna("MISSING_DATA").astype(str)
+        # 1. Aggressive cleaner for MIN, MID, MAX, and ENUMS
+        def clean_bounds(val):
+            if pd.isna(val) or str(val).strip() in ["", "N/A", "nan", "None", "MISSING_DATA"]:
+                return "MISSING_DATA"
+            
+            if isinstance(val, float) and val.is_integer():
+                return str(int(val))
+                
+            if isinstance(val, str) and val.endswith(".0"):
+                try:
+                    float(val)
+                    return val[:-2]
+                except ValueError:
+                    pass
+                    
+            return str(val).strip()
+
+        # 2. Gentle cleaner for OFFSET, RESOLUTION, and Strings (Preserves .0 floats)
+        def clean_standard(val):
+            if pd.isna(val) or str(val).strip() in ["", "N/A", "nan", "None", "MISSING_DATA"]:
+                return "MISSING_DATA"
+            return str(val).strip()
+
+        # Apply specific logic based on the column name
+        for col in df.columns:
+            if any(kw in col.upper() for kw in ['MIN', 'MID', 'MAX', 'ENUM']):
+                df[col] = df[col].apply(clean_bounds)
+            else:
+                # Leaves CAN_OFFSET and CAN_RESOLUTION completely untouched!
+                df[col] = df[col].apply(clean_standard)
+            
+        return df
 
     def render(self, data_frames: dict, test_type: str, output_root: str):
         try:
@@ -54,6 +81,8 @@ class CaplCanToSomeipBasicFuncAndVarsGenerator:
                 return
 
             full_df = pd.concat(valid_dfs, ignore_index=True)
+            
+            # Run the column-aware cleaner
             full_df = self._validate_and_clean(full_df)
 
             if full_df.empty:
