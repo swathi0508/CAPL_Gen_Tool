@@ -3,172 +3,121 @@ import math
 import re
 import warnings
 import pandas as pd
+import difflib
+import ast
 from core.logger import log
 
+# Suppress the warning natively without altering Pandas' internal data types
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 class CrossValidator:
-    """Filters garbage enums, performs lexical/semantic validation, and computes strictly-typed limits."""
-
-    # Expanded to catch all edge cases like "Not_available__init_or_lever_switched_failure_"
-    INVALID_ENUM_KEYWORDS = ['unavailable', 'not_used', 'notused', 'unknown', 'null', 'sna', 'reserved', 'not_available', 'notavailable']
+    """Filters enums and performs mapping using the priority-score mapping engine strictly in RAM."""
 
     def __init__(self, can_db: dict, eth_db: dict):
         self.can_lookup = {str(k).lower(): v for k, v in can_db.items()}
-
         self.eth_lookup = {}
         for sig_str, data in eth_db.items():
             meth = str(data.get('Method', data.get('Attribute_Value', ''))).strip().lower()
             if meth:
                 self.eth_lookup[meth] = data
 
+    # --- START OF PERFECT MAPPING CORE LOGIC (FROM REMOTE) ---
     @staticmethod
-    def clean_string_for_match(s: str) -> str:
-        return re.sub(r'_+', '', str(s)).lower()
+    def normalize_strict(text):
+        t = str(text).lower()
+        t = t.replace('no_activated', 'not_activated').replace('noactivated', 'notactivated')
+        t = t.replace('_', '').replace(' ', '')
+        return re.sub(r'[^a-z0-9]', '', t)
 
     @staticmethod
-    def parse_enum_data(raw_enum) -> dict:
-        if isinstance(raw_enum, dict): return raw_enum
-        enum_str = str(raw_enum).strip()
-        if enum_str in ["", "Physical Value", "N/A", "{}"]: return {}
+    def is_strictly_excluded(text):
+        if not text: return True
+        text_clean = str(text).lower()
+        # Merged forbidden list for maximum safety
+        forbidden = ['unavailable', 'not_used', 'notused', 'reserved', 'unvailable', 'x__', 'unspecified', 'init', 'not_available', 'notavailable', 'null', 'sna']
+        return any(sub in text_clean for sub in forbidden)
 
-        parsed_dict = {}
-        if enum_str.startswith('{') and enum_str.endswith('}'):
-            try:
-                import ast
-                return ast.literal_eval(enum_str)
-            except Exception: pass
+    @staticmethod
+    def get_polarity(text):
+        text_clean = str(text).lower().replace('_', ' ')
+        neg_indicators = {'no', 'not', 'false', 'off', 'incorrect', 'notactivated', 'disengaged', 'disabled', 'invalid', 'noalert', 'nodisplay'}
+        tokens = set(re.findall(r'\b\w+\b', text_clean))
+        if any(word in tokens for word in neg_indicators) or 'not' in text_clean or 'no' in text_clean:
+            return "NEG"
+        return "POS"
 
-        for p in enum_str.split('|'):
-            if ':' in p:
-                k, v = p.split(':', 1)
-                parsed_dict[k.strip()] = v.strip()
-        return parsed_dict
+    @staticmethod
+    def calculate_priority_score(cid, sid, cval, sval, is_binary, is_gear_context):
+        c_raw, s_raw = str(cval).lower(), str(sval).lower()
+        c_norm, s_norm = CrossValidator.normalize_strict(cval), CrossValidator.normalize_strict(sval)
+        index_bias = 50 if str(cid) == str(sid) else 0
 
-    def get_valid_enums(self, raw_enum_data) -> dict:
-        enum_dict = self.parse_enum_data(raw_enum_data)
-        valid_enums = {}
+        # 0. GEAR LEVER LOCK
+        if is_gear_context:
+            gear_map = {'p': 'parking', 'r': 'reverse', 'n': 'neutral', 'd': 'drive', 'b': 'brake', 'm': 'manual'}
+            for short, full in gear_map.items():
+                if (re.search(rf'^{short}_|\b{short}\b', c_raw) or full in c_raw) and full in s_raw:
+                    return 70000 + index_bias
 
-        for k, v in enum_dict.items():
-            value = str(v).strip().lower()
-            
-            # Bulletproof substring check to catch fused garbage strings
-            if any(kw in value for kw in self.INVALID_ENUM_KEYWORDS):
-                continue
-            try:
-                valid_enums[int(k)] = v
-            except ValueError:
-                pass
-        return valid_enums
+        # 1. HARD SEMANTIC NUMBER OVERRIDE
+        num_map = {'1': 'one', '2': 'two', '3': 'three', '4': 'four', '5': 'five', '6': 'six', '7': 'seven', '8': 'eight', '9': 'nine'}
+        c_ints = re.findall(r'\d+', c_raw)
+        if c_ints:
+            for digit in c_ints:
+                word = num_map.get(digit)
+                if word and (f"_{word}" in s_raw or f" {word}" in s_raw or s_raw.endswith(word)):
+                    return 65000 + index_bias
 
-    def get_intersected_enum_keys(self, valid_c_enums: dict, valid_e_enums: dict) -> tuple[set, set]:
-        """
-        SEMANTIC CROSS-MAP ENGINE:
-        Wrapped in a try-except to guarantee it never crashes the pipeline.
-        """
+        # 2. 90% SUBSTRING & DIRECTIONAL/STATE LOCK
+        ratio = difflib.SequenceMatcher(None, c_norm, s_norm).ratio()
+        c_dir = "b_to_m" if "battery_to_motor" in c_raw or "battery_to_rear" in c_raw else "m_to_b" if "motor_to_battery" in c_raw or "rear_motor_to_battery" in c_raw else "none"
+        s_dir = "b_to_m" if "battery_to_motor" in s_raw else "m_to_b" if "motor_to_battery" in s_raw else "none"
+        if c_dir != "none" and s_dir != "none" and c_dir != s_dir:
+            return -10000 
+
+        if ratio >= 0.90 or c_norm in s_norm or s_norm in c_norm:
+            if CrossValidator.get_polarity(cval) == CrossValidator.get_polarity(sval):
+                return 50000 + (ratio * 1000) + index_bias
+
+        # 3. TOKEN OVERLAP
+        c_tokens = set(re.findall(r'\b\w{3,}\b', c_raw.replace('_', ' ')))
+        s_tokens = set(re.findall(r'\b\w{3,}\b', s_raw.replace('_', ' ')))
+        common = c_tokens.intersection(s_tokens)
+        if common and CrossValidator.get_polarity(cval) == CrossValidator.get_polarity(sval):
+            return 40000 + (len(common) * 1000) + index_bias
+
+        # 4. ORDINAL/LEVEL MATCH
+        ord_map = {'1': 'level1', '2': 'level2', '3': 'level3'}
+        if c_ints:
+            for digit in c_ints:
+                level = ord_map.get(digit)
+                if level and level in s_norm:
+                    return 35000 + index_bias
+
+        # 5. INTEGER DIRECT MAPPING
+        s_ints = re.findall(r'\d+', s_raw)
+        if c_ints and s_ints and c_ints[0] == s_ints[0]:
+            if any(x in c_raw for x in ["not_used", "reserved", "notused"]):
+                return 0
+            return 20000 + index_bias
+
+        # 6. BINARY 1:1
+        if is_binary and CrossValidator.get_polarity(cval) == CrossValidator.get_polarity(sval):
+            return 10000 + index_bias
+
+        if CrossValidator.get_polarity(cval) != CrossValidator.get_polarity(sval): return 0
+        return (ratio * 100) + index_bias
+    # --- END OF PERFECT MAPPING CORE LOGIC ---
+
+    @staticmethod
+    def extract_dict(data):
+        if pd.isna(data) or str(data).strip() in ['N/A', '', 'nan', '{}']: 
+            return {}
+        content = str(data).strip()
         try:
-            matched_c_keys = set()
-            matched_e_keys = set()
-            
-            GEAR_MAP = {'P': 'PARKING', 'R': 'REVERSE', 'N': 'NEUTRAL', 'D': 'DRIVE', 'B': 'BRAKE', 'M': 'MANUAL', 'L': 'LOW'}
-            NEGATIONS = {'NO', 'NOT', 'OFF', 'DEACTIVATED', 'DISABLE', 'DISABLED', 'WITHOUT', 'NONE', 'FALSE', 'INCORRECT', 'INACTIVE', 'UNSPECIFIED'}
-            POSITIVES = {'ON', 'ACTIVATED', 'ENABLE', 'ENABLED', 'WITH', 'TRUE', 'CORRECT', 'ACTIVE', 'ONGOING', 'AVAILABLE', 'REQUESTED', 'REQUEST'}
-            SYNONYMS = {'LV': 'SPEED', 'LEVEL': 'SPEED', 'PROGRESS': 'ONGOING', 'REQ': 'REQUEST'}
-
-            def extract_tokens(s):
-                s = str(s).upper()
-                s = s.replace('_T_', ' ')
-                if s.startswith('VALUE_STATE_'): s = s.replace('VALUE_STATE_', ' ')
-                s = s.replace('STATUS', ' ').replace('STATE', ' ')
-                
-                raw_tokens = [t for t in re.split(r'[^A-Z0-9]', s) if t]
-                normalized_tokens = []
-                for t in raw_tokens:
-                    match = re.match(r'^([A-Z]+)(\d+)$', t)
-                    if match:
-                        alpha, num = match.groups()
-                        alpha = SYNONYMS.get(alpha, alpha)
-                        normalized_tokens.extend([alpha, num])
-                    else:
-                        normalized_tokens.append(SYNONYMS.get(t, t))
-                        
-                stop_words = {'IS', 'THE', 'OR', 'IN', 'TABLE', 'DESCRIPTION', 'ACTION'}
-                filtered = [t for t in normalized_tokens if t not in stop_words]
-                return filtered if filtered else normalized_tokens
-
-            if valid_c_enums and valid_e_enums:
-                for c_k, c_v in valid_c_enums.items():
-                    c_tokens = extract_tokens(c_v)
-                    c_is_negative = bool(set(c_tokens) & NEGATIONS)
-                    c_is_positive = bool(set(c_tokens) & POSITIVES)
-                    c_polarity = False if c_is_negative else (True if c_is_positive else None)
-                    
-                    c_digits = {t for t in c_tokens if t.isdigit()}
-                    c_nouns = set(c_tokens) - NEGATIONS - POSITIVES
-
-                    for e_k, e_v in valid_e_enums.items():
-                        e_tokens = extract_tokens(e_v)
-                        e_is_negative = bool(set(e_tokens) & NEGATIONS)
-                        e_is_positive = bool(set(e_tokens) & POSITIVES)
-                        e_polarity = False if e_is_negative else (True if e_is_positive else None)
-                        
-                        e_digits = {t for t in e_tokens if t.isdigit()}
-                        e_nouns = set(e_tokens) - NEGATIONS - POSITIVES
-
-                        # RULE 1: Polarity Clash
-                        if (c_polarity is False and e_polarity is True) or (c_polarity is True and e_polarity is False):
-                            continue
-                        
-                        is_match = False
-                        
-                        # RULE 2: Number Intersection
-                        if c_digits and e_digits and (c_digits & e_digits):
-                            is_match = True
-                            
-                        # RULE 3: Noun and Gear Overlap
-                        if not is_match:
-                            for ct in c_nouns:
-                                for et in e_nouns:
-                                    if ct == et:
-                                        is_match = True
-                                        break
-                                    elif ct in GEAR_MAP and et.startswith(GEAR_MAP[ct]):
-                                        is_match = True
-                                        break
-                                    elif et in GEAR_MAP and ct.startswith(GEAR_MAP[et]):
-                                        is_match = True
-                                        break
-                                if is_match: break
-                                
-                        # RULE 4: Semantic Polarity Fallback
-                        if not is_match and c_polarity == e_polarity and c_polarity is not None:
-                            if not c_nouns or not e_nouns:
-                                is_match = True
-
-                        # RULE 5: Dumb Lexical Fallback (Prevents short 1/2-letter overlaps)
-                        if not is_match and not c_polarity and not e_polarity:
-                            c_clean = self.clean_string_for_match(c_v)
-                            e_clean = self.clean_string_for_match(e_v)
-                            if len(c_clean) > 2 and len(e_clean) > 2:
-                                if c_clean in e_clean or e_clean in c_clean:
-                                    is_match = True
-
-                        if is_match:
-                            matched_c_keys.add(c_k)
-                            matched_e_keys.add(e_k)
-                            
-            return matched_c_keys, matched_e_keys
-        
-        except Exception as e:
-            log.debug(f"Semantic matcher fallback triggered: {e}")
-            return set(valid_c_enums.keys()), set(valid_e_enums.keys())
-
-    @staticmethod
-    def compute_enum_stats(keys):
-        """Accepts an iterable of keys (list/set)."""
-        if not keys: return "N/A", "N/A", "N/A"
-        sorted_keys = sorted(list(keys))
-        return sorted_keys[0], sorted_keys[len(sorted_keys) // 2], sorted_keys[-1]
+            if content.startswith('{'): return ast.literal_eval(content)
+            return {'0': content}
+        except Exception: return {'0': content}
 
     @staticmethod
     def compute_phy_stats(min_val, max_val):
@@ -188,14 +137,10 @@ class CrossValidator:
         for idx, row in df.iterrows():
             new_row = row.to_dict()
             
-            # ROW SAFETY WRAPPER: Guarantees the loop never breaks midway
             try:
                 can_sig, eth_sig = None, None
-
-                # OS-PROOF FIX: Convert all dictionary keys to strict UPPERCASE for safe extraction on Linux
                 row_upper = {str(k).strip().upper(): v for k, v in new_row.items()}
 
-                # 1. Safely grab lookup keys using row_upper
                 if is_can_sheet:
                     raw_can = str(row_upper.get('CAN_PORT', '')).strip().lower() 
                     if raw_can and raw_can != 'nan': can_sig = ("i" + raw_can).lower()
@@ -207,81 +152,100 @@ class CrossValidator:
                     raw_can = str(row_upper.get('CAN_PORT', '')).strip().lower()
                     if raw_can and raw_can != 'nan': can_sig = ("i" + raw_can).lower()
 
-                # 2. Extract Valid Enums
-                valid_c_enums = {}
+                # 1. Extract and Filter Enums using Core Logic
+                can_raw_dict = {}
                 if can_sig and can_sig in self.can_lookup:
-                    c_data = self.can_lookup[can_sig]
-                    valid_c_enums = self.get_valid_enums(c_data.get('Attributes', {}).get('Enums', {}))
-
-                valid_e_enums = {}
-                if eth_sig and eth_sig in self.eth_lookup:
-                    e_data = self.eth_lookup[eth_sig]
-                    valid_e_enums = self.get_valid_enums(e_data.get('Enums', {}))
-
-                # 3. INTERSECT ENUMS & RECORD MATCH
-                matched_c_keys, matched_e_keys = self.get_intersected_enum_keys(valid_c_enums, valid_e_enums)
+                    can_raw_dict = self.extract_dict(self.can_lookup[can_sig].get('Attributes', {}).get('Enums', {}))
                 
-                if valid_c_enums and valid_e_enums:
-                    new_row['Enum_Lexical_Match'] = "MATCH" if matched_c_keys else "MISMATCH"
+                sip_raw_dict = {}
+                if eth_sig and eth_sig in self.eth_lookup:
+                    sip_raw_dict = self.extract_dict(self.eth_lookup[eth_sig].get('Enums', {}))
+
+                can_f = {k: v for k, v in can_raw_dict.items() if not self.is_strictly_excluded(v)}
+                sip_f = {k: v for k, v in sip_raw_dict.items() if not self.is_strictly_excluded(v)}
+
+                # 2. Perform Priority-Score Mapping Logic
+                can_min, can_mid, can_max = "N/A", "N/A", "N/A"
+                sip_min, sip_mid, sip_max = "N/A", "N/A", "N/A"
+
+                if can_f and sip_f:
+                    context_str = (str(row_upper.get('SOMEIP_TOPIC_ATTRIBUTE', '')) + " " + " ".join(map(str, sip_f.values()))).lower()
+                    is_gear = any(x in context_str for x in ['gear', 'lever', 'pnrdb'])
+                    is_binary = (len(can_f) == 2 and len(sip_f) == 2)
+
+                    match_pool = []
+                    for cid, cval in can_f.items():
+                        for sid, sval in sip_f.items():
+                            score = self.calculate_priority_score(cid, sid, cval, sval, is_binary, is_gear)
+                            match_pool.append({'cid': cid, 'sid': sid, 'score': score, 'sval': sval, 'cval': cval})
+
+                    match_pool.sort(key=lambda x: x['score'], reverse=True)
+                    final_mapping, used_sip = {}, set()
+                    
+                    for m in match_pool:
+                        if m['cid'] not in final_mapping and m['sid'] not in used_sip:
+                            if m['score'] > -5000:
+                                final_mapping[m['cid']] = str(m['sid'])
+                                used_sip.add(m['sid'])
+
+                    # Calculate Min/Mid/Max from Valid Mappings
+                    valid_results = []
+                    for cid in can_f:
+                        if cid in final_mapping:
+                            valid_results.append({'c_id': str(cid), 's_id': final_mapping[cid]})
+
+                    n = len(valid_results)
+                    if n >= 2:
+                        idx_min, idx_mid, idx_max = (1 if n > 3 else 0), n // 2, n - 1
+                        m_min, m_mid, m_max = valid_results[idx_min], valid_results[idx_mid], valid_results[idx_max]
+                        can_min, can_mid, can_max = m_min['c_id'], m_mid['c_id'], m_max['c_id']
+                        sip_min, sip_mid, sip_max = m_min['s_id'], m_mid['s_id'], m_max['s_id']
+
+                    new_row['Enum_Lexical_Match'] = "MATCH" if final_mapping else "MISMATCH"
                 else:
                     new_row['Enum_Lexical_Match'] = "N/A"
 
-                # 4. Populate CAN Columns
-                if can_sig and can_sig in self.can_lookup:
-                    if valid_c_enums:
-                        keys_to_use = matched_c_keys if matched_c_keys else valid_c_enums.keys()
-                        e_min, e_mid, e_max = self.compute_enum_stats(keys_to_use)
-                        new_row.update({'COMPUTED_CAN_ENUM_MIN': e_min, 'COMPUTED_CAN_ENUM_MID': e_mid, 'COMPUTED_CAN_ENUM_MAX': e_max})
-                        new_row.update({'COMPUTED_CAN_MIN_PHY': "N/A (Is Enum)", 'COMPUTED_CAN_MID_PHY': "N/A (Is Enum)", 'COMPUTED_CAN_MAX_PHY': "N/A (Is Enum)"})
-                    else:
-                        for col in ['ENUM_MIN', 'ENUM_MID', 'ENUM_MAX']: new_row[f'COMPUTED_CAN_{col}'] = "N/A"
-                        limits = c_data.get('Attributes', {}).get('Phys_Limits', {})
-                        p_min, p_mid, p_max = self.compute_phy_stats(limits.get('Min'), limits.get('Max'))
-                        new_row.update({'COMPUTED_CAN_MIN_PHY': p_min, 'COMPUTED_CAN_MID_PHY': p_mid, 'COMPUTED_CAN_MAX_PHY': p_max})
-                else:
-                    for col in ['ENUM_MIN', 'ENUM_MID', 'ENUM_MAX', 'MIN_PHY', 'MID_PHY', 'MAX_PHY']:
-                        new_row[f'COMPUTED_CAN_{col}'] = "N/A"
+                # Update row with computed Enums
+                new_row.update({
+                    'COMPUTED_CAN_ENUM_MIN': can_min, 'COMPUTED_CAN_ENUM_MID': can_mid, 'COMPUTED_CAN_ENUM_MAX': can_max,
+                    'COMPUTED_SOMEIP_ENUM_MIN': sip_min, 'COMPUTED_SOMEIP_ENUM_MID': sip_mid, 'COMPUTED_SOMEIP_ENUM_MAX': sip_max
+                })
 
-                # 5. Populate SOME/IP Columns
-                if eth_sig and eth_sig in self.eth_lookup:
-                    if valid_e_enums:
-                        keys_to_use = matched_e_keys if matched_e_keys else valid_e_enums.keys()
-                        e_min, e_mid, e_max = self.compute_enum_stats(keys_to_use)
-                        new_row.update({'COMPUTED_SOMEIP_ENUM_MIN': e_min, 'COMPUTED_SOMEIP_ENUM_MID': e_mid, 'COMPUTED_SOMEIP_ENUM_MAX': e_max})
-                        new_row.update({'COMPUTED_SOMEIP_MIN_PHY': "N/A (Is Enum)", 'COMPUTED_SOMEIP_MID_PHY': "N/A (Is Enum)", 'COMPUTED_SOMEIP_MAX_PHY': "N/A (Is Enum)"})
-                    else:
-                        for col in ['ENUM_MIN', 'ENUM_MID', 'ENUM_MAX']: new_row[f'COMPUTED_SOMEIP_{col}'] = "N/A"
-                        p_min, p_mid, p_max = self.compute_phy_stats(e_data.get('Min'), e_data.get('Max'))
-                        new_row.update({'COMPUTED_SOMEIP_MIN_PHY': p_min, 'COMPUTED_SOMEIP_MID_PHY': p_mid, 'COMPUTED_SOMEIP_MAX_PHY': p_max})
+                # 3. Handle Physical Limits
+                if can_sig and can_sig in self.can_lookup and not can_f:
+                    limits = self.can_lookup[can_sig].get('Attributes', {}).get('Phys_Limits', {})
+                    p_min, p_mid, p_max = self.compute_phy_stats(limits.get('Min'), limits.get('Max'))
+                    new_row.update({'COMPUTED_CAN_MIN_PHY': p_min, 'COMPUTED_CAN_MID_PHY': p_mid, 'COMPUTED_CAN_MAX_PHY': p_max})
                 else:
-                    for col in ['ENUM_MIN', 'ENUM_MID', 'ENUM_MAX', 'MIN_PHY', 'MID_PHY', 'MAX_PHY']:
-                        new_row[f'COMPUTED_SOMEIP_{col}'] = "N/A"
+                    new_row.update({'COMPUTED_CAN_MIN_PHY': "N/A (Is Enum)" if can_f else "N/A", 
+                                    'COMPUTED_CAN_MID_PHY': "N/A (Is Enum)" if can_f else "N/A", 
+                                    'COMPUTED_CAN_MAX_PHY': "N/A (Is Enum)" if can_f else "N/A"})
 
-                # 6. Fallback logic: If SOME/IP PHY is blank/missing, fallback to CAN computed PHY values
+                if eth_sig and eth_sig in self.eth_lookup and not sip_f:
+                    e_data = self.eth_lookup[eth_sig]
+                    p_min, p_mid, p_max = self.compute_phy_stats(e_data.get('Min'), e_data.get('Max'))
+                    new_row.update({'COMPUTED_SOMEIP_MIN_PHY': p_min, 'COMPUTED_SOMEIP_MID_PHY': p_mid, 'COMPUTED_SOMEIP_MAX_PHY': p_max})
+                else:
+                    new_row.update({'COMPUTED_SOMEIP_MIN_PHY': "N/A (Is Enum)" if sip_f else "N/A", 
+                                    'COMPUTED_SOMEIP_MID_PHY': "N/A (Is Enum)" if sip_f else "N/A", 
+                                    'COMPUTED_SOMEIP_MAX_PHY': "N/A (Is Enum)" if sip_f else "N/A"})
+
+                # 4. Cross-pollinate Fallbacks
                 for suffix in ['MIN', 'MID', 'MAX']:
-                    someip_key = f'COMPUTED_SOMEIP_{suffix}_PHY'
-                    can_key = f'COMPUTED_CAN_{suffix}_PHY'
-                    someip_val = new_row.get(someip_key)
-                    if someip_val in [None, '', 'N/A'] and can_key in new_row:
-                        new_row[someip_key] = new_row.get(can_key)
+                    for ptype in ['', 'ENUM_']:
+                        s_key = f'COMPUTED_SOMEIP_{ptype}{suffix}' if ptype else f'COMPUTED_SOMEIP_{suffix}_PHY'
+                        c_key = f'COMPUTED_CAN_{ptype}{suffix}' if ptype else f'COMPUTED_CAN_{suffix}_PHY'
                         
-                # 7. Fallback logic: If SOME/IP ENUM is blank/missing, fallback to CAN computed ENUM values
-                for suffix in ['MIN', 'MID', 'MAX']:
-                    someip_key = f'COMPUTED_SOMEIP_ENUM_{suffix}'
-                    can_key = f'COMPUTED_CAN_ENUM_{suffix}'
-                    someip_val = new_row.get(someip_key)
-                    if someip_val in [None, '', 'N/A'] and can_key in new_row:
-                        new_row[someip_key] = new_row.get(can_key)
-                        
+                        s_val = new_row.get(s_key)
+                        if s_val in [None, '', 'N/A'] and new_row.get(c_key) not in [None, '', 'N/A']:
+                            new_row[s_key] = new_row[c_key]
+                            
             except Exception as e:
                 log.debug(f"Row error safely bypassed: {e}")
 
             updated_rows.append(new_row)
 
-        df_final = pd.DataFrame(updated_rows)
-
-        # FINAL STEP: Replace all empty cells, NaN, and None with "N/A" for a clean Excel sheet
-        df_final = df_final.fillna("N/A")
+        df_final = pd.DataFrame(updated_rows).fillna("N/A")
 
         expected_computed_cols = [
             'COMPUTED_CAN_ENUM_MIN', 'COMPUTED_CAN_ENUM_MID', 'COMPUTED_CAN_ENUM_MAX',

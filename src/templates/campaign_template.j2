@@ -22,7 +22,7 @@ void MainTest()
 
 /* Testcase Definitions */
 {% for row in rows -%}
-{% set req_id = row[prefix ~ '_REQ_ID'] | default('MISSING_DATA') -%}
+{% set req_id = row[prefix ~ '_REQ_ID'] | default('MISSING_DATA') %}
 testcase {{ req_id }}()
 {
   START_LOGGING_TEST_CASE("{{ req_id }}");
