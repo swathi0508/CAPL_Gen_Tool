@@ -18,20 +18,20 @@ def main():
         return
 
     parser = argparse.ArgumentParser(description="CAPL Generation Tool Pipeline.")
-    parser.add_argument("--cli", action="store_true", help="Run in headless mode")
-    parser.add_argument("--enable-log", action="store_true", help="DEV ONLY: Saves intermediate files to disk and boosts logging verbosity")
-    parser.add_argument("--excel", type=Path, required=True, help="Path to input Excel Requirements")
-    parser.add_argument("--arxml", type=str, required=True, help="Path to the unified Raw ARXML Network File")
-    parser.add_argument("--out", type=Path, default=Path("./Output_CAPL_Scripts"), help="Output directory")
-    parser.add_argument("--can-cache", default="can_db_cache.json", help="Path to generated CAN Cache")
-    parser.add_argument("--eth-cache", default="someip_db_cache.json", help="Path to generated ETH Cache")
-    parser.add_argument("--category", default="E2E_CAN", help="Target Category")
-    parser.add_argument("--type", default="CAN->SOMEIP", help="Target Test Type")
+    parser.add_argument("--cli", action="store_true", help=" INTERFACE TEST - CAPL SCRIPT GENERATOR TOOL")
+    parser.add_argument("--enable-log", action="store_true")
+    parser.add_argument("--req_excel", type=Path, required=True, help="Path to Input Requirement.xlsx")
+    parser.add_argument("--arxml", type=str, required=True, help="Path to the ETH_CAN.arxml File")
+    parser.add_argument("--out", type=Path, default=Path("./Output_CAPL_Scripts"), help="Output directory for generated CAPL Scripts")
+    parser.add_argument("--can-cache", default="can_db_cache.json")
+    parser.add_argument("--eth-cache", default="someip_db_cache.json")
+    parser.add_argument("--category", default="E2E_CAN", required=True, help="Target Category - E2E_CAN | E2E_ETH")
+    parser.add_argument("--type", default="CAN->SOMEIP", required=True, help="Target Test Type")
 
     args = parser.parse_args()
 
     run_headless_generation(
-        excel_path=args.excel, 
+        excel_path=args.req_excel, 
         output_dir=args.out, 
         can_db=args.can_cache, 
         eth_db=args.eth_cache, 

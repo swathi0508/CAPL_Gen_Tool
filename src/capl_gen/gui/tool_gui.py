@@ -20,12 +20,12 @@ def get_asset_path(filename: str) -> Path:
 class CaplGenGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Randstad Digital - DPE | CAPL Generator")
+        self.root.title("Randstad Digital - CAPL Generator")
         self.root.geometry("1000x800") 
         self.root.minsize(800, 700)
 
         self.sheet_path_var = tk.StringVar(value="Requirements.xlsx")
-        self.arxml_path_var = tk.StringVar(value="Network.arxml")
+        self.arxml_path_var = tk.StringVar(value="ETH_CAN.arxml")
         self.test_cat_var = tk.StringVar(value="E2E_CAN")
         self.test_type_var = tk.StringVar(value="CAN->SOMEIP")
         self.output_folder_var = tk.StringVar(value="GeneratedTestScripts")
@@ -90,7 +90,7 @@ class CaplGenGUI:
             except Exception as e:
                 pass
         self.canvas.create_text(
-            500, 90, text="AI ASSIST INTERFACE SCRIPT GENERATOR TOOL",
+            500, 90, text="INTERFACE TEST- CAPL SCRIPT GENERATOR TOOL",
             font=("Helvetica", 15, "bold"), fill=self.colors['text_title'], anchor="center", tags="title"
         )
 
