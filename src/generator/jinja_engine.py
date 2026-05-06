@@ -26,8 +26,15 @@ class JinjaEngine:
     def __init__(self, output_root="Output_CAPL_Scripts"):
         current_file = Path(__file__).resolve()
         self.base_src_dir = current_file.parent.parent
-        self.template_dir = self.base_src_dir / "templates"
-        self.output_dir = self.base_src_dir.parent / output_root
+
+        if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+            self.template_dir = Path(sys._MEIPASS) / "templates"
+            app_root = Path(sys.executable).resolve().parent
+        else:
+            self.template_dir = self.base_src_dir / "templates"
+            app_root = self.base_src_dir.parent
+
+        self.output_dir = app_root / output_root
         
         if not self.template_dir.exists():
             log.error(f"Template directory missing at: {self.template_dir}")
