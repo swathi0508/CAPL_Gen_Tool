@@ -220,6 +220,12 @@ class CaplGenGUI(QMainWindow):
         self.log_text.append(f"> {message}")
         self.log_text.ensureCursorVisible()
 
+    def _format_time(self, elapsed: float) -> str:
+        """Helper to consistently format execution times."""
+        m, s = divmod(elapsed, 60)
+        ms = int((s - int(s)) * 1000)
+        return f"{int(m):02d}m {int(s):02d}s {ms:03d}ms"
+
 
     def _on_pre_process_complete(self):
         self.pre_process_done = True
@@ -283,21 +289,35 @@ class CaplGenGUI(QMainWindow):
 
 
         def task():
-            start_time = time.time()
+            total_start_time = time.time()
             try:
-                self.signals.log_signal.emit("⚙️ Pre-Processing started. This will take a few seconds...")
-                self.pipeline.build_databases(arxml)
-               
-                self.signals.log_signal.emit("⚙️ Analyzing requirement specifications...")
+                # --- PHASE 1: PARSING / CACHE VALIDATION ---
+                parse_start = time.time()
+                self.signals.log_signal.emit("⚙️ Validating ARXML and Network Databases...")
+                
+                # The pipeline returns booleans if it actually parsed them (True) or used cache (False)
+                can_built, eth_built = self.pipeline.build_databases(arxml)
+                
+                parse_time = self._format_time(time.time() - parse_start)
+                
+                if not can_built and not eth_built:
+                    self.signals.log_signal.emit(f"⚡ Valid Database cache was found. Arxml Re-Parsing skipped.")
+                else:
+                    self.signals.log_signal.emit(f"✅ Arxml Databases parsed successfully. (Time: {parse_time})")
+                
+                # --- PHASE 2: PRE-PROCESSING ---
+                pre_start = time.time()
+                self.signals.log_signal.emit("⚙️ [(Pre-Processing)] Analyzing requirement specifications ...")
+                
                 self.pipeline.run_preprocessing_memory(req, "GeneratedTestScripts")
-               
-                # --- HIGH PRECISION TIME FORMATTING ---
-                elapsed = time.time() - start_time
-                m, s = divmod(elapsed, 60)
-                ms = int((s - int(s)) * 1000)
-                formatted_time = f"{int(m):02d}m {int(s):02d}s {ms:03d}ms"
-               
-                self.signals.log_signal.emit(f"✅ Pre-Processing complete. (Execution Time: {formatted_time})")
+                
+                pre_time = self._format_time(time.time() - pre_start)
+                self.signals.log_signal.emit(f"✅ Pre-Processing mapping complete. (Time: {pre_time})")
+                
+                # --- COMPLETION ---
+                total_time = self._format_time(time.time() - total_start_time)
+                self.signals.log_signal.emit(f"🏁 System Ready. (Total Elapsed Time: {total_time})")
+                
                 self.signals.finished_signal.emit()
             except Exception as e:
                 self.signals.log_signal.emit("❌ Error: Failed to process files. Please verify input documents.")
@@ -312,24 +332,20 @@ class CaplGenGUI(QMainWindow):
         category = self.cat_combo.currentText()
         test_type = self.typ_combo.currentText()
         out_dir = "GeneratedTestScripts"
-       
+        
         self.write_log(f"📋 Selected Test Category: {category}")
         self.write_log(f"📋 Selected Test Type: {test_type}")
-       
+        
         start_time = time.time()
         try:
-            self.write_log(f"✅ CAPL Scripts Generation Started.")
+            self.write_log(f"⚙️ CAPL Scripts Generation Started...")
             self.pipeline.run_generation(out_dir, category, test_type)
-           
-            # --- HIGH PRECISION TIME FORMATTING ---
-            elapsed = time.time() - start_time
-            m, s = divmod(elapsed, 60)
-            ms = int((s - int(s)) * 1000)
-            formatted_time = f"{int(m):02d}m {int(s):02d}s {ms:03d}ms"
-           
+            
+            formatted_time = self._format_time(time.time() - start_time)
+            
             self.write_log(f"✅ CAPL Scripts Generated Successfully. (Execution Time: {formatted_time})")
             self.write_log(f"📂 Output Location: {os.path.abspath(out_dir)}")
-        except Exception as e:
+        except Exception as e: 
             self.write_log("❌ Generation failed. An error occurred during file creation.")
             log.error(f"Internal Generation Error: {e}")
 
