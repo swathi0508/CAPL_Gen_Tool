@@ -3,6 +3,7 @@ import os
 import time
 import threading
 from datetime import datetime
+from datetime import datetime
 from pathlib import Path
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, QLineEdit, QPushButton, 
@@ -35,7 +36,32 @@ class CaplGenGUI(QMainWindow):
         self.resize(1150, 850)
         
         self.pre_process_done = False
+# Signal bridge to handle thread-safe UI updates
+class CommSignals(QObject):
+    log_signal = pyqtSignal(str)
+    finished_signal = pyqtSignal()
+
+class CaplGenGUI(QMainWindow):
+    def __init__(self, root_dummy=None):
+        super().__init__()
+        
+        self.setWindowTitle("Randstad Digital - CAPL Generator")
+        self.setMinimumSize(1150, 850)
+        self.resize(1150, 850)
+        
+        self.pre_process_done = False
         self.pipeline = CaplGenerationPipeline()
+        self.signals = CommSignals()
+        
+        # Connect signals
+        self.signals.log_signal.connect(self.write_log)
+        self.signals.finished_signal.connect(self._on_pre_process_complete)
+        
+        # Colors
+        self.clr_title = "#F8F9FA" 
+        self.clr_label = "#E5E7EB" 
+        self.clr_input_bg = "rgba(45, 55, 72, 240)"
+        self.clr_util_btn = "#4A5568"
         self.signals = CommSignals()
         
         # Connect signals
@@ -99,9 +125,61 @@ class CaplGenGUI(QMainWindow):
             QCheckBox {{ color: {self.clr_label}; background: transparent; }}
         """)
 
+        self._build_ui_container()
+        self._center_window_safely()
+
+    def _center_window_safely(self):
+        screen = QApplication.primaryScreen().availableGeometry()
+        x = (screen.width() - self.width()) // 2
+        self.move(x, 100)
+
+    def _setup_canvas(self):
+        bg_path = get_asset_path("background.png")
+        self.bg_pixmap = QPixmap(str(bg_path)) if bg_path.exists() else None
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        if self.bg_pixmap:
+            painter.drawPixmap(self.rect(), self.bg_pixmap)
+        painter.fillRect(self.rect(), QColor(10, 18, 32, 225))
+
+    def _build_ui_container(self):
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+        self.outer_layout = QHBoxLayout(self.central_widget)
+        self.outer_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.content_widget = QWidget()
+        self.content_widget.setFixedWidth(1020)
+        self.main_layout = QVBoxLayout(self.content_widget)
+        self.main_layout.setContentsMargins(10, 40, 10, 40)
+        self.main_layout.setSpacing(15)
+
+        self.outer_layout.addStretch()
+        self.outer_layout.addWidget(self.content_widget)
+        self.outer_layout.addStretch()
+
+        self.setStyleSheet(f"""
+            QLabel {{ color: {self.clr_label}; font-weight: bold; background: transparent; }}
+            QLineEdit, QComboBox {{ 
+                background-color: {self.clr_input_bg}; 
+                border: 1px solid #4a5568; border-radius: 4px; 
+                color: white; padding: 6px; 
+            }}
+            QPushButton#util_btn {{ 
+                background-color: {self.clr_util_btn}; color: #FFFFFF; 
+                border-radius: 4px; font-weight: bold; padding: 6px;
+            }}
+            QPushButton#util_btn:hover {{ background-color: #718096; }}
+            QPushButton#util_btn:pressed {{ background-color: #2D3748; }}
+            QCheckBox {{ color: {self.clr_label}; background: transparent; }}
+        """)
+
         self._build_header()
         self.main_layout.addSpacing(40)
+        self.main_layout.addSpacing(40)
         self._build_input_section()
+        self._build_config_section()
         self._build_config_section()
         self._build_log_section()
 
@@ -335,6 +413,15 @@ class CaplGenGUI(QMainWindow):
             with open(f, 'w', encoding='utf-8') as file: file.write(self.log_text.toPlainText())
 
 def launch_gui():
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        except: pass
+    app = QApplication(sys.argv)
+    gui = CaplGenGUI()
+    gui.show()
+    sys.exit(app.exec())
     if sys.platform.startswith("win"):
         try:
             import ctypes
