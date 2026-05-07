@@ -148,7 +148,7 @@ class CaplGenGUI(QMainWindow):
         btn_br_arxml.setObjectName("util_btn")
         btn_br_arxml.setGeometry(760, 25, 90, 32)
         btn_br_arxml.clicked.connect(self._browse_arxml_file)
-       
+        
         QLabel("Input Requirement Sheet:", container).move(0, 75)
         self.req_path_edit = QLineEdit(container)
         self.req_path_edit.setGeometry(0, 100, 750, 32)
@@ -174,12 +174,12 @@ class CaplGenGUI(QMainWindow):
         self.cat_combo = QComboBox(container)
         self.cat_combo.addItems(["E2E_CAN", "E2E_ETH"])
         self.cat_combo.setGeometry(0, 25, 850, 32)
-       
+        
         QLabel("Test Type:", container).move(0, 75)
         self.typ_combo = QComboBox(container)
         self.typ_combo.addItems(["CAN->SOMEIP", "CAN->SOMEIP_FF", "CAN->SWC", "SWC->CAN", "SOMEIP->CAN"])
         self.typ_combo.setGeometry(0, 100, 850, 32)
-       
+        
         self.btn_gen = QPushButton("GENERATE SCRIPTS", container)
         self.btn_gen.setEnabled(False)
         self.btn_gen.setGeometry(860, 62, 140, 38)
@@ -202,22 +202,23 @@ class CaplGenGUI(QMainWindow):
             btn = QPushButton(text); btn.setObjectName("util_btn"); btn.clicked.connect(func)
             header.addWidget(btn)
         layout.addLayout(header)
-       
+        
         self.log_text = QTextEdit(); self.log_text.setReadOnly(True)
         self.log_text.setStyleSheet("background-color: #000000; color: #cbd5e1; font-family: Consolas; border: 1px solid #2d3748; border-radius: 4px;")
         layout.addWidget(self.log_text)
-       
+        
         # --- SECURITY LOCK: Hide Dev Mode Checkbox in Production ---
         # self.cb_verbose = QCheckBox("Enable Verbose Log / Dev Mode")
         # if not getattr(sys, 'frozen', False):
         #     layout.addWidget(self.cb_verbose)
-           
+            
         self.main_layout.addWidget(container, 1)
-
 
     # --- Thread Safe Helpers ---
     def write_log(self, message: str):
-        self.log_text.append(f"> {message}")
+        # Appends the current time before the log message
+        current_time = datetime.now().strftime("%H:%M:%S")
+        self.log_text.append(f"[{current_time}] : > {message}")
         self.log_text.ensureCursorVisible()
 
     def _format_time(self, elapsed: float) -> str:
@@ -272,17 +273,17 @@ class CaplGenGUI(QMainWindow):
 
         arxml = self.arxml_path_edit.text()
         req = self.req_path_edit.text()
-       
+        
         # Pass the UI state down to the pipeline
         self.pipeline.enable_log = self.cb_verbose.isChecked() if hasattr(self, 'cb_verbose') else False
-       
+        
         self.btn_preprocess.setEnabled(False)
         self.btn_preprocess.setStyleSheet("""
             QPushButton { background-color: #d68910; color: white; border-radius: 4px; font-weight: bold; border: none; }
             QPushButton:hover { background-color: #b9770e; }
             QPushButton:pressed { background-color: #9c640c; }
         """)
-       
+        
         self.pre_process_done = False
         self.btn_gen.setEnabled(False)
         self.btn_gen.setStyleSheet("background-color: #3b3e40; color: #94a3b8; border-radius: 4px; border: none;")
@@ -364,7 +365,7 @@ class CaplGenGUI(QMainWindow):
             if f != self.arxml_path_edit.text():
                 self.pipeline.can_db_data = {}
                 self.pipeline.eth_db_data = {}
-           
+            
             self.arxml_path_edit.setText(f)
             self.write_log(f"🌐 ARXML Selected: {os.path.basename(f)}")
 
