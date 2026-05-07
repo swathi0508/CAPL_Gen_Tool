@@ -7,9 +7,8 @@ from pathlib import Path
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QLabel, QLineEdit, QPushButton,
                              QComboBox, QTextEdit, QFileDialog, QCheckBox, QMessageBox)
-from PyQt6.QtGui import QPixmap, QPainter, QColor, QFont
+from PyQt6.QtGui import QPixmap, QPainter, QColor, QFont, QIcon
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
-
 
 from core.logger import log
 from pipeline.main_pipeline import CaplGenerationPipeline
@@ -37,6 +36,10 @@ class CaplGenGUI(QMainWindow):
         self.setWindowTitle("Randstad Digital - CAPL Generator")
         self.setMinimumSize(1150, 850)
         self.resize(1150, 850)
+
+        icon_path = get_asset_path("app_icon.ico")
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
        
         self.pre_process_done = False
         self.pipeline = CaplGenerationPipeline()
@@ -296,9 +299,7 @@ class CaplGenGUI(QMainWindow):
                 parse_start = time.time()
                 self.signals.log_signal.emit("⚙️ Validating ARXML and Network Databases...")
                 
-                # The pipeline returns booleans if it actually parsed them (True) or used cache (False)
                 can_built, eth_built = self.pipeline.build_databases(arxml)
-                
                 parse_time = self._format_time(time.time() - parse_start)
                 
                 if not can_built and not eth_built:
@@ -311,6 +312,19 @@ class CaplGenGUI(QMainWindow):
                 self.signals.log_signal.emit("⚙️ [(Pre-Processing)] Analyzing requirement specifications ...")
                 
                 self.pipeline.run_preprocessing_memory(req, "GeneratedTestScripts")
+                
+                # --- MISSING SIGNALS UI SUMMARIZATION ---
+                if hasattr(self.pipeline, 'missing_signals') and self.pipeline.missing_signals:
+                    total_missing = len(self.pipeline.missing_signals)
+                    self.signals.log_signal.emit(f"⚠️ WARNING: {total_missing} signals from your Requirement Excel were NOT found.")
+                    
+                    # Only print the first 5 to the UI to prevent log spam
+                    display_limit = 5
+                    for sig in self.pipeline.missing_signals[:display_limit]:
+                        self.signals.log_signal.emit(f"   - Missing: {sig}")
+                    
+                    if total_missing > display_limit:
+                        self.signals.log_signal.emit(f"   ... plus {total_missing - display_limit} more. (Check console for full list )")
                 
                 pre_time = self._format_time(time.time() - pre_start)
                 self.signals.log_signal.emit(f"✅ Pre-Processing mapping complete. (Time: {pre_time})")
@@ -346,8 +360,10 @@ class CaplGenGUI(QMainWindow):
             
             self.write_log(f"✅ CAPL Scripts Generated Successfully. (Execution Time: {formatted_time})")
             self.write_log(f"📂 Output Location: {os.path.abspath(out_dir)}")
+            
         except Exception as e: 
-            self.write_log("❌ Generation failed. An error occurred during file creation.")
+            # Passes the exact generation error (e.g., "Template missing" or "Folder locked") to the UI
+            self.write_log(f"❌ Generation failed: {str(e)}")
             log.error(f"Internal Generation Error: {e}")
 
 
