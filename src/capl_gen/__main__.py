@@ -9,6 +9,22 @@ from core.logger import log
 from capl_gen.gui.tool_gui import launch_gui
 from capl_gen.cli import run_headless_generation
 
+# --- SECURITY SHIELD: Global Exception Handler ---
+def global_exception_handler(exc_type, exc_value, exc_traceback):
+    """Intercepts unhandled crashes to prevent leaking source code paths to users."""
+    is_production = getattr(sys, 'frozen', False)
+    
+    if is_production:
+        # In Production: Give a generic, safe error message. Do NOT print the traceback.
+        log.critical(f"A fatal application error occurred: {exc_type.__name__}. Please contact support.")
+    else:
+        # In Development: Print the full traceback so you can fix the bug.
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+
+# Attach the shield
+sys.excepthook = global_exception_handler
+# -------------------------------------------------
+
 def main():
     """Universal Entry Point for the CAPL Gen Tool."""
     
