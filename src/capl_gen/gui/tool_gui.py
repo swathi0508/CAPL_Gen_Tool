@@ -116,7 +116,7 @@ class CaplGenGUI(QMainWindow):
             l_pix = QPixmap(str(logo_path)).scaledToHeight(55, Qt.TransformationMode.SmoothTransformation)
             l_lbl.setPixmap(l_pix)
             header.addWidget(l_lbl)
-        title = QLabel("INTERFACE TEST - CAPL SCRIPT GENERATOR TOOL")
+        title = QLabel("CAPLBolt | <i>Instant Interface Test Script Generation</i>")
         title.setStyleSheet(f"font-size: 24px; color: {self.clr_title}; font-weight: bold;")
         header.addWidget(title)
         header.addStretch()
@@ -191,9 +191,9 @@ class CaplGenGUI(QMainWindow):
         layout.addWidget(self.log_text)
         
         # --- SECURITY LOCK: Hide Dev Mode Checkbox in Production ---
-        self.cb_verbose = QCheckBox("Enable Verbose Log / Dev Mode")
-        if not getattr(sys, 'frozen', False):
-            layout.addWidget(self.cb_verbose)
+        # self.cb_verbose = QCheckBox("Enable Verbose Log / Dev Mode")
+        # if not getattr(sys, 'frozen', False):
+        #     layout.addWidget(self.cb_verbose)
             
         self.main_layout.addWidget(container, 1) 
 
@@ -262,20 +262,20 @@ class CaplGenGUI(QMainWindow):
             start_time = time.time()
             try:
                 self.signals.log_signal.emit("⚙️ Pre-Processing started. This will take a few seconds...")
-                
-                # We intentionally don't emit developer logs from these functions to the UI
                 self.pipeline.build_databases(arxml)
                 
                 self.signals.log_signal.emit("⚙️ Analyzing requirement specifications...")
                 self.pipeline.run_preprocessing_memory(req, "GeneratedTestScripts")
                 
-                elapsed = int(time.time() - start_time)
-                formatted_time = time.strftime('%H:%M:%S', time.gmtime(elapsed))
+                # --- HIGH PRECISION TIME FORMATTING ---
+                elapsed = time.time() - start_time
+                m, s = divmod(elapsed, 60)
+                ms = int((s - int(s)) * 1000)
+                formatted_time = f"{int(m):02d}m {int(s):02d}s {ms:03d}ms"
                 
                 self.signals.log_signal.emit(f"✅ Pre-Processing complete. (Execution Time: {formatted_time})")
                 self.signals.finished_signal.emit()
             except Exception as e:
-                # Keep error message generic for the user
                 self.signals.log_signal.emit("❌ Error: Failed to process files. Please verify input documents.")
                 log.error(f"Internal Pre-Processing Error: {e}")
                 QTimer.singleShot(0, self._check_logic_states)
@@ -292,10 +292,14 @@ class CaplGenGUI(QMainWindow):
         
         start_time = time.time()
         try:
+            self.write_log(f"✅ CAPL Scripts Generation Started.")
             self.pipeline.run_generation(out_dir, category, test_type)
             
-            elapsed = int(time.time() - start_time)
-            formatted_time = time.strftime('%H:%M:%S', time.gmtime(elapsed))
+            # --- HIGH PRECISION TIME FORMATTING ---
+            elapsed = time.time() - start_time
+            m, s = divmod(elapsed, 60)
+            ms = int((s - int(s)) * 1000)
+            formatted_time = f"{int(m):02d}m {int(s):02d}s {ms:03d}ms"
             
             self.write_log(f"✅ CAPL Scripts Generated Successfully. (Execution Time: {formatted_time})")
             self.write_log(f"📂 Output Location: {os.path.abspath(out_dir)}")
