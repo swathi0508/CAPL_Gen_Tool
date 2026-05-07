@@ -1,10 +1,14 @@
 import sys
 import os
+import time
 import threading
-import tkinter as tk
-from tkinter import ttk, filedialog
+from datetime import datetime
 from pathlib import Path
-from PIL import Image, ImageTk
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
+                             QHBoxLayout, QLabel, QLineEdit, QPushButton, 
+                             QComboBox, QTextEdit, QFileDialog, QCheckBox, QMessageBox)
+from PyQt6.QtGui import QPixmap, QPainter, QColor, QFont
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
 
 from core.logger import log
 from pipeline.main_pipeline import CaplGenerationPipeline
@@ -17,261 +21,322 @@ def get_asset_path(filename: str) -> Path:
     if script_path.exists(): return script_path
     return Path(__file__).parent.parent.parent / filename
 
-class CaplGenGUI:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Randstad Digital - CAPL Generator")
-        self.root.geometry("1000x800") 
-        self.root.minsize(800, 700)
+# Signal bridge to handle thread-safe UI updates
+class CommSignals(QObject):
+    log_signal = pyqtSignal(str)
+    finished_signal = pyqtSignal()
 
-        self.sheet_path_var = tk.StringVar(value="Requirements.xlsx")
-        self.arxml_path_var = tk.StringVar(value="ETH_CAN.arxml")
-        self.test_cat_var = tk.StringVar(value="E2E_CAN")
-        self.test_type_var = tk.StringVar(value="CAN->SOMEIP")
-        self.output_folder_var = tk.StringVar(value="GeneratedTestScripts")
-        self.enable_log_var = tk.BooleanVar(value=False)
+class CaplGenGUI(QMainWindow):
+    def __init__(self, root_dummy=None):
+        super().__init__()
         
-        # State control flag for the async background parser
-        self._is_parsing_active = False
+        self.setWindowTitle("Randstad Digital - CAPL Generator")
+        self.setMinimumSize(1150, 850)
+        self.resize(1150, 850)
         
+        self.pre_process_done = False
         self.pipeline = CaplGenerationPipeline()
-
-        self.colors = {
-            'text_light': '#e0e0e0', 'text_title': '#4ba3e3', 'input_bg': '#ffffff', 
-            'input_fg': '#000000', 'btn_preprocess': '#3b7a57', 'btn_generate': '#a14040', 
-            'btn_browse': '#2c476b', 'btn_fg': 'white', 'log_bg': '#050a12', 'log_fg': '#d1d1d1',
-            'btn_busy': '#5c5c5c' # Gray color when async tasks are running
-        }
+        self.signals = CommSignals()
+        
+        # Connect signals
+        self.signals.log_signal.connect(self.write_log)
+        self.signals.finished_signal.connect(self._on_pre_process_complete)
+        
+        # Colors
+        self.clr_title = "#F8F9FA" 
+        self.clr_label = "#E5E7EB" 
+        self.clr_input_bg = "rgba(45, 55, 72, 240)"
+        self.clr_util_btn = "#4A5568"
 
         self._setup_canvas()
-        self._build_header()
-        self._build_input_section()
-        self._build_action_buttons()
-        self._build_log_section()
-        self._start_background_db_build()
+        self._build_ui_container()
+        self._center_window_safely()
+
+    def _center_window_safely(self):
+        screen = QApplication.primaryScreen().availableGeometry()
+        x = (screen.width() - self.width()) // 2
+        self.move(x, 100)
 
     def _setup_canvas(self):
-        self.bg_image_path = get_asset_path("background.png")
-        self.canvas = tk.Canvas(self.root, highlightthickness=0)
-        self.canvas.place(x=0, y=0, relwidth=1, relheight=1)
-        if self.bg_image_path.exists():
-            try:
-                self.original_bg = Image.open(self.bg_image_path)
-                self.root.bind("<Configure>", self._resize_event)
-            except Exception as e:
-                log.error(f"Error loading background: {e}")
+        bg_path = get_asset_path("background.png")
+        self.bg_pixmap = QPixmap(str(bg_path)) if bg_path.exists() else None
 
-    def _resize_event(self, event):
-        if event.widget == self.root:
-            width, height = event.width, event.height
-            if width > 10 and height > 10:
-                resized_image = self.original_bg.resize((width, height), Image.LANCZOS)
-                self.bg_photo = ImageTk.PhotoImage(resized_image)
-                self.canvas.delete("bg")
-                self.canvas.create_image(0, 0, image=self.bg_photo, anchor="nw", tags="bg")
-                self.canvas.tag_lower("bg")
-                self.canvas.coords("logo", width / 2, 40)
-                self.canvas.coords("title", width / 2, 90)
-                left_align = width * 0.1
-                self.canvas.coords("lbl_sheet", left_align, height * 0.16)
-                self.canvas.coords("lbl_arxml", left_align, height * 0.23) 
-                self.canvas.coords("lbl_cat", left_align, height * 0.30)
-                self.canvas.coords("lbl_type", left_align, height * 0.37)
-                self.canvas.coords("lbl_out", left_align, height * 0.44)
-                self.canvas.coords("lbl_log", left_align, height * 0.67) 
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        if self.bg_pixmap:
+            painter.drawPixmap(self.rect(), self.bg_pixmap)
+        painter.fillRect(self.rect(), QColor(10, 18, 32, 225))
+
+    def _build_ui_container(self):
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+        self.outer_layout = QHBoxLayout(self.central_widget)
+        self.outer_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.content_widget = QWidget()
+        self.content_widget.setFixedWidth(1020)
+        self.main_layout = QVBoxLayout(self.content_widget)
+        self.main_layout.setContentsMargins(10, 40, 10, 40)
+        self.main_layout.setSpacing(15)
+
+        self.outer_layout.addStretch()
+        self.outer_layout.addWidget(self.content_widget)
+        self.outer_layout.addStretch()
+
+        self.setStyleSheet(f"""
+            QLabel {{ color: {self.clr_label}; font-weight: bold; background: transparent; }}
+            QLineEdit, QComboBox {{ 
+                background-color: {self.clr_input_bg}; 
+                border: 1px solid #4a5568; border-radius: 4px; 
+                color: white; padding: 6px; 
+            }}
+            QPushButton#util_btn {{ 
+                background-color: {self.clr_util_btn}; color: #FFFFFF; 
+                border-radius: 4px; font-weight: bold; padding: 6px;
+            }}
+            QPushButton#util_btn:hover {{ background-color: #718096; }}
+            QPushButton#util_btn:pressed {{ background-color: #2D3748; }}
+            QCheckBox {{ color: {self.clr_label}; background: transparent; }}
+        """)
+
+        self._build_header()
+        self.main_layout.addSpacing(40)
+        self._build_input_section()
+        self._build_config_section()
+        self._build_log_section()
 
     def _build_header(self):
+        header_widget = QWidget()
+        header_widget.setFixedWidth(1000)
+        header = QHBoxLayout(header_widget)
+        header.setContentsMargins(0, 0, 0, 0)
         logo_path = get_asset_path("logo.png")
         if logo_path.exists():
-            try:
-                original_logo = Image.open(logo_path)
-                h_size = 45 
-                w_prop = (h_size / float(original_logo.size[1]))
-                w_size = int((float(original_logo.size[0]) * float(w_prop)))
-                resized_logo = original_logo.resize((w_size, h_size), Image.LANCZOS)
-                self.logo_img = ImageTk.PhotoImage(resized_logo) 
-                self.canvas.create_image(500, 40, image=self.logo_img, anchor="center", tags="logo") 
-            except Exception:
-                pass
-        self.canvas.create_text(
-            500, 90, text="INTERFACE TEST- CAPL SCRIPT GENERATOR TOOL",
-            font=("Helvetica", 15, "bold"), fill=self.colors['text_title'], anchor="center", tags="title"
-        )
+            l_lbl = QLabel()
+            l_pix = QPixmap(str(logo_path)).scaledToHeight(55, Qt.TransformationMode.SmoothTransformation)
+            l_lbl.setPixmap(l_pix)
+            header.addWidget(l_lbl)
+        title = QLabel("INTERFACE TEST - CAPL SCRIPT GENERATOR TOOL")
+        title.setStyleSheet(f"font-size: 24px; color: {self.clr_title}; font-weight: bold;")
+        header.addWidget(title)
+        header.addStretch()
+        self.main_layout.addWidget(header_widget)
 
     def _build_input_section(self):
-        font_style = ("Helvetica", 10, "bold")
-        self.canvas.create_text(0, 0, text="Input Requirement Sheet:", font=font_style, fill=self.colors['text_light'], anchor="sw", tags="lbl_sheet")
-        self.canvas.create_text(0, 0, text="Input Unified ARXML Network:", font=font_style, fill=self.colors['text_light'], anchor="sw", tags="lbl_arxml")
-        self.canvas.create_text(0, 0, text="Test Category:", font=font_style, fill=self.colors['text_light'], anchor="sw", tags="lbl_cat")
-        self.canvas.create_text(0, 0, text="Test Type:", font=font_style, fill=self.colors['text_light'], anchor="sw", tags="lbl_type")
-        self.canvas.create_text(0, 0, text="Output Folder Name:", font=font_style, fill=self.colors['text_light'], anchor="sw", tags="lbl_out")
-
-        tk.Entry(self.root, textvariable=self.sheet_path_var, bg=self.colors['input_bg'], fg=self.colors['input_fg'], relief="flat").place(relx=0.1, rely=0.17, relwidth=0.68, height=30)
-        tk.Button(self.root, text="Browse...", bg=self.colors['btn_browse'], fg=self.colors['btn_fg'], relief="flat", cursor="hand2", command=self._browse_file).place(relx=0.79, rely=0.17, relwidth=0.11, height=30)
-
-        tk.Entry(self.root, textvariable=self.arxml_path_var, bg=self.colors['input_bg'], fg=self.colors['input_fg'], relief="flat").place(relx=0.1, rely=0.24, relwidth=0.68, height=30)
-        tk.Button(self.root, text="Browse...", bg=self.colors['btn_browse'], fg=self.colors['btn_fg'], relief="flat", cursor="hand2", command=self._browse_arxml_file).place(relx=0.79, rely=0.24, relwidth=0.11, height=30)
-
-        ttk.Combobox(self.root, textvariable=self.test_cat_var, values=["E2E_CAN", "E2E_ETH"], state="readonly").place(relx=0.1, rely=0.31, relwidth=0.8, height=30)
-        ttk.Combobox(self.root, textvariable=self.test_type_var, values=["CAN->SOMEIP", "CAN->SOMEIP_FF", "CAN->SWC", "SWC->CAN", "SOMEIP->CAN"], state="readonly").place(relx=0.1, rely=0.38, relwidth=0.8, height=30)
-        tk.Entry(self.root, textvariable=self.output_folder_var, bg=self.colors['input_bg'], fg=self.colors['input_fg'], relief="flat").place(relx=0.1, rely=0.45, relwidth=0.8, height=30)
+        container = QWidget()
+        container.setFixedSize(1000, 140)
+        QLabel("Input ETH_CAN.arxml:", container).move(0, 0)
+        self.arxml_path_edit = QLineEdit(container)
+        self.arxml_path_edit.setGeometry(0, 25, 750, 32)
+        self.arxml_path_edit.textChanged.connect(self._check_logic_states)
+        btn_br_arxml = QPushButton("BROWSE", container)
+        btn_br_arxml.setObjectName("util_btn")
+        btn_br_arxml.setGeometry(760, 25, 90, 32)
+        btn_br_arxml.clicked.connect(self._browse_arxml_file)
         
-        # SECURITY LOCK: Only show Dev Mode checkbox if NOT compiled into an .exe
-        is_production = getattr(sys, 'frozen', False)
-        if not is_production:
-            tk.Checkbutton(self.root, text="Enable Verbose Log / Dev Mode", variable=self.enable_log_var, bg=self.colors['log_bg'], fg=self.colors['text_title'], selectcolor=self.colors['log_bg'], activebackground=self.colors['log_bg']).place(relx=0.1, rely=0.50)
+        QLabel("Input Requirement Sheet:", container).move(0, 75)
+        self.req_path_edit = QLineEdit(container)
+        self.req_path_edit.setGeometry(0, 100, 750, 32)
+        self.req_path_edit.textChanged.connect(self._check_logic_states)
+        btn_br_req = QPushButton("BROWSE", container)
+        btn_br_req.setObjectName("util_btn")
+        btn_br_req.setGeometry(760, 100, 90, 32)
+        btn_br_req.clicked.connect(self._browse_file)
+        
+        self.btn_preprocess = QPushButton("PRE-PROCESS", container)
+        self.btn_preprocess.setEnabled(False)
+        self.btn_preprocess.setGeometry(860, 62, 140, 38)
+        self.btn_preprocess.setFont(QFont("Helvetica", 10, QFont.Weight.Bold))
+        self.btn_preprocess.setStyleSheet("background-color: #3b3e40; color: #94a3b8; border-radius: 4px; border: none;")
+        self.btn_preprocess.clicked.connect(self.run_preprocess)
+        self.main_layout.addWidget(container)
 
-    def _build_action_buttons(self):
-        # Note: We do NOT use state="disabled" natively, we manage state via self._is_parsing_active
-        self.btn_preprocess = tk.Button(self.root, text="PRE - PROCESS", bg=self.colors['btn_preprocess'], fg=self.colors['btn_fg'], font=("Arial", 11, "bold"), relief="flat", cursor="hand2", command=self.run_preprocess)
-        self.btn_preprocess.place(relx=0.1, rely=0.55, relwidth=0.8, height=38)
-
-        self.btn_generate = tk.Button(self.root, text="GENERATE SCRIPTS", bg=self.colors['btn_generate'], fg=self.colors['btn_fg'], font=("Arial", 11, "bold"), relief="flat", cursor="hand2", command=self.run_generation)
-        self.btn_generate.place(relx=0.1, rely=0.62, relwidth=0.8, height=38)
+    def _build_config_section(self):
+        container = QWidget()
+        container.setFixedSize(1000, 140)
+        QLabel("Test Category:", container).move(0, 0)
+        self.cat_combo = QComboBox(container)
+        self.cat_combo.addItems(["E2E_CAN", "E2E_ETH"])
+        self.cat_combo.setGeometry(0, 25, 850, 32)
+        
+        QLabel("Test Type:", container).move(0, 75)
+        self.typ_combo = QComboBox(container)
+        self.typ_combo.addItems(["CAN->SOMEIP", "CAN->SOMEIP_FF", "CAN->SWC", "SWC->CAN", "SOMEIP->CAN"])
+        self.typ_combo.setGeometry(0, 100, 850, 32)
+        
+        self.btn_gen = QPushButton("GENERATE SCRIPTS", container)
+        self.btn_gen.setEnabled(False)
+        self.btn_gen.setGeometry(860, 62, 140, 38)
+        self.btn_gen.setFont(QFont("Helvetica", 9, QFont.Weight.Bold))
+        self.btn_gen.setStyleSheet("background-color: #3b3e40; color: #94a3b8; border-radius: 4px; border: none;")
+        self.btn_gen.clicked.connect(self.run_generation)
+        self.main_layout.addWidget(container)
 
     def _build_log_section(self):
-        self.canvas.create_text(0, 0, text="EXECUTION LOGS", font=("Helvetica", 10, "bold"), fill=self.colors['text_light'], anchor="sw", tags="lbl_log")
-        tk.Button(self.root, text="Clear", bg=self.colors['btn_browse'], fg=self.colors['btn_fg'], relief="flat", cursor="hand2", command=self._clear_log).place(relx=0.90, rely=0.67, relwidth=0.08, height=25, anchor="se")
-        log_frame = tk.Frame(self.root, bg=self.colors['log_bg'])
-        log_frame.place(relx=0.1, rely=0.68, relwidth=0.8, relheight=0.28) 
-        log_frame.columnconfigure(0, weight=1)
-        log_frame.rowconfigure(0, weight=1)
-
-        self.log_text = tk.Text(log_frame, state="disabled", wrap="word", bg=self.colors['log_bg'], fg=self.colors['log_fg'], insertbackground='white', relief="flat", padx=5, pady=5)
-        scrollbar = ttk.Scrollbar(log_frame, orient="vertical", command=self.log_text.yview)
-        self.log_text.configure(yscrollcommand=scrollbar.set)
-        self.log_text.grid(row=0, column=0, sticky="nsew")
-        scrollbar.grid(row=0, column=1, sticky="ns")
-        self.write_log("System UI initialized.")
-
-    def _start_background_db_build(self):
-        arxml_path = self.arxml_path_var.get()
-        if not os.path.exists(arxml_path):
-            return
-
-        # Lock the UI buttons safely
-        self._is_parsing_active = True
-        self.btn_preprocess.config(bg=self.colors['btn_busy'], text="PRE - PROCESS (Validating Cache...)")
+        container = QWidget()
+        container.setFixedWidth(1000)
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
         
-        self.write_log("⚙️ Validating ARXML cache and preparing network databases in background...")
+        header = QHBoxLayout()
+        header.addWidget(QLabel("EXECUTION LOGS"))
+        header.addStretch()
+        for text, func in [("DOWNLOAD LOGS", self.download_logs), ("CLEAR", self._clear_log)]:
+            btn = QPushButton(text); btn.setObjectName("util_btn"); btn.clicked.connect(func)
+            header.addWidget(btn)
+        layout.addLayout(header)
         
-        thread = threading.Thread(target=self._run_parsers_in_background, args=(arxml_path,), daemon=True)
-        thread.start()
-
-    def _run_parsers_in_background(self, arxml_path):
-        try:
-            self.pipeline.enable_log = self.enable_log_var.get()
+        self.log_text = QTextEdit(); self.log_text.setReadOnly(True)
+        self.log_text.setStyleSheet("background-color: #000000; color: #cbd5e1; font-family: Consolas; border: 1px solid #2d3748; border-radius: 4px;")
+        layout.addWidget(self.log_text)
+        
+        # --- SECURITY LOCK: Hide Dev Mode Checkbox in Production ---
+        self.cb_verbose = QCheckBox("Enable Verbose Log / Dev Mode")
+        if not getattr(sys, 'frozen', False):
+            layout.addWidget(self.cb_verbose)
             
-            # The pipeline automatically handles checking the cache size/timestamp.
-            # If it's valid, it loads instantly. If not, it re-parses.
-            self.pipeline.build_databases(arxml_path)
-            
-            self.root.after(0, self._on_parsing_complete, True, "✅ Network Databases ready. You may now start Pre-Processing.")
-        except Exception:
-            # Hide raw exception details for security
-            self.root.after(0, self._on_parsing_complete, False, "❌ Background Validation Failed. Please verify the ARXML file format.")
+        self.main_layout.addWidget(container, 1) 
 
-    def _on_parsing_complete(self, success: bool, message: str):
-        """Unlocks the GUI after the async thread finishes."""
-        self._is_parsing_active = False
-        self.btn_preprocess.config(bg=self.colors['btn_preprocess'], text="PRE - PROCESS")
-        self.write_log(message)
-
-    def _browse_file(self):
-        file_path = filedialog.askopenfilename(title="Select Requirements Excel", filetypes=[("Excel Files", ".xlsx;.xls"), ("All Files", "*.*")])
-        if file_path: self.sheet_path_var.set(file_path)
-
-    def _browse_arxml_file(self):
-        file_path = filedialog.askopenfilename(title="Select Unified ARXML File", filetypes=[("ARXML Files", "*.arxml"), ("All Files", "*.*")])
-        if file_path:
-            self.arxml_path_var.set(file_path)
-            
-            # FORCE CLEAR RAM: Since they picked a new file, we wipe the memory so 
-            # build_databases() is forced to run the file size/timestamp checks again!
-            self.pipeline.can_db_data = {}
-            self.pipeline.eth_db_data = {}
-            
-            self._start_background_db_build()
-
-    def _clear_log(self):
-        self.log_text.config(state="normal")
-        self.log_text.delete(1.0, tk.END)
-        self.log_text.config(state="disabled")
-
+    # --- Thread Safe Helpers ---
     def write_log(self, message: str):
-        self.log_text.config(state="normal")
-        self.log_text.insert(tk.END, f"{message}\n")
-        self.log_text.see(tk.END)
-        self.log_text.config(state="disabled")
-        self.root.update_idletasks()
+        self.log_text.append(f"> {message}")
+        self.log_text.ensureCursorVisible()
+
+    def _on_pre_process_complete(self):
+        self.pre_process_done = True
+        self._update_gen_button_ui()
+        self._check_logic_states()
+
+    # --- Actions ---
+    def _check_logic_states(self):
+        if self.arxml_path_edit.text().strip() and self.req_path_edit.text().strip():
+            self.btn_preprocess.setEnabled(True)
+            self.btn_preprocess.setStyleSheet("""
+                QPushButton { background-color: #1e8449; color: white; border-radius: 4px; font-weight: bold; border: none; }
+                QPushButton:hover { background-color: #166534; }
+                QPushButton:pressed { background-color: #0d4d26; }
+            """)
+        else:
+            self.btn_preprocess.setEnabled(False)
+            self.btn_preprocess.setStyleSheet("background-color: #3b3e40; color: #94a3b8; border-radius: 4px; border: none;")
+
+    def _update_gen_button_ui(self):
+        if self.pre_process_done:
+            self.btn_gen.setEnabled(True)
+            self.btn_gen.setStyleSheet("""
+                QPushButton { background-color: #1e8449; color: white; border-radius: 4px; font-weight: bold; border: none; }
+                QPushButton:hover { background-color: #166534; }
+                QPushButton:pressed { background-color: #0d4d26; }
+            """)
 
     def run_preprocess(self):
-        # 1. SOFT LOCK: Intercept clicks while async thread is parsing
-        if self._is_parsing_active:
-            self.write_log("⏳ Please wait: A background process is currently parsing the ARXML network...")
-            return
+        # 1. Prompt if already processed
+        if self.pre_process_done:
+            reply = QMessageBox.question(
+                self, 'Pre-Process Again?', 
+                'Previous pre-processed data already exists. Do you want to pre-process again?',
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
+                QMessageBox.StandardButton.No
+            )
+            if reply == QMessageBox.StandardButton.No:
+                return
 
-        self.pipeline.enable_log = self.enable_log_var.get()
-        input_excel = self.sheet_path_var.get()
-        out_dir = self.output_folder_var.get()
-        arxml_path = self.arxml_path_var.get()
-
-        if not os.path.exists(input_excel):
-            self.write_log(f"❌ Error: Input Excel '{input_excel}' not found.")
-            return
-
-        self.write_log("--- Starting Pre-Processing (Mapping & Validation) ---")
+        arxml = self.arxml_path_edit.text()
+        req = self.req_path_edit.text()
         
-        # Hard lock the buttons during synchronous preprocessing
-        self.btn_preprocess.config(state="disabled")
-        self.btn_generate.config(state="disabled")
+        # Pass the UI state down to the pipeline
+        self.pipeline.enable_log = self.cb_verbose.isChecked() if hasattr(self, 'cb_verbose') else False
         
-        try:
-            # Fallback in case memory is empty and thread didn't run
-            if not self.pipeline.can_db_data:
-                self.pipeline.build_databases(arxml_path)
-            
-            self.pipeline.run_preprocessing_memory(input_excel, out_dir)
-            self.write_log(f"✅ Pre-Processing Complete. Phase 1 & 2 mapped into memory securely.")
-        except Exception as e:
-            self.write_log("❌ Fatal error during Pre-Processing. Please verify input formats.")
-        finally:
-            self.btn_preprocess.config(state="normal")
-            self.btn_generate.config(state="normal")
+        self.btn_preprocess.setEnabled(False)
+        self.btn_preprocess.setStyleSheet("""
+            QPushButton { background-color: #d68910; color: white; border-radius: 4px; font-weight: bold; border: none; }
+            QPushButton:hover { background-color: #b9770e; }
+            QPushButton:pressed { background-color: #9c640c; }
+        """)
+        
+        self.pre_process_done = False
+        self.btn_gen.setEnabled(False)
+        self.btn_gen.setStyleSheet("background-color: #3b3e40; color: #94a3b8; border-radius: 4px; border: none;")
+
+        def task():
+            start_time = time.time()
+            try:
+                self.signals.log_signal.emit("⚙️ Pre-Processing started. This will take a few seconds...")
+                
+                # We intentionally don't emit developer logs from these functions to the UI
+                self.pipeline.build_databases(arxml)
+                
+                self.signals.log_signal.emit("⚙️ Analyzing requirement specifications...")
+                self.pipeline.run_preprocessing_memory(req, "GeneratedTestScripts")
+                
+                elapsed = int(time.time() - start_time)
+                formatted_time = time.strftime('%H:%M:%S', time.gmtime(elapsed))
+                
+                self.signals.log_signal.emit(f"✅ Pre-Processing complete. (Execution Time: {formatted_time})")
+                self.signals.finished_signal.emit()
+            except Exception as e:
+                # Keep error message generic for the user
+                self.signals.log_signal.emit("❌ Error: Failed to process files. Please verify input documents.")
+                log.error(f"Internal Pre-Processing Error: {e}")
+                QTimer.singleShot(0, self._check_logic_states)
+
+        threading.Thread(target=task, daemon=True).start()
 
     def run_generation(self):
-        if self._is_parsing_active:
-            self.write_log("⏳ Please wait: A background process is currently running...")
-            return
-
-        out_dir = self.output_folder_var.get()
-        category = self.test_cat_var.get()
-        test_type = self.test_type_var.get()
-
-        if not self.pipeline.in_memory_dfs:
-            self.write_log("❌ Error: Memory mapping missing. Please run PRE - PROCESS first.")
-            return
-
-        self.write_log(f"--- Starting CAPL Generation ({category} | {test_type}) ---")
-        self.btn_preprocess.config(state="disabled")
-        self.btn_generate.config(state="disabled")
+        category = self.cat_combo.currentText()
+        test_type = self.typ_combo.currentText()
+        out_dir = "GeneratedTestScripts"
         
+        self.write_log(f"📋 Selected Test Category: {category}")
+        self.write_log(f"📋 Selected Test Type: {test_type}")
+        
+        start_time = time.time()
         try:
             self.pipeline.run_generation(out_dir, category, test_type)
             
-            # Print the explicit Absolute Path so the user knows exactly where to look
-            abs_out_path = os.path.abspath(out_dir)
-            self.write_log(f"✅ CAPL Scripts successfully generated!")
-            self.write_log(f"📂 Output Location: {abs_out_path}")
-        except Exception:
-            self.write_log("❌ Generation failed. An internal error occurred during template formatting.")
-        finally:
-            self.btn_preprocess.config(state="normal")
-            self.btn_generate.config(state="normal")
+            elapsed = int(time.time() - start_time)
+            formatted_time = time.strftime('%H:%M:%S', time.gmtime(elapsed))
+            
+            self.write_log(f"✅ CAPL Scripts Generated Successfully. (Execution Time: {formatted_time})")
+            self.write_log(f"📂 Output Location: {os.path.abspath(out_dir)}")
+        except Exception as e: 
+            self.write_log("❌ Generation failed. An error occurred during file creation.")
+            log.error(f"Internal Generation Error: {e}")
+
+    def _browse_file(self):
+        f, _ = QFileDialog.getOpenFileName(self, "Select Requirements", "", "Excel Files (*.xlsx *.xls)")
+        if f: 
+            self.req_path_edit.setText(f)
+            self.write_log(f"📄 Requirement Sheet Selected: {os.path.basename(f)}")
+
+    def _browse_arxml_file(self):
+        f, _ = QFileDialog.getOpenFileName(self, "Select ARXML", "", "ARXML Files (*.arxml)")
+        if f: 
+            # --- FORCE CLEAR RAM CACHE IF FILE CHANGES ---
+            if f != self.arxml_path_edit.text():
+                self.pipeline.can_db_data = {}
+                self.pipeline.eth_db_data = {}
+            
+            self.arxml_path_edit.setText(f)
+            self.write_log(f"🌐 ARXML Selected: {os.path.basename(f)}")
+
+    def _clear_log(self): 
+        self.log_text.clear()
+    
+    def download_logs(self):
+        timestamp = datetime.now().strftime("%d_%m_%Y__%H_%M_%S")
+        filename = f"CaplGenLogs_{timestamp}.txt"
+        f, _ = QFileDialog.getSaveFileName(self, "Save Logs", filename, "Text Files (*.txt)")
+        if f: 
+            with open(f, 'w', encoding='utf-8') as file: file.write(self.log_text.toPlainText())
 
 def launch_gui():
-    root = tk.Tk()
-    style = ttk.Style()
-    if "clam" in style.theme_names(): style.theme_use("clam")
-    app = CaplGenGUI(root)
-    root.mainloop()
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        except: pass
+    app = QApplication(sys.argv)
+    gui = CaplGenGUI()
+    gui.show()
+    sys.exit(app.exec())
