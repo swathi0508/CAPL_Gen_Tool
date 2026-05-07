@@ -138,11 +138,41 @@ class CaplGenerationPipeline:
         out_path = Path(output_dir)
         out_path.mkdir(parents=True, exist_ok=True)
         
+        # Initialize missing signals list for the GUI to pick up
+        self.missing_signals = []
+        
         try:
             # 1. Map requirements (Now returns dict of DataFrames)
             log.info("-> Phase 1: Mapping Databases to Requirements")
             orchestrator = MapperOrchestrator(self.can_db_data, self.eth_db_data)
             self.in_memory_dfs = orchestrator.process_to_dataframes(input_excel)
+
+            # --- START OF MISSING SIGNALS CAPTURE ---
+            can_keys = {str(k).lower() for k in self.can_db_data.keys()}
+            eth_keys = {str(k).lower() for k in self.eth_db_data.keys()}
+
+            for sheet_name, df in self.in_memory_dfs.items():
+                for _, row in df.iterrows():
+                    req_id = str(row.get('REQ ID', 'Unknown')).strip()
+                    
+                    # Check CAN Ports
+                    can_port = str(row.get('CAN_PORT', '')).strip()
+                    if can_port and can_port.lower() not in ['nan', 'none', '']:
+                        search_key = f"i{can_port.lower()}"
+                        if search_key not in can_keys:
+                            self.missing_signals.append(f"CAN Port '{can_port}' [Req: {req_id}]")
+                            log.warning(f"❌ MISSING CAN: {req_id} | Target: {search_key}")
+
+                    # Check SOME/IP Attributes
+                    eth_attr = str(row.get('ATTRIBUTE_VALUE', '')).strip()
+                    if eth_attr and eth_attr.lower() not in ['nan', 'none', '']:
+                        if eth_attr.lower() not in eth_keys:
+                            self.missing_signals.append(f"ETH Attr '{eth_attr}' [Req: {req_id}]")
+                            log.warning(f"❌ MISSING ETH: {req_id} | Target: {eth_attr.lower()}")
+            
+            # Deduplicate the list in case of duplicate requirements
+            self.missing_signals = list(dict.fromkeys(self.missing_signals))
+            # --- END OF MISSING SIGNALS CAPTURE ---
 
             # 2. Compute Limits and Validate
             log.info("-> Phase 2: Cross-Validating Signals & Computing Bounds")
@@ -164,6 +194,9 @@ class CaplGenerationPipeline:
 
             elapsed = str(timedelta(seconds=round(time.time() - start_time)))
             log.info(f"=== PRE-PROCESSING COMPLETE ({elapsed}) ===")
+            
+            # Return the dfs (optional, but good practice)
+            return self.in_memory_dfs
 
         except Exception as e:
             log.exception(f"Fatal error during Pre-Processing: {e}")
