@@ -164,12 +164,21 @@ class CrossValidator:
                 can_f = {k: v for k, v in can_raw_dict.items() if not self.is_strictly_excluded(v)}
                 sip_f = {k: v for k, v in sip_raw_dict.items() if not self.is_strictly_excluded(v)}
 
-                # --- NEW UNIFIED LOGIC ---
-                is_enum = bool(can_f or sip_f)
+                # --- GUARANTEE IS_ENUM & PRE-COMPUTE RAW BOUNDARIES ---
+                is_enum = bool(can_raw_dict or sip_raw_dict)
                 new_row['IS_ENUM'] = is_enum
                 
                 can_min, can_mid, can_max = "N/A", "N/A", "N/A"
                 sip_min, sip_mid, sip_max = "N/A", "N/A", "N/A"
+
+                # FALLBACK: Safely extract bounds from RAW data first!
+                if is_enum:
+                    if can_raw_dict:
+                        c_keys = sorted([int(k) for k in can_raw_dict.keys() if str(k).lstrip('-').isdigit()])
+                        if c_keys: can_min, can_mid, can_max = c_keys[0], c_keys[len(c_keys)//2], c_keys[-1]
+                    if sip_raw_dict:
+                        s_keys = sorted([int(k) for k in sip_raw_dict.keys() if str(k).lstrip('-').isdigit()])
+                        if s_keys: sip_min, sip_mid, sip_max = s_keys[0], s_keys[len(s_keys)//2], s_keys[-1]
 
                 # 2. Assign Enums if BOTH exist
                 if can_f and sip_f:
@@ -192,12 +201,15 @@ class CrossValidator:
                                 final_mapping[m['cid']] = str(m['sid'])
                                 used_sip.add(m['sid'])
 
+                    # Populate valid_results for boundary calculations
                     valid_results = [{'c_id': str(cid), 's_id': final_mapping[cid]} for cid in can_f if cid in final_mapping]
 
                     n = len(valid_results)
                     if n >= 2:
                         idx_min, idx_mid, idx_max = (1 if n > 3 else 0), n // 2, n - 1
                         m_min, m_mid, m_max = valid_results[idx_min], valid_results[idx_mid], valid_results[idx_max]
+                        
+                        # OVERWRITE the fallback bounds with strictly mapped pairs
                         can_min, can_mid, can_max = m_min['c_id'], m_mid['c_id'], m_max['c_id']
                         sip_min, sip_mid, sip_max = m_min['s_id'], m_mid['s_id'], m_max['s_id']
 
@@ -205,12 +217,12 @@ class CrossValidator:
                 else:
                     new_row['Enum_Lexical_Match'] = "N/A"
 
-                # 3. Assign Physical Limits (Only computes if the specific signal is NOT an enum)
-                if not can_f and can_sig and can_sig in self.can_lookup:
+                # 3. Assign Physical Limits (Only if it is explicitly NOT an Enum)
+                if not is_enum and can_sig and can_sig in self.can_lookup:
                     limits = self.can_lookup[can_sig].get('Attributes', {}).get('Phys_Limits', {})
                     can_min, can_mid, can_max = self.compute_phy_stats(limits.get('Min'), limits.get('Max'))
 
-                if not sip_f and eth_sig and eth_sig in self.eth_lookup:
+                if not is_enum and eth_sig and eth_sig in self.eth_lookup:
                     e_data = self.eth_lookup[eth_sig]
                     sip_min, sip_mid, sip_max = self.compute_phy_stats(e_data.get('Min'), e_data.get('Max'))
 
