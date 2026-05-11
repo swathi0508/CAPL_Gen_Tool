@@ -43,28 +43,33 @@ class SomeipFFParser(BaseParser):
             # Reset internal containers
             self.interfaces = {}
             self.general_signals = {}
-            total_vars = [0] # List to allow mutation in recursion
+            total_vars = [0] 
 
             self._walk_namespace(root, [], total_vars)
 
-            # Generate Summary
+            # --- Fixed Summary Logic ---
             elapsed = str(timedelta(seconds=int(time.time() - start_time))).zfill(8)
+            total = total_vars[0]
+            
+            # In this parser, if a signal is counted, it has been successfully 
+            # placed into either INTERFACES or GENERAL_SIGNALS.
+            resolved = total 
 
-            file_size = os.path.getsize(self.file_path)
             self.summary_stats = {
                 "Source_File_Name": os.path.basename(self.file_path),
-                "Source_File_Size_Bytes": file_size,
-                "Total_Signals_Found": total_vars[0],
-                "Resolved_With_Paths": 0,
-                "No_Path_Found": total_vars[0],
+                "Source_File_Size_Bytes": os.path.getsize(self.file_path),
+                "Total_Signals_Found": total,
+                "Resolved_With_Paths": resolved,
+                "No_Path_Found": total - resolved,
                 "Interfaces_Found": len(self.interfaces),
                 "Processing_Time_HH_MM_SS": elapsed
             }
+            # ---------------------------
 
             # Map the result to self._parsed_data for BaseParser compatibility
             self._parsed_data = self.to_json_dict()
             
-            log.info(f"✅ Successfully extracted {total_vars[0]} signals across {len(self.interfaces)} interfaces.")
+            log.info(f"✅ Successfully extracted {total} signals across {len(self.interfaces)} interfaces.")
             return self._parsed_data
 
         except Exception as e:
@@ -81,6 +86,7 @@ class SomeipFFParser(BaseParser):
                 self._walk_namespace(child, path + [name] if name else path, count)
             
             elif tag == 'variable':
+                # Only count and process if it belongs to our target cluster
                 if self.CLUSTER_TARGET not in path:
                     continue
                 
@@ -92,12 +98,10 @@ class SomeipFFParser(BaseParser):
         var_name = var_node.get('name', '')
         db_name = "::".join(path + [var_name])
         
-        # 1. Role and Node Extraction
         role = "PROVIDED" if "PROVIDED_SERVICES" in path else "CONSUMED" if "CONSUMED_SERVICES" in path else "N/A"
         raw_node = path[2] if len(path) > 2 else "GENERAL"
         node_clean = raw_node.replace('N_', '', 1) if raw_node.startswith('N_') else raw_node
 
-        # 2. Interface and Type Detection
         interface_name = "N/A"
         i_type = "GENERAL"
         
@@ -111,15 +115,12 @@ class SomeipFFParser(BaseParser):
             if len(path) > idx + 1: interface_name = path[idx + 1]
             i_type = "EVENT_GROUP"
 
-        # 3. Encoding and Signedness Logic
         raw_encoding = var_node.get('encoding', '65001')
         is_signed = (raw_encoding == "65000")
         
-        # 4. Bit Metadata extraction
         raw_bitcount = var_node.get('bitcount') or var_node.get('bitlength')
         bit_count = int(raw_bitcount) if raw_bitcount and str(raw_bitcount).isdigit() else 0
 
-        # 5. Build Signal Metadata
         signal_data = {
             "Signal_DB_Name": db_name,
             "DataType": var_node.get('type', "N/A"),
@@ -130,7 +131,6 @@ class SomeipFFParser(BaseParser):
             "Enums": self._extract_enums(var_node)
         }
 
-        # 6. Hierarchical Placement
         if i_type != "GENERAL":
             if interface_name not in self.interfaces:
                 sif_ns = next((x for x in path if x.startswith("sif_")), "N/A")
@@ -168,7 +168,6 @@ class SomeipFFParser(BaseParser):
         return enums
 
     def to_json_dict(self) -> Dict[str, Any]:
-        """Returns the final hierarchical dictionary."""
         return {
             "Summary": self.summary_stats,
             "INTERFACES": self.interfaces,
@@ -176,10 +175,8 @@ class SomeipFFParser(BaseParser):
         }
 
     def to_json_file(self, output_path: str, write_allowed: bool = False):
-        """Standardizes the output to match the desired hierarchical file."""
         import json
         if not write_allowed: return
-        
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(self.to_json_dict(), f, indent=4)
         log.info(f"💾 Hierarchical JSON saved to: {output_path}")
