@@ -152,7 +152,7 @@ class CrossValidator:
                     raw_can = str(row_upper.get('CAN_PORT', '')).strip().lower()
                     if raw_can and raw_can != 'nan': can_sig = ("i" + raw_can).lower()
 
-                # 1. Extract and Filter Enums using Core Logic
+                # 1. Extract and Filter Enums
                 can_raw_dict = {}
                 if can_sig and can_sig in self.can_lookup:
                     can_raw_dict = self.extract_dict(self.can_lookup[can_sig].get('Attributes', {}).get('Enums', {}))
@@ -164,10 +164,14 @@ class CrossValidator:
                 can_f = {k: v for k, v in can_raw_dict.items() if not self.is_strictly_excluded(v)}
                 sip_f = {k: v for k, v in sip_raw_dict.items() if not self.is_strictly_excluded(v)}
 
-                # 2. Perform Priority-Score Mapping Logic
+                # --- NEW UNIFIED LOGIC ---
+                is_enum = bool(can_f or sip_f)
+                new_row['IS_ENUM'] = is_enum
+                
                 can_min, can_mid, can_max = "N/A", "N/A", "N/A"
                 sip_min, sip_mid, sip_max = "N/A", "N/A", "N/A"
 
+                # 2. Assign Enums if BOTH exist
                 if can_f and sip_f:
                     context_str = (str(row_upper.get('SOMEIP_TOPIC_ATTRIBUTE', '')) + " " + " ".join(map(str, sip_f.values()))).lower()
                     is_gear = any(x in context_str for x in ['gear', 'lever', 'pnrdb'])
@@ -188,11 +192,7 @@ class CrossValidator:
                                 final_mapping[m['cid']] = str(m['sid'])
                                 used_sip.add(m['sid'])
 
-                    # Calculate Min/Mid/Max from Valid Mappings
-                    valid_results = []
-                    for cid in can_f:
-                        if cid in final_mapping:
-                            valid_results.append({'c_id': str(cid), 's_id': final_mapping[cid]})
+                    valid_results = [{'c_id': str(cid), 's_id': final_mapping[cid]} for cid in can_f if cid in final_mapping]
 
                     n = len(valid_results)
                     if n >= 2:
@@ -205,40 +205,29 @@ class CrossValidator:
                 else:
                     new_row['Enum_Lexical_Match'] = "N/A"
 
-                # Update row with computed Enums
+                # 3. Assign Physical Limits (Only computes if the specific signal is NOT an enum)
+                if not can_f and can_sig and can_sig in self.can_lookup:
+                    limits = self.can_lookup[can_sig].get('Attributes', {}).get('Phys_Limits', {})
+                    can_min, can_mid, can_max = self.compute_phy_stats(limits.get('Min'), limits.get('Max'))
+
+                if not sip_f and eth_sig and eth_sig in self.eth_lookup:
+                    e_data = self.eth_lookup[eth_sig]
+                    sip_min, sip_mid, sip_max = self.compute_phy_stats(e_data.get('Min'), e_data.get('Max'))
+
+                # Flush unified values to the row
                 new_row.update({
-                    'COMPUTED_CAN_ENUM_MIN': can_min, 'COMPUTED_CAN_ENUM_MID': can_mid, 'COMPUTED_CAN_ENUM_MAX': can_max,
-                    'COMPUTED_SOMEIP_ENUM_MIN': sip_min, 'COMPUTED_SOMEIP_ENUM_MID': sip_mid, 'COMPUTED_SOMEIP_ENUM_MAX': sip_max
+                    'COMPUTED_CAN_VALUE_MIN': can_min, 'COMPUTED_CAN_VALUE_MID': can_mid, 'COMPUTED_CAN_VALUE_MAX': can_max,
+                    'COMPUTED_SOMEIP_VALUE_MIN': sip_min, 'COMPUTED_SOMEIP_VALUE_MID': sip_mid, 'COMPUTED_SOMEIP_VALUE_MAX': sip_max
                 })
 
-                # 3. Handle Physical Limits
-                if can_sig and can_sig in self.can_lookup and not can_f:
-                    limits = self.can_lookup[can_sig].get('Attributes', {}).get('Phys_Limits', {})
-                    p_min, p_mid, p_max = self.compute_phy_stats(limits.get('Min'), limits.get('Max'))
-                    new_row.update({'COMPUTED_CAN_MIN_PHY': p_min, 'COMPUTED_CAN_MID_PHY': p_mid, 'COMPUTED_CAN_MAX_PHY': p_max})
-                else:
-                    new_row.update({'COMPUTED_CAN_MIN_PHY': "N/A (Is Enum)" if can_f else "N/A", 
-                                    'COMPUTED_CAN_MID_PHY': "N/A (Is Enum)" if can_f else "N/A", 
-                                    'COMPUTED_CAN_MAX_PHY': "N/A (Is Enum)" if can_f else "N/A"})
-
-                if eth_sig and eth_sig in self.eth_lookup and not sip_f:
-                    e_data = self.eth_lookup[eth_sig]
-                    p_min, p_mid, p_max = self.compute_phy_stats(e_data.get('Min'), e_data.get('Max'))
-                    new_row.update({'COMPUTED_SOMEIP_MIN_PHY': p_min, 'COMPUTED_SOMEIP_MID_PHY': p_mid, 'COMPUTED_SOMEIP_MAX_PHY': p_max})
-                else:
-                    new_row.update({'COMPUTED_SOMEIP_MIN_PHY': "N/A (Is Enum)" if sip_f else "N/A", 
-                                    'COMPUTED_SOMEIP_MID_PHY': "N/A (Is Enum)" if sip_f else "N/A", 
-                                    'COMPUTED_SOMEIP_MAX_PHY': "N/A (Is Enum)" if sip_f else "N/A"})
-
-                # 4. Cross-pollinate Fallbacks
+                # 4. Unified Cross-pollinate Fallbacks
                 for suffix in ['MIN', 'MID', 'MAX']:
-                    for ptype in ['', 'ENUM_']:
-                        s_key = f'COMPUTED_SOMEIP_{ptype}{suffix}' if ptype else f'COMPUTED_SOMEIP_{suffix}_PHY'
-                        c_key = f'COMPUTED_CAN_{ptype}{suffix}' if ptype else f'COMPUTED_CAN_{suffix}_PHY'
-                        
-                        s_val = new_row.get(s_key)
-                        if s_val in [None, '', 'N/A'] and new_row.get(c_key) not in [None, '', 'N/A']:
-                            new_row[s_key] = new_row[c_key]
+                    s_key = f'COMPUTED_SOMEIP_VALUE_{suffix}'
+                    c_key = f'COMPUTED_CAN_VALUE_{suffix}'
+                    
+                    s_val = new_row.get(s_key)
+                    if s_val in [None, '', 'N/A'] and new_row.get(c_key) not in [None, '', 'N/A']:
+                        new_row[s_key] = new_row[c_key]
                             
             except Exception as e:
                 log.debug(f"Row error safely bypassed: {e}")
@@ -247,11 +236,11 @@ class CrossValidator:
 
         df_final = pd.DataFrame(updated_rows).fillna("N/A")
 
+        # 5. Clean expected headers
         expected_computed_cols = [
-            'COMPUTED_CAN_ENUM_MIN', 'COMPUTED_CAN_ENUM_MID', 'COMPUTED_CAN_ENUM_MAX',
-            'COMPUTED_CAN_MIN_PHY', 'COMPUTED_CAN_MID_PHY', 'COMPUTED_CAN_MAX_PHY',
-            'COMPUTED_SOMEIP_ENUM_MIN', 'COMPUTED_SOMEIP_ENUM_MID', 'COMPUTED_SOMEIP_ENUM_MAX',
-            'COMPUTED_SOMEIP_MIN_PHY', 'COMPUTED_SOMEIP_MID_PHY', 'COMPUTED_SOMEIP_MAX_PHY'
+            'IS_ENUM',
+            'COMPUTED_CAN_VALUE_MIN', 'COMPUTED_CAN_VALUE_MID', 'COMPUTED_CAN_VALUE_MAX',
+            'COMPUTED_SOMEIP_VALUE_MIN', 'COMPUTED_SOMEIP_VALUE_MID', 'COMPUTED_SOMEIP_VALUE_MAX'
         ]
         for col in expected_computed_cols:
             if col not in df_final.columns:
