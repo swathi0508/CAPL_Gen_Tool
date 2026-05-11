@@ -59,7 +59,7 @@ class SomeipFFParser(BaseParser):
                 "Interfaces_Found": len(self.interfaces), # Kept for SOME/IP visibility
                 "Processing_Time_HH_MM_SS": elapsed       # Standardized key name
             }
-            
+
             # Map the result to self._parsed_data for BaseParser compatibility
             self._parsed_data = self.to_json_dict()
             
@@ -87,7 +87,7 @@ class SomeipFFParser(BaseParser):
                 self._process_variable_hierarchical(child, path)
 
     def _process_variable_hierarchical(self, var_node: etree.Element, path: List[str]):
-        """Nests signals into INTERFACES or GENERAL_SIGNALS."""
+        """Nests signals into INTERFACES or GENERAL_SIGNALS with bit metadata."""
         var_name = var_node.get('name', '')
         db_name = "::".join(path + [var_name])
         
@@ -110,10 +110,12 @@ class SomeipFFParser(BaseParser):
             if len(path) > idx + 1: interface_name = path[idx + 1]
             i_type = "EVENT_GROUP"
 
-        # 3. Build Signal Metadata
+        # 3. Build Signal Metadata (Added BitCount and Encoding)
         signal_data = {
             "Signal_DB_Name": db_name,
             "DataType": var_node.get('type', "N/A"),
+            "BitCount": int(var_node.get('bitcount', 0)) or int(var_node.get('bitlength', 0)),
+            "Encoding": var_node.get('encoding', "N/A"),
             "Enums": self._extract_enums(var_node)
         }
 
