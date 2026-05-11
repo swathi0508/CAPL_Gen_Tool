@@ -11,9 +11,9 @@ variables
 
 // --- UNIQUE PHYICAL VARIABLE DEFINITIONS ---
 {% for row in standard_vars %}
-  double I{{ row.CAN_PORT | default('MISSING_DATA') }}_Min = {{ row.COMPUTED_CAN_MIN_PHY | default('MISSING_DATA') }};
-  double I{{ row.CAN_PORT | default('MISSING_DATA') }}_Mid = {{ row.COMPUTED_CAN_MID_PHY | default('MISSING_DATA') }};
-  double I{{ row.CAN_PORT | default('MISSING_DATA') }}_Max = {{ row.COMPUTED_CAN_MAX_PHY | default('MISSING_DATA') }};
+  double I{{ row.CAN_PORT | default('MISSING_DATA') }}_Min = {{ row.COMPUTED_CAN_VALUE_MIN | default('MISSING_DATA') }};
+  double I{{ row.CAN_PORT | default('MISSING_DATA') }}_Mid = {{ row.COMPUTED_CAN_VALUE_MID | default('MISSING_DATA') }};
+  double I{{ row.CAN_PORT | default('MISSING_DATA') }}_Max = {{ row.COMPUTED_CAN_VALUE_MAX | default('MISSING_DATA') }};
   double I{{ row.CAN_PORT | default('MISSING_DATA') }}_Offset = {{ row.CAN_OFFSET | default('MISSING_DATA') }};
   double I{{ row.CAN_PORT | default('MISSING_DATA') }}_Resolution = {{ row.CAN_RESOLUTION | default('MISSING_DATA') }};
 {% endfor %}
@@ -22,9 +22,9 @@ variables
 {% for row in can_enums %}
   enum E_CAN_{{ row.CAN_PORT }}
   {
-    I{{ row.CAN_PORT }}_Min = {{ row.COMPUTED_CAN_ENUM_MIN | int }},
-    I{{ row.CAN_PORT }}_Mid = {{ row.COMPUTED_CAN_ENUM_MID | int }},
-    I{{ row.CAN_PORT }}_Max = {{ row.COMPUTED_CAN_ENUM_MAX | int }}
+    I{{ row.CAN_PORT }}_Min = {{ row.COMPUTED_CAN_VALUE_MIN | int }},
+    I{{ row.CAN_PORT }}_Mid = {{ row.COMPUTED_CAN_VALUE_MID | int }},
+    I{{ row.CAN_PORT }}_Max = {{ row.COMPUTED_CAN_VALUE_MAX | int }}
   };
 {% endfor %}
 
@@ -32,9 +32,9 @@ variables
 {% for row in eth_enums %}
   enum E_ETH_{{ row.SOMEIP_PORT }}_{{ row.ATTRIBUTE_VALUE }}
   {
-    {{ row.SOMEIP_PORT }}_{{ row.ATTRIBUTE_VALUE }}_Min = {{ row.COMPUTED_SOMEIP_ENUM_MIN | int }},
-    {{ row.SOMEIP_PORT }}_{{ row.ATTRIBUTE_VALUE }}_Mid = {{ row.COMPUTED_SOMEIP_ENUM_MID | int }},
-    {{ row.SOMEIP_PORT }}_{{ row.ATTRIBUTE_VALUE }}_Max = {{ row.COMPUTED_SOMEIP_ENUM_MAX | int }}
+    {{ row.SOMEIP_PORT }}_{{ row.ATTRIBUTE_VALUE }}_Min = {{ row.COMPUTED_SOMEIP_VALUE_MIN | int }},
+    {{ row.SOMEIP_PORT }}_{{ row.ATTRIBUTE_VALUE }}_Mid = {{ row.COMPUTED_SOMEIP_VALUE_MID | int }},
+    {{ row.SOMEIP_PORT }}_{{ row.ATTRIBUTE_VALUE }}_Max = {{ row.COMPUTED_SOMEIP_VALUE_MAX | int }}
   };
 {% endfor %}
 }

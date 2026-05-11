@@ -12,14 +12,14 @@ class CaplCanToSomeipBasicFuncAndVarsGenerator:
         self.func_template = "can_to_someip_basic_functions_template.j2"
         self.var_template = "can_to_someip_variables_template.j2"
         
+        # --- UPDATED TO MATCH NEW UNIFIED COLUMN NAMES ---
         self.j2_columns = [
             'CAN_PORT', 'CAN_DB_SIGNAL_NAME', 'SOMEIP_DB_SIGNAL_NAME', 
             'SOMEIP_DB_SIGNAL_VALUESTATE', 'CAN_ENUM', 'SOMEIP_ENUM',
             'SOMEIP_PORT', 'ATTRIBUTE_VALUE', 'BASIC_FUNCTION_NAME',
-            'COMPUTED_CAN_MIN_PHY', 'COMPUTED_CAN_MID_PHY', 'COMPUTED_CAN_MAX_PHY',
-            'CAN_OFFSET', 'CAN_RESOLUTION', 'COMPUTED_CAN_ENUM_MIN', 
-            'COMPUTED_SOMEIP_ENUM_MIN', 'COMPUTED_CAN_ENUM_MID', 
-            'COMPUTED_SOMEIP_ENUM_MID', 'COMPUTED_CAN_ENUM_MAX', 'COMPUTED_SOMEIP_ENUM_MAX'
+            'CAN_OFFSET', 'CAN_RESOLUTION', 'IS_ENUM',
+            'COMPUTED_CAN_VALUE_MIN', 'COMPUTED_CAN_VALUE_MID', 'COMPUTED_CAN_VALUE_MAX',
+            'COMPUTED_SOMEIP_VALUE_MIN', 'COMPUTED_SOMEIP_VALUE_MID', 'COMPUTED_SOMEIP_VALUE_MAX'
         ]
 
     def _validate_and_clean(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -101,19 +101,20 @@ class CaplCanToSomeipBasicFuncAndVarsGenerator:
             func_records = func_df.to_dict(orient='records')
 
             # 4. GENERATE VARIABLES
-            # --- Physical/Standard Variables ---
-            std_vars_df = actual_value_rows[actual_value_rows['CAN_ENUM'] == "MISSING_DATA"].copy()
+            # Force IS_ENUM to uppercase string to safely check True/False without typing issues
+            actual_value_rows['IS_ENUM_STR'] = actual_value_rows['IS_ENUM'].astype(str).str.upper()
+
+            # --- Physical/Standard Variables (Where IS_ENUM is False or Missing) ---
+            std_vars_df = actual_value_rows[actual_value_rows['IS_ENUM_STR'] != "TRUE"].copy()
             std_vars = std_vars_df.drop_duplicates(subset=['CAN_PORT']).to_dict(orient='records')
 
-            # --- Enum Variables ---
-            enum_base = actual_value_rows[actual_value_rows['CAN_ENUM'] != "MISSING_DATA"].copy()
+            # --- Enum Variables (Where IS_ENUM is True) ---
+            enum_base = actual_value_rows[actual_value_rows['IS_ENUM_STR'] == "TRUE"].copy()
             can_enums = enum_base.drop_duplicates(subset=['CAN_PORT']).to_dict(orient='records')
             eth_enums = enum_base.drop_duplicates(subset=['SOMEIP_PORT', 'ATTRIBUTE_VALUE']).to_dict(orient='records')
 
-            # --- UNIQUE ETHERNET SIGNALS (NEW LOGIC) ---
-            # Extract all signals from both relevant columns
+            # --- UNIQUE ETHERNET SIGNALS ---
             all_signals = pd.concat([full_df['SOMEIP_DB_SIGNAL_NAME'], full_df['SOMEIP_DB_SIGNAL_VALUESTATE']])
-            # Filter out missing data and get unique list
             unique_signals = sorted([s for s in all_signals.unique() if s != "MISSING_DATA"])
 
             # 5. RENDER OUTPUTS
@@ -132,7 +133,7 @@ class CaplCanToSomeipBasicFuncAndVarsGenerator:
                     standard_vars=std_vars, 
                     can_enums=can_enums,
                     eth_enums=eth_enums,
-                    ethernet_signals=unique_signals  # Passing the new unique signals list
+                    ethernet_signals=unique_signals 
                 ))
 
             log.info(f"Generated {len(func_records)} functions. ValueState metadata excluded.")
