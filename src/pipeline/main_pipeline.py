@@ -14,6 +14,7 @@ from signals.can_parser import CANSignalParser
 from signals.someip_event_parser import SomeIPEventParser
 from validators.cross_validator import CrossValidator
 from signals.someip_ff_parser import SomeipFFParser
+from signals.aacp_sysvar_parser import AacpSysVarParser 
 
 class CaplGenerationPipeline:
     """The central brain orchestrating Parsers, Mappers, Validators, and Generators strictly in RAM."""
@@ -21,15 +22,18 @@ class CaplGenerationPipeline:
     def __init__(self, can_db_cache: str = "can_db_cache.json", 
                  eth_db_cache: str = "someip_db_cache.json", 
                  someip_ff_db_cache: str = "someip_ff_cache.json",
+                 aacp_sysvar_vsysvar_db_cache: str = "aacp_sysvar_cache.json",
                  enable_log: bool = False):
         self.can_db = can_db_cache
         self.eth_db = eth_db_cache
         self.ff_db = someip_ff_db_cache
+        self.aacp_db = aacp_sysvar_vsysvar_db_cache
         
         # State Tracking
         self.can_db_data = {}
         self.eth_db_data = {}
         self.ff_db_data = {}
+        self.aacp_db_data = {}
         self.in_memory_dfs = {}
 
         # Security Lock: If running as compiled EXE, forcefully block file dumping
@@ -56,41 +60,34 @@ class CaplGenerationPipeline:
         """Determines if the JSON cache is stale, belongs to a different source file, or size mismatched."""
         if not os.path.exists(cache_path) or not os.path.exists(source_file):
             return False
-
-        # 1. Timestamp Check (Fastest check)
+            
         if os.path.getmtime(source_file) > os.path.getmtime(cache_path):
             log.info(f"🔄 Source file timestamp modified. Cache '{os.path.basename(cache_path)}' is stale.")
             return False
-
-        # 2. Deep Integrity Check: Name & File Size
+            
         try:
             import re
             current_size = os.path.getsize(source_file)
-            
             with open(cache_path, 'r', encoding='utf-8') as f:
                 head = f.read(1024) 
-                
                 if os.path.basename(source_file) not in head:
                     log.info(f"🔄 Different source file selected. Invalidating cache '{os.path.basename(cache_path)}'.")
                     return False
-                    
                 size_match = re.search(r'"Source_File_Size_Bytes":\s*(\d+)', head)
                 if size_match:
                     cached_size = int(size_match.group(1))
                     if cached_size != current_size:
                         log.info(f"🔄 File size changed ({cached_size}b -> {current_size}b). Invalidating cache.")
                         return False
-
         except Exception as e:
             log.debug(f"Cache validation check failed, defaulting to re-parse: {e}")
             return False
-
         return True
 
-    def build_databases(self, raw_arxml_path: str, someip_sysvar_xml: str) -> tuple[bool, bool, bool]:
+    def build_databases(self, raw_arxml_path: str, someip_sysvar_xml: str, aacp_sysvar_vsysvar: str) -> tuple[bool, bool, bool, bool]:
         """Loads databases from JSON cache if valid, otherwise parses from source files."""
         self._configure_logging()
-        can_built, eth_built, ff_built = False, False, False
+        can_built, eth_built, ff_built, aacp_built = False, False, False, False
         
         try:
             # --- CAN DATABASE ---
@@ -128,12 +125,24 @@ class CaplGenerationPipeline:
                     self.ff_db_data = ff_parser.parse()
                     ff_parser.to_json_file(self.ff_db, write_allowed=self.write_to_disk)
                     ff_built = True
+
+            # --- AACP SYSVAR DATABASE ---
+            if not self.aacp_db_data:
+                aacp_parser = AacpSysVarParser(aacp_sysvar_vsysvar)
+                if self._is_cache_valid(self.aacp_db, aacp_sysvar_vsysvar) and aacp_parser.load_from_json(self.aacp_db):
+                    log.info(f"✅ Loaded AACP SysVar from fast cache: {self.aacp_db}")
+                    self.aacp_db_data = aacp_parser.to_json_dict()
+                elif os.path.exists(aacp_sysvar_vsysvar):
+                    log.info(f"⚙️ Parsing AACP SysVar from VSYSVAR...")
+                    self.aacp_db_data = aacp_parser.parse()
+                    aacp_parser.to_json_file(self.aacp_db, write_allowed=self.write_to_disk)
+                    aacp_built = True
                 
         except Exception as e:
             log.error(f"Failed to build or load database caches: {e}")
             raise
             
-        return can_built, eth_built, ff_built
+        return can_built, eth_built, ff_built, aacp_built
 
     def run_preprocessing_memory(self, input_excel: str, output_dir: str):
         """PHASE 1 & 2: Maps and Validates strictly via DataFrames."""
@@ -154,29 +163,25 @@ class CaplGenerationPipeline:
             orchestrator = MapperOrchestrator(self.can_db_data, self.eth_db_data)
             self.in_memory_dfs = orchestrator.process_to_dataframes(input_excel)
 
-            # --- START OF MISSING SIGNALS CAPTURE ---
+            # --- MISSING SIGNALS CAPTURE ---
             can_keys = {str(k).lower() for k in self.can_db_data.keys()}
             eth_keys = {str(k).lower() for k in self.eth_db_data.keys()}
 
             for sheet_name, df in self.in_memory_dfs.items():
                 for _, row in df.iterrows():
                     req_id = str(row.get('REQ ID', 'Unknown')).strip()
-                    
                     can_port = str(row.get('CAN_PORT', '')).strip()
                     if can_port and can_port.lower() not in ['nan', 'none', '']:
                         search_key = f"i{can_port.lower()}"
                         if search_key not in can_keys:
                             self.missing_signals.append(f"CAN Port '{can_port}' [Req: {req_id}]")
-                            log.warning(f"❌ MISSING CAN: {req_id} | Target: {search_key}")
 
                     eth_attr = str(row.get('ATTRIBUTE_VALUE', '')).strip()
                     if eth_attr and eth_attr.lower() not in ['nan', 'none', '']:
                         if eth_attr.lower() not in eth_keys:
                             self.missing_signals.append(f"ETH Attr '{eth_attr}' [Req: {req_id}]")
-                            log.warning(f"❌ MISSING ETH: {req_id} | Target: {eth_attr.lower()}")
             
             self.missing_signals = list(dict.fromkeys(self.missing_signals))
-            # --- END OF MISSING SIGNALS CAPTURE ---
 
             # 2. Compute Limits and Validate
             log.info("-> Phase 2: Cross-Validating Signals & Computing Bounds")
@@ -197,7 +202,6 @@ class CaplGenerationPipeline:
 
             elapsed = str(timedelta(seconds=round(time.time() - start_time)))
             log.info(f"=== PRE-PROCESSING COMPLETE ({elapsed}) ===")
-            
             return self.in_memory_dfs
 
         except Exception as e:
@@ -208,22 +212,20 @@ class CaplGenerationPipeline:
         """PHASE 3: Passes the memory dict directly to the Jinja Engine."""
         start_time = time.time()
         log.info(f"=== STARTING CAPL GENERATION ({category} | {test_type}) ===")
-
         if not self.in_memory_dfs:
             raise RuntimeError("Missing DataFrame memory. Run Preprocessing first.")
-
         try:
             engine = JinjaEngine(output_root=output_dir)
             engine.run_from_memory(self.in_memory_dfs, self.eth_db_data, category, test_type)
-
             elapsed = str(timedelta(seconds=round(time.time() - start_time)))
             log.info(f"=== GENERATION COMPLETE ({elapsed}) ===")
         except Exception as e:
             log.exception(f"Fatal error during Generation: {e}")
             raise
 
-    def run_full_headless_flow(self, input_excel: str, out_dir: str, category: str, test_type: str, raw_arxml: str, someip_sysvar_xml: str):
+    def run_full_headless_flow(self, input_excel: str, out_dir: str, category: str, test_type: str, 
+                               raw_arxml: str, someip_sysvar_xml: str, aacp_sysvar_vsysvar: str):
         """Used strictly by the CLI to run everything top-to-bottom in RAM."""
-        self.build_databases(raw_arxml, someip_sysvar_xml)
+        self.build_databases(raw_arxml, someip_sysvar_xml, aacp_sysvar_vsysvar)
         self.run_preprocessing_memory(input_excel, out_dir)
         self.run_generation(out_dir, category, test_type)
