@@ -6,7 +6,7 @@ from pipeline.main_pipeline import CaplGenerationPipeline
 # Clean __pycache__ at test start
 cleanup_pycache()
 
-def test_full_pipeline(input_excel: str, output_dir: str, category: str, test_type: str, raw_arxml: str):
+def test_full_pipeline(input_excel: str, output_dir: str, category: str, test_type: str, raw_arxml: str, someip_sysvar_xml: str):
     """Tests the entire unified, in-memory pipeline."""
     log.info("==================================================")
     log.info("🚀 STARTING UNIFIED PIPELINE INTEGRATION TEST")
@@ -16,6 +16,7 @@ def test_full_pipeline(input_excel: str, output_dir: str, category: str, test_ty
     pipeline = CaplGenerationPipeline(
         can_db_cache="can_db_cache.json",
         eth_db_cache="someip_db_cache.json",
+        someip_ff_db_cache="someip_ff_cache.json",
         enable_log=False
     )
 
@@ -25,7 +26,8 @@ def test_full_pipeline(input_excel: str, output_dir: str, category: str, test_ty
             out_dir=output_dir,
             category=category,
             test_type=test_type,
-            raw_arxml=raw_arxml
+            raw_arxml=raw_arxml,
+            someip_sysvar_xml=someip_sysvar_xml
         )
         log.info("==================================================")
         log.info("✅ FULL PIPELINE EXECUTED SUCCESSFULLY")
@@ -37,10 +39,11 @@ def test_full_pipeline(input_excel: str, output_dir: str, category: str, test_ty
 if __name__ == "__main__":
     # Ensure these point to valid sample files in your workspace
     RAW_ARXML = "../ETH_CAN.arxml"
-    REQUIREMENTS_EXCEL = "../Requirements.xlsx"
-    OUTPUT_DIR = "./output_test"
-
-    CATEGORY = "E2E_CAN"
+    SOMEIP_SYSVAR_XML = "../SysVarDef.xml"
+    REQUIREMENTS_EXCEL = r"../Requirements.xlsx" 
+    OUTPUT_DIR = r"./output"
+    
+    CATEGORY = "E2E_CAN"            
     TEST_TYPE = "CAN->SOMEIP"
 
-    test_full_pipeline(REQUIREMENTS_EXCEL, OUTPUT_DIR, CATEGORY, TEST_TYPE, RAW_ARXML)
+    test_full_pipeline(REQUIREMENTS_EXCEL, OUTPUT_DIR, CATEGORY, TEST_TYPE, RAW_ARXML, SOMEIP_SYSVAR_XML)

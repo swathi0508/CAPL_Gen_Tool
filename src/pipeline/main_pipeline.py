@@ -13,18 +13,23 @@ from mappers.mapper_orchestrator import MapperOrchestrator
 from signals.can_parser import CANSignalParser
 from signals.someip_event_parser import SomeIPEventParser
 from validators.cross_validator import CrossValidator
-
+from signals.someip_ff_parser import SomeipFFParser
 
 class CaplGenerationPipeline:
     """The central brain orchestrating Parsers, Mappers, Validators, and Generators strictly in RAM."""
 
-    def __init__(self, can_db_cache: str = "can_db_cache.json", eth_db_cache: str = "someip_db_cache.json", enable_log: bool = False):
+    def __init__(self, can_db_cache: str = "can_db_cache.json", 
+                 eth_db_cache: str = "someip_db_cache.json", 
+                 someip_ff_db_cache: str = "someip_ff_cache.json",
+                 enable_log: bool = False):
         self.can_db = can_db_cache
         self.eth_db = eth_db_cache
-
+        self.ff_db = someip_ff_db_cache
+        
         # State Tracking
         self.can_db_data = {}
         self.eth_db_data = {}
+        self.ff_db_data = {}
         self.in_memory_dfs = {}
 
         # Security Lock: If running as compiled EXE, forcefully block file dumping
@@ -47,36 +52,33 @@ class CaplGenerationPipeline:
         else:
             log.setLevel(logging.INFO)
 
-    def _is_cache_valid(self, cache_path: str, source_arxml: str) -> bool:
-        """Determines if the JSON cache is stale, belongs to a different ARXML, or size mismatched."""
-        if not os.path.exists(cache_path) or not os.path.exists(source_arxml):
+    def _is_cache_valid(self, cache_path: str, source_file: str) -> bool:
+        """Determines if the JSON cache is stale, belongs to a different source file, or size mismatched."""
+        if not os.path.exists(cache_path) or not os.path.exists(source_file):
             return False
 
         # 1. Timestamp Check (Fastest check)
-        if os.path.getmtime(source_arxml) > os.path.getmtime(cache_path):
-            log.info(f"🔄 ARXML timestamp modified. Cache '{os.path.basename(cache_path)}' is stale.")
+        if os.path.getmtime(source_file) > os.path.getmtime(cache_path):
+            log.info(f"🔄 Source file timestamp modified. Cache '{os.path.basename(cache_path)}' is stale.")
             return False
 
         # 2. Deep Integrity Check: Name & File Size
         try:
             import re
-            current_size = os.path.getsize(source_arxml)
-
+            current_size = os.path.getsize(source_file)
+            
             with open(cache_path, 'r', encoding='utf-8') as f:
-                # Still reading only the first 1KB for O(1) lightning speed
-                head = f.read(1024)
-
-                # Check A: Did the filename change?
-                if os.path.basename(source_arxml) not in head:
-                    log.info(f"🔄 Different ARXML selected. Invalidating cache '{os.path.basename(cache_path)}'.")
+                head = f.read(1024) 
+                
+                if os.path.basename(source_file) not in head:
+                    log.info(f"🔄 Different source file selected. Invalidating cache '{os.path.basename(cache_path)}'.")
                     return False
-
-                # Check B: Did the file size change? (Extract size from the JSON string)
+                    
                 size_match = re.search(r'"Source_File_Size_Bytes":\s*(\d+)', head)
                 if size_match:
                     cached_size = int(size_match.group(1))
                     if cached_size != current_size:
-                        log.info(f"🔄 ARXML file size changed ({cached_size}b -> {current_size}b). Invalidating cache.")
+                        log.info(f"🔄 File size changed ({cached_size}b -> {current_size}b). Invalidating cache.")
                         return False
 
         except Exception as e:
@@ -85,49 +87,53 @@ class CaplGenerationPipeline:
 
         return True
 
-    def build_databases(self, raw_arxml_path: str) -> tuple[bool, bool]:
-        """Loads databases from JSON cache if valid, otherwise parses from ARXML."""
+    def build_databases(self, raw_arxml_path: str, someip_sysvar_xml: str) -> tuple[bool, bool, bool]:
+        """Loads databases from JSON cache if valid, otherwise parses from source files."""
         self._configure_logging()
-        can_built, eth_built = False, False
-
+        can_built, eth_built, ff_built = False, False, False
+        
         try:
             # --- CAN DATABASE ---
             if not self.can_db_data:
                 can_parser = CANSignalParser(raw_arxml_path)
-
-                # Check if the cache is valid AND loads successfully
                 if self._is_cache_valid(self.can_db, raw_arxml_path) and can_parser.load_from_json(self.can_db):
                     log.info(f"✅ Loaded CAN Network from fast cache: {self.can_db}")
                     self.can_db_data = can_parser.to_json_dict()
-
-                # Fallback to ARXML parsing
                 elif os.path.exists(raw_arxml_path):
-                    log.info("⚙️ Parsing CAN Network from ARXML (Cache invalid or missing)...")
-                    self.can_db_data = can_parser.parse()
+                    log.info(f"⚙️ Parsing CAN Network from ARXML...")
+                    self.can_db_data = can_parser.parse() 
                     can_parser.to_json_file(self.can_db, write_allowed=self.write_to_disk)
                     can_built = True
 
-            # --- SOME/IP DATABASE ---
+            # --- SOME/IP EVENT DATABASE ---
             if not self.eth_db_data:
                 eth_parser = SomeIPEventParser(raw_arxml_path)
-
-                # Check if the cache is valid AND loads successfully
                 if self._is_cache_valid(self.eth_db, raw_arxml_path) and eth_parser.load_from_json(self.eth_db):
                     log.info(f"✅ Loaded SOME/IP Network from fast cache: {self.eth_db}")
                     self.eth_db_data = eth_parser.to_json_dict()
-
-                # Fallback to ARXML parsing
                 elif os.path.exists(raw_arxml_path):
-                    log.info("⚙️ Parsing SOME/IP Network from ARXML (Cache invalid or missing)...")
+                    log.info(f"⚙️ Parsing SOME/IP Network from ARXML...")
                     self.eth_db_data = eth_parser.parse()
                     eth_parser.to_json_file(self.eth_db, write_allowed=self.write_to_disk)
                     eth_built = True
 
+            # --- SOME/IP FF (SYSVAR) DATABASE ---
+            if not self.ff_db_data:
+                ff_parser = SomeipFFParser(someip_sysvar_xml)
+                if self._is_cache_valid(self.ff_db, someip_sysvar_xml) and ff_parser.load_from_json(self.ff_db):
+                    log.info(f"✅ Loaded SOME/IP FF from fast cache: {self.ff_db}")
+                    self.ff_db_data = ff_parser.to_json_dict()
+                elif os.path.exists(someip_sysvar_xml):
+                    log.info(f"⚙️ Parsing SOME/IP FF from XML...")
+                    self.ff_db_data = ff_parser.parse()
+                    ff_parser.to_json_file(self.ff_db, write_allowed=self.write_to_disk)
+                    ff_built = True
+                
         except Exception as e:
             log.error(f"Failed to build or load database caches: {e}")
             raise
-
-        return can_built, eth_built
+            
+        return can_built, eth_built, ff_built
 
     def run_preprocessing_memory(self, input_excel: str, output_dir: str):
         """PHASE 1 & 2: Maps and Validates strictly via DataFrames."""
@@ -139,8 +145,7 @@ class CaplGenerationPipeline:
 
         out_path = Path(output_dir)
         out_path.mkdir(parents=True, exist_ok=True)
-
-        # Initialize missing signals list for the GUI to pick up
+        
         self.missing_signals = []
 
         try:
@@ -156,8 +161,7 @@ class CaplGenerationPipeline:
             for sheet_name, df in self.in_memory_dfs.items():
                 for _, row in df.iterrows():
                     req_id = str(row.get('REQ ID', 'Unknown')).strip()
-
-                    # Check CAN Ports
+                    
                     can_port = str(row.get('CAN_PORT', '')).strip()
                     if can_port and can_port.lower() not in ['nan', 'none', '']:
                         search_key = f"i{can_port.lower()}"
@@ -165,14 +169,12 @@ class CaplGenerationPipeline:
                             self.missing_signals.append(f"CAN Port '{can_port}' [Req: {req_id}]")
                             log.warning(f"❌ MISSING CAN: {req_id} | Target: {search_key}")
 
-                    # Check SOME/IP Attributes
                     eth_attr = str(row.get('ATTRIBUTE_VALUE', '')).strip()
                     if eth_attr and eth_attr.lower() not in ['nan', 'none', '']:
                         if eth_attr.lower() not in eth_keys:
                             self.missing_signals.append(f"ETH Attr '{eth_attr}' [Req: {req_id}]")
                             log.warning(f"❌ MISSING ETH: {req_id} | Target: {eth_attr.lower()}")
-
-            # Deduplicate the list in case of duplicate requirements
+            
             self.missing_signals = list(dict.fromkeys(self.missing_signals))
             # --- END OF MISSING SIGNALS CAPTURE ---
 
@@ -185,7 +187,6 @@ class CaplGenerationPipeline:
             if "E2E_ETH_PARSED" in self.in_memory_dfs:
                 self.in_memory_dfs["E2E_ETH_PARSED"] = validator.process_dataframe(self.in_memory_dfs["E2E_ETH_PARSED"], is_can_sheet=False)
 
-            # GATED FILE WRITE: Save intermediate Excel ONLY in Dev Mode
             if self.write_to_disk:
                 base_name = Path(input_excel).name.replace(".xlsx", "_Intermediate.xlsx")
                 intermediate_excel = out_path / base_name
@@ -196,8 +197,7 @@ class CaplGenerationPipeline:
 
             elapsed = str(timedelta(seconds=round(time.time() - start_time)))
             log.info(f"=== PRE-PROCESSING COMPLETE ({elapsed}) ===")
-
-            # Return the dfs (optional, but good practice)
+            
             return self.in_memory_dfs
 
         except Exception as e:
@@ -222,8 +222,8 @@ class CaplGenerationPipeline:
             log.exception(f"Fatal error during Generation: {e}")
             raise
 
-    def run_full_headless_flow(self, input_excel: str, out_dir: str, category: str, test_type: str, raw_arxml: str):
+    def run_full_headless_flow(self, input_excel: str, out_dir: str, category: str, test_type: str, raw_arxml: str, someip_sysvar_xml: str):
         """Used strictly by the CLI to run everything top-to-bottom in RAM."""
-        self.build_databases(raw_arxml)
+        self.build_databases(raw_arxml, someip_sysvar_xml)
         self.run_preprocessing_memory(input_excel, out_dir)
         self.run_generation(out_dir, category, test_type)

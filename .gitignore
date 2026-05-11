@@ -25,7 +25,12 @@ dist/
 *.log
 *.csv
 *.json
+*.xml
 
 # IDE
 .vscode/
 .idea/
+
+# Test outputs
+tests/unit_tests/output/
+output/
