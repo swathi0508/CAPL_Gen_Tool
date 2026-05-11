@@ -20,12 +20,12 @@ bundled_datas = [
     # Assuming templates are in src/templates. We unpack them to 'templates' inside the exe.
     ('src/templates', 'templates'), 
     
-    # We must bundle the images your GUI is looking for!
-    ('src/capl_gen/gui/images', 'gui/images'), 
+    # Updated to capl_bolt
+    ('src/capl_bolt/gui/images', 'gui/images'), 
 ]
 
 a = Analysis(
-    ['src/capl_gen/__main__.py'],          
+    ['src/capl_bolt/__main__.py'],         # Updated to capl_bolt
     pathex=['src'],                        
     binaries=[],
     datas=bundled_datas,                   
@@ -35,8 +35,9 @@ a = Analysis(
         'cantools',
         'lxml',
         'jinja2',
-        'capl_gen.cli',
-        'capl_gen.gui.tool_gui' # Ensure the GUI module isn't missed by the tree-shaker
+        'PyQt6',
+        'capl_bolt.cli',                   # Updated to capl_bolt
+        'capl_bolt.gui.tool_gui'           # Updated to capl_bolt
     ],
     hookspath=[],
     hooksconfig={},
@@ -57,19 +58,18 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='CAPL_Gen_Tool',
+    name='CAPLBolt',                       
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,                  
     upx_exclude=[],
     runtime_tmpdir=None,
-    # True = Shows a background console (Required for CLI to output text).
-    console=False,              
+    console=False,    
     disable_windowed_traceback=True,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    # icon='assets/tool_icon.ico'  
+    icon='src/capl_bolt/gui/images/app_icon.ico'  # Updated to capl_bolt
 )
