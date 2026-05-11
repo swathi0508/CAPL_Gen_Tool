@@ -10,7 +10,7 @@ class CaplCanToSomeipBasicFuncAndVarsGenerator:
     def __init__(self, template_dir):
         self.env = Environment(loader=FileSystemLoader(template_dir))
         self.func_template = "can_to_someip_basic_functions_template.j2"
-        self.var_template = "can_to_someip_variables_template.j2"
+        self.var_template = "variables_template.j2"
         
         # --- UPDATED TO MATCH NEW UNIFIED COLUMN NAMES ---
         self.j2_columns = [
