@@ -6,8 +6,8 @@ from pathlib import Path
 from core.logger import log
 
 # gui and cli are inside capl_gen, so we must explicitly name the parent package
-from capl_gen.gui.tool_gui import launch_gui
-from capl_gen.cli import run_headless_generation
+from capl_bolt.gui.tool_gui import launch_gui
+from capl_bolt.cli import run_headless_generation
 
 # --- SECURITY SHIELD: Global Exception Handler ---
 def global_exception_handler(exc_type, exc_value, exc_traceback):

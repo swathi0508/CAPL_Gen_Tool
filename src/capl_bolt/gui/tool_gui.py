@@ -133,7 +133,7 @@ class CaplGenGUI(QMainWindow):
             l_pix = QPixmap(str(logo_path)).scaledToHeight(55, Qt.TransformationMode.SmoothTransformation)
             l_lbl.setPixmap(l_pix)
             header.addWidget(l_lbl)
-        title = QLabel("CAPLBolt | <i>Instant Interface Test Script Generation</i>")
+        title = QLabel("CAPLBolt | <i>Instant Interface Test Script Generator</i>")
         title.setStyleSheet(f"font-size: 24px; color: {self.clr_title}; font-weight: bold;")
         header.addWidget(title)
         header.addStretch()
