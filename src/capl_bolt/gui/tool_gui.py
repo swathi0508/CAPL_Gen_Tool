@@ -398,11 +398,6 @@ class CaplGenGUI(QMainWindow):
 
 
 def launch_gui():
-    if sys.platform.startswith("win"):
-        try:
-            import ctypes
-            ctypes.windll.shcore.SetProcessDpiAwareness(1)
-        except: pass
     app = QApplication(sys.argv)
     gui = CaplGenGUI()
     gui.show()
