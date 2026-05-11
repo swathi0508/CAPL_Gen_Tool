@@ -30,7 +30,7 @@ class CaplCanToSomeipBasicFuncAndVarsGenerator:
         missing_cols = [c for c in self.j2_columns if c not in df.columns]
         for c in missing_cols: df[c] = pd.NA
 
-        # 1. Aggressive cleaner for MIN, MID, MAX, and ENUMS
+        # 1. Aggressive cleaner for MIN, MID, MAX, and ENUMS (Forces Integers)
         def clean_bounds(val):
             if pd.isna(val) or str(val).strip() in ["", "N/A", "nan", "None", "MISSING_DATA"]:
                 return "MISSING_DATA"
@@ -47,18 +47,29 @@ class CaplCanToSomeipBasicFuncAndVarsGenerator:
                     
             return str(val).strip()
 
-        # 2. Gentle cleaner for OFFSET, RESOLUTION, and Strings (Preserves .0 floats)
+        # 2. STRICT FLOAT CLEANER for OFFSET and RESOLUTION (Forces Decimals)
+        def clean_float(val):
+            if pd.isna(val) or str(val).strip() in ["", "N/A", "nan", "None", "MISSING_DATA"]:
+                return "MISSING_DATA"
+            try:
+                # Casting to float forces Python to append '.0' if it is a whole number
+                return str(float(val))
+            except ValueError:
+                return str(val).strip()
+
+        # 3. Gentle cleaner for Strings / Names
         def clean_standard(val):
             if pd.isna(val) or str(val).strip() in ["", "N/A", "nan", "None", "MISSING_DATA"]:
                 return "MISSING_DATA"
             return str(val).strip()
 
-        # Apply specific logic based on the column name
+        # Apply specific logic based on the column name keywords
         for col in df.columns:
             if any(kw in col.upper() for kw in ['MIN', 'MID', 'MAX', 'ENUM']):
                 df[col] = df[col].apply(clean_bounds)
+            elif any(kw in col.upper() for kw in ['OFFSET', 'RESOLUTION']):
+                df[col] = df[col].apply(clean_float)
             else:
-                # Leaves CAN_OFFSET and CAN_RESOLUTION completely untouched!
                 df[col] = df[col].apply(clean_standard)
             
         return df
