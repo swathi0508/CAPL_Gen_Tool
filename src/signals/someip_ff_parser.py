@@ -11,6 +11,7 @@ class SomeipFFParser(BaseParser):
     """
     Parses SysVarDef.xml into a hierarchical, method-centric JSON structure.
     Structure: Summary, INTERFACES, and GENERAL_SIGNALS.
+    Includes IsSigned metadata based on encoding ID.
     """
     
     CLUSTER_TARGET = "IL_EthernetCluster"
@@ -52,12 +53,12 @@ class SomeipFFParser(BaseParser):
             file_size = os.path.getsize(self.file_path)
             self.summary_stats = {
                 "Source_File_Name": os.path.basename(self.file_path),
-                "Source_File_Size_Bytes": file_size,      # Added back
+                "Source_File_Size_Bytes": file_size,
                 "Total_Signals_Found": total_vars[0],
-                "Resolved_With_Paths": 0,                 # Added back
-                "No_Path_Found": total_vars[0],           # Added back
-                "Interfaces_Found": len(self.interfaces), # Kept for SOME/IP visibility
-                "Processing_Time_HH_MM_SS": elapsed       # Standardized key name
+                "Resolved_With_Paths": 0,
+                "No_Path_Found": total_vars[0],
+                "Interfaces_Found": len(self.interfaces),
+                "Processing_Time_HH_MM_SS": elapsed
             }
 
             # Map the result to self._parsed_data for BaseParser compatibility
@@ -110,16 +111,26 @@ class SomeipFFParser(BaseParser):
             if len(path) > idx + 1: interface_name = path[idx + 1]
             i_type = "EVENT_GROUP"
 
-        # 3. Build Signal Metadata (Added BitCount and Encoding)
+        # 3. Encoding and Signedness Logic
+        raw_encoding = var_node.get('encoding', '65001')
+        is_signed = (raw_encoding == "65000")
+        
+        # 4. Bit Metadata extraction
+        raw_bitcount = var_node.get('bitcount') or var_node.get('bitlength')
+        bit_count = int(raw_bitcount) if raw_bitcount and str(raw_bitcount).isdigit() else 0
+
+        # 5. Build Signal Metadata
         signal_data = {
             "Signal_DB_Name": db_name,
             "DataType": var_node.get('type', "N/A"),
-            "BitCount": int(var_node.get('bitcount', 0)) or int(var_node.get('bitlength', 0)),
-            "Encoding": var_node.get('encoding', "N/A"),
+            "BitCount": bit_count,
+            "Encoding": raw_encoding,
+            "IsSigned": is_signed,
+            "ByteOrder": var_node.get('byteOrder', '0'),
             "Enums": self._extract_enums(var_node)
         }
 
-        # 4. Hierarchical Placement
+        # 6. Hierarchical Placement
         if i_type != "GENERAL":
             if interface_name not in self.interfaces:
                 sif_ns = next((x for x in path if x.startswith("sif_")), "N/A")
