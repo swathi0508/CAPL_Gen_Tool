@@ -32,7 +32,6 @@ a = Analysis(
     hiddenimports=[                        
         'pandas',
         'openpyxl',
-        'cantools',
         'lxml',
         'jinja2',
         'PyQt6',
