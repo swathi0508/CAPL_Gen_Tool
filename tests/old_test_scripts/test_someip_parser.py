@@ -1,11 +1,14 @@
 import os
+
 import pandas as pd
-from signals.someip_event_parser import SomeIPEventParser
+
 from core.logger import log
+from signals.someip_event_parser import SomeIPEventParser
+
 
 def update_eth_intermediate_sheet(arxml_path: str, excel_path: str, sheet_name: str = "E2E_ETH", json_cache: str = None):
     """
-    Parses the ARXML (or loads from JSON cache) and merges the SOME/IP properties 
+    Parses the ARXML (or loads from JSON cache) and merges the SOME/IP properties
     into an existing Excel requirements sheet.
     """
     log.info(f"Starting SOME/IP Database Dump to Intermediate Sheet (Tab: {sheet_name})...")
@@ -14,15 +17,15 @@ def update_eth_intermediate_sheet(arxml_path: str, excel_path: str, sheet_name: 
     # 1. INVOKE THE PARSER (WITH CACHE SUPPORT)
     # ==========================================
     parser = SomeIPEventParser(arxml_path)
-    
+
     # Try to load from JSON first to save time
     if json_cache and os.path.exists(json_cache):
         parser.load_from_json(json_cache)
-    
+
     # BaseParser.to_dataframe() will now handle the logic:
     # If load_from_json worked, it uses that. If not, it triggers parse().
     df_signals = parser.to_dataframe()
-    
+
     if df_signals.empty:
         log.error("Parsing failed or no data found. Aborting Excel update.")
         return
@@ -50,7 +53,7 @@ def update_eth_intermediate_sheet(arxml_path: str, excel_path: str, sheet_name: 
     # Clean the requirements keys
     df_req['match_sif'] = df_req['Service ID'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
     df_req['match_method'] = df_req['Attribute value'].astype(str).str.strip().str.lower()
-    
+
     # Clean the ARXML database keys
     df_signals['match_sif'] = df_signals['SIF'].astype(str).str.strip()
     df_signals['match_method'] = df_signals['Attribute_Value'].astype(str).str.strip().str.lower()
@@ -60,7 +63,7 @@ def update_eth_intermediate_sheet(arxml_path: str, excel_path: str, sheet_name: 
 
     # Columns to pull into the sheet
     columns_to_add = [
-        'match_sif', 'match_method', 'Signal_String', 'DataType', 
+        'match_sif', 'match_method', 'Signal_String', 'DataType',
         'Enums', 'Min', 'Mid', 'Max', 'Factor', 'Offset', 'Unit'
     ]
 
@@ -73,9 +76,9 @@ def update_eth_intermediate_sheet(arxml_path: str, excel_path: str, sheet_name: 
     # 4. PERFORM THE MERGE
     # ==========================================
     df_updated = pd.merge(
-        df_req, 
-        df_signals_unique[columns_to_add], 
-        on=['match_sif', 'match_method'], 
+        df_req,
+        df_signals_unique[columns_to_add],
+        on=['match_sif', 'match_method'],
         how='left'
     )
 
@@ -100,5 +103,5 @@ if __name__ == "__main__":
     ARXML_FILE = "ETH_CAN.arxml"
     EXCEL_FILE = "Requirements.xlsx"
     CACHE_FILE = "someip_db_cache.json"
-    
+
     update_eth_intermediate_sheet(ARXML_FILE, EXCEL_FILE, json_cache=CACHE_FILE)

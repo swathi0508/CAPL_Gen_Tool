@@ -1,12 +1,12 @@
-import os
 import json
-import pandas as pd
 from pathlib import Path
+
+import pandas as pd
+from cache_cleanup import cleanup_pycache
 
 from core.logger import log
 from mappers.mapper_orchestrator import MapperOrchestrator
 from validators.cross_validator import CrossValidator
-from cache_cleanup import cleanup_pycache
 
 # Clean __pycache__ at test start
 cleanup_pycache()
@@ -43,7 +43,7 @@ def test_mapper_and_validator(input_excel: str, output_dir: str, can_cache: str,
         # ---------------------------------------------------------
         log.info("--- PHASE 2: CROSS-VALIDATING IN RAM ---")
         validator = CrossValidator(can_db=orchestrator.can_mapper.db, eth_db=orchestrator.eth_mapper.db)
-        
+
         if "E2E_CAN_PARSED" in in_memory_dfs:
             in_memory_dfs["E2E_CAN_PARSED"] = validator.process_dataframe(in_memory_dfs["E2E_CAN_PARSED"], is_can_sheet=True)
         if "E2E_ETH_PARSED" in in_memory_dfs:
@@ -63,9 +63,9 @@ def test_mapper_and_validator(input_excel: str, output_dir: str, can_cache: str,
         log.exception(f"❌ Test encountered a fatal error: {e}")
 
 if __name__ == "__main__":
-    INPUT_REQ_FILE = r"../Requirements.xlsx" 
+    INPUT_REQ_FILE = r"../Requirements.xlsx"
     OUTPUT_DIRECTORY = r"./output"
     CAN_JSON_CACHE = r"can_db_cache.json"
     ETH_JSON_CACHE = r"someip_db_cache.json"
-    
+
     test_mapper_and_validator(INPUT_REQ_FILE, OUTPUT_DIRECTORY, CAN_JSON_CACHE, ETH_JSON_CACHE)

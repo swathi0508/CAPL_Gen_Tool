@@ -1,8 +1,7 @@
-import os
-from pathlib import Path
+from cache_cleanup import cleanup_pycache
+
 from core.logger import log
 from pipeline.main_pipeline import CaplGenerationPipeline
-from cache_cleanup import cleanup_pycache
 
 # Clean __pycache__ at test start
 cleanup_pycache()
@@ -15,8 +14,8 @@ def test_full_pipeline(input_excel: str, output_dir: str, category: str, test_ty
 
     # Initialize the Pipeline in DEV MODE (enable_log=True) so it dumps caches to disk
     pipeline = CaplGenerationPipeline(
-        can_db_cache="can_db_cache.json", 
-        eth_db_cache="someip_db_cache.json", 
+        can_db_cache="can_db_cache.json",
+        eth_db_cache="someip_db_cache.json",
         enable_log=False
     )
 
@@ -31,7 +30,7 @@ def test_full_pipeline(input_excel: str, output_dir: str, category: str, test_ty
         log.info("==================================================")
         log.info("✅ FULL PIPELINE EXECUTED SUCCESSFULLY")
         log.info("==================================================")
-        
+
     except Exception as e:
         log.exception(f"❌ Pipeline Integration Test Failed: {e}")
 
@@ -40,8 +39,8 @@ if __name__ == "__main__":
     RAW_ARXML = "../ETH_CAN.arxml"
     REQUIREMENTS_EXCEL = "../Requirements.xlsx"
     OUTPUT_DIR = "./output_test"
-    
-    CATEGORY = "E2E_CAN"            
+
+    CATEGORY = "E2E_CAN"
     TEST_TYPE = "CAN->SOMEIP"
 
     test_full_pipeline(REQUIREMENTS_EXCEL, OUTPUT_DIR, CATEGORY, TEST_TYPE, RAW_ARXML)

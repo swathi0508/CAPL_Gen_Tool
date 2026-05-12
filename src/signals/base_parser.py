@@ -1,11 +1,13 @@
-import sys
-import os
 import json
+import os
 import time
-import pandas as pd
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from typing import Any, Dict
+
+import pandas as pd
+
 from core.logger import log
+
 
 class BaseParser(ABC):
     """Abstract Base Class defining the contract and Data API for all parsers."""
@@ -52,7 +54,7 @@ class BaseParser(ABC):
                 "No_Path_Found": no_path,
                 "Processing_Time_HH_MM_SS": self._get_processing_time()
             },
-            "SIGNAL_LIST": data 
+            "SIGNAL_LIST": data
         }
 
         try:
@@ -69,7 +71,7 @@ class BaseParser(ABC):
         try:
             with open(input_path, 'r', encoding='utf-8') as f:
                 raw_cache = json.load(f)
-            
+
             # Legacy Stripping: Look for the signal dictionary inside the wrapper
             if "SIGNAL_LIST" in raw_cache:
                 self._parsed_data = raw_cache["SIGNAL_LIST"]
@@ -78,7 +80,7 @@ class BaseParser(ABC):
             else:
                 # Fallback: just remove Summary
                 self._parsed_data = {k: v for k, v in raw_cache.items() if k != "Summary"}
-                
+
             log.info(f"🚀 Loaded {len(self._parsed_data)} signals from cache.")
             return True
         except Exception as e:
@@ -99,11 +101,11 @@ class BaseParser(ABC):
             for sig_name, content in data.items():
                 attrs = content.get('Attributes', {})
                 paths = content.get('signal_paths', [])
-                
+
                 # Base attributes common to all paths of this signal
                 # We pull everything from attrs (Resolution, Offset, etc.)
                 base_info = {"Signal_Name": sig_name, **attrs}
-                
+
                 if not paths:
                     df_rows.append({**base_info, "Status": "No Path"})
                 else:
@@ -119,7 +121,7 @@ class BaseParser(ABC):
             df_rows = [{"Signal_String": k, **v} for k, v in data.items()]
 
         df = pd.DataFrame(df_rows)
-        
+
         # Dynamic safe sorting
         sort_prio = ['SIF', 'Cluster', 'can_cluster', 'Port', 'tx', 'Method', 'Signal_Name']
         avail = [c for c in sort_prio if c in df.columns]

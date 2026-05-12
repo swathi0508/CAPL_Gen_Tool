@@ -1,34 +1,37 @@
-import os
 import json
+import os
 import re
+
 import pandas as pd
+
 from core.logger import log
+
 
 class BaseMapper:
     """Base class providing shared utilities for protocol mappers."""
-    
+
     def __init__(self, db_source):
         # Save the raw input (can be a string path OR a dictionary)
         self._raw_source = db_source
-        
+
         # Keep cache_path for legacy disk compatibility. If it's a dict, this becomes None.
         self.cache_path = db_source if isinstance(db_source, str) else None
-        
+
         # Trigger the load (which now handles both RAM and Disk)
         self.db = self._load_database()
 
     def _load_database(self) -> dict:
         """Loads data from disk, or returns the RAM dictionary directly."""
-        
+
         # 1. IN-MEMORY PIPELINE: If we were passed a dictionary, return it instantly!
         if isinstance(self._raw_source, dict):
             return self._raw_source
-            
+
         # 2. LEGACY DISK PIPELINE: If it's a file path, load it from the JSON.
         if not self.cache_path or not os.path.exists(self.cache_path):
             log.warning(f"Database cache not found at: {self.cache_path}")
             return {}
-            
+
         try:
             with open(self.cache_path, 'r', encoding='utf-8') as f:
                 return json.load(f)
@@ -63,7 +66,7 @@ class BaseMapper:
     def extract_cluster(path_val) -> str:
         if pd.isna(path_val) or str(path_val).strip() == "":
             return ""
-        clusters = ["CAN_FD_CHASSIS", "CAN_FD_PT", "CAN_ITS3_FD", "CAN_ITS5_FD", 
+        clusters = ["CAN_FD_CHASSIS", "CAN_FD_PT", "CAN_ITS3_FD", "CAN_ITS5_FD",
                     "PCU4_CAN", "CAN_EXT", "CAN_FD_ACCESS2"]
         tokens = re.split(r'\s*=>\s*|\s*::\s*', str(path_val))
         for token in tokens:

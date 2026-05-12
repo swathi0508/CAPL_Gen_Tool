@@ -1,14 +1,17 @@
 import os
 import re
+
 import pandas as pd
+
+from core.logger import log
 from mappers.base_mapper import BaseMapper
 from mappers.can_mapper import CANMapper
 from mappers.someip_mapper import SomeIPMapper
-from core.logger import log
+
 
 class MapperOrchestrator:
     """Coordinates the end-to-end mapping into in-memory DataFrames."""
-    
+
     def __init__(self, can_db_data: dict, eth_db_data: dict):
         # Now accepts the RAM dictionary directly instead of cache paths
         self.can_mapper = CANMapper(can_db_data)
@@ -16,8 +19,8 @@ class MapperOrchestrator:
 
     def get_column_mapping(self, sheet_type: str) -> dict:
         base_map = {
-            "SWC": "SWC", 
-            "TEST_TYPE": "TEST_TYPE", 
+            "SWC": "SWC",
+            "TEST_TYPE": "TEST_TYPE",
             "BASIC_FUNCTION_NAME": "BASIC_FUNCTION_NAME",
             "CAN_CLUSTER": "CAN_CLUSTER"
         }
@@ -62,11 +65,11 @@ class MapperOrchestrator:
         tt = str(row.get('TEST_TYPE', '')).upper()
         if any(x in tt for x in ["NONEED", "ENABLER", "NO_NEED"]):
             return "FUNCTION_NOT_REQUIRED"
-        
+
         sp = str(row.get('SOMEIP_PORT', '')).strip()
         attr_raw = str(row.get('ATTRIBUTE_VALUE', '')).strip()
         topic_attr = str(row.get('SOMEIP_TOPIC_ATTRIBUTE', '')).lower()
-        
+
         is_state = "value_state" in topic_attr or "valuestate" in topic_attr or \
                    bool(re.search(r'ValueState|value_state', attr_raw, re.IGNORECASE))
 
@@ -103,13 +106,13 @@ class MapperOrchestrator:
         if is_state:
             stripped = re.sub(r'ValueState|value_state', '', attr_raw, flags=re.IGNORECASE).strip()
             return f"PENDING_STATE_MATCH|{sp}|{stripped}|{generate_name()}|{tt}"
-        
+
         return generate_name()
 
     def cross_fill_global_data(self, df_list):
         """
         SELF-HEALING MODULE:
-        Scans all sheets. If E2E_CAN has the Path/Cluster/BFN, it universally copies 
+        Scans all sheets. If E2E_CAN has the Path/Cluster/BFN, it universally copies
         them into the E2E_ETH sheet to heal missing or <NA> cells.
         """
         combined = pd.concat(df_list, ignore_index=True)
@@ -143,14 +146,14 @@ class MapperOrchestrator:
             # Heal Path Synthesis
             if 'PATH_SYNTHESIS' in df.columns:
                 df['PATH_SYNTHESIS'] = df.apply(
-                    lambda r: path_lookup.get(str(r.get('CAN_PORT', '')).strip(), r['PATH_SYNTHESIS']) 
+                    lambda r: path_lookup.get(str(r.get('CAN_PORT', '')).strip(), r['PATH_SYNTHESIS'])
                     if is_empty(r.get('PATH_SYNTHESIS')) else r['PATH_SYNTHESIS'], axis=1
                 )
-            
+
             # Heal CAN Cluster
             if 'CAN_CLUSTER' in df.columns:
                 df['CAN_CLUSTER'] = df.apply(
-                    lambda r: cluster_lookup.get(str(r.get('CAN_PORT', '')).strip(), r['CAN_CLUSTER']) 
+                    lambda r: cluster_lookup.get(str(r.get('CAN_PORT', '')).strip(), r['CAN_CLUSTER'])
                     if is_empty(r.get('CAN_CLUSTER')) else r['CAN_CLUSTER'], axis=1
                 )
 
@@ -159,16 +162,16 @@ class MapperOrchestrator:
                 val = str(row.get('BASIC_FUNCTION_NAME', ''))
                 if not val.startswith("PENDING_STATE_MATCH") and "UNKNOWN" not in val:
                     return val if not is_empty(val) else "basic_fn_UNKNOWN"
-                
+
                 parts = val.split('|')
                 if len(parts) >= 4:
                     sp, stripped_attr, fallback_name = parts[1], parts[2], parts[3]
-                    
+
                     if stripped_attr and (sp, stripped_attr) in bfn_lookup:
                         return bfn_lookup[(sp, stripped_attr)]
                     if sp in bfn_lookup:
                         return bfn_lookup[sp]
-                        
+
                     # Inject the newly healed CAN_CLUSTER into the fallback name!
                     if fallback_name != "basic_fn_UNKNOWN" and not is_empty(row.get('CAN_CLUSTER')):
                         fallback_name = fallback_name.replace("__", f"_{row['CAN_CLUSTER']}_")
@@ -181,7 +184,7 @@ class MapperOrchestrator:
             # Replace any lingering Pandas <NA> artifacts with clean "N/A"
             df = df.fillna("N/A").replace("<NA>", "N/A")
             processed_dfs.append(df)
-            
+
         return processed_dfs
 
     def process_to_dataframes(self, input_excel: str) -> dict:
@@ -189,17 +192,17 @@ class MapperOrchestrator:
         log.info(f"Mapping data from: {os.path.basename(input_excel)}")
         xls = pd.ExcelFile(input_excel)
         sheets_to_process = [s for s in xls.sheet_names if s.strip().upper() in ["E2E_ETH", "E2E_CAN"]]
-        
+
         results_list = []
         sheet_names = []
 
         for sheet in sheets_to_process:
             df_in = pd.read_excel(xls, sheet_name=sheet)
             df_in.columns = df_in.columns.astype(str).str.strip().str.upper()
-            
+
             df_out = pd.DataFrame()
             mapping = self.get_column_mapping(sheet.strip().upper())
-            
+
             for target, source in mapping.items():
                 col = BaseMapper.resolve_column_name(df_in.columns, source if isinstance(source, list) else [source])
                 df_out[target] = df_in[col] if col else None
@@ -217,11 +220,11 @@ class MapperOrchestrator:
                 df_out = pd.concat([df_out, eth_res], axis=1)
 
             df_out['BASIC_FUNCTION_NAME'] = df_out.apply(self.compute_basic_function_name, axis=1)
-            
+
             ordered = [c for c in self.get_output_columns(sheet.strip().upper()) if c in df_out.columns]
             extra = [c for c in df_out.columns if c not in ordered]
             df_out = pd.concat([df_out[ordered], df_out[extra]], axis=1)
-            
+
             results_list.append(df_out)
             sheet_names.append(f"{sheet.strip().upper()}_PARSED")
 
@@ -229,4 +232,4 @@ class MapperOrchestrator:
             results_list = self.cross_fill_global_data(results_list)
 
         log.info("✅ Core mapping resolution complete.")
-        return {name: df for name, df in zip(sheet_names, results_list)}
+        return {name: df for name, df in zip(sheet_names, results_list, strict=False)}

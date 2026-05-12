@@ -1,26 +1,28 @@
-import os
 from typing import Any, Dict, List
+
 from lxml import etree
-from signals.base_parser import BaseParser
+
 from core.logger import log
+from signals.base_parser import BaseParser
+
 
 class CANSignalParser(BaseParser):
     def __init__(self, file_path: str):
         super().__init__(file_path)
         self._parsed_data: Dict[str, Any] = {}
         self.ns: Dict[str, str] = {}
-        
+
         # Lookups
         self.compu_map = {}
         self.sig_attr_data = {}
         self.sig_to_pdu = {}
         self.pdu_period_map = {}
-        
+
         # Caches
-        self._topology_cache = {} 
-        self._ecu_cache = []      
-        self._group_cache = []    
-        self._cluster_cache = []  
+        self._topology_cache = {}
+        self._ecu_cache = []
+        self._group_cache = []
+        self._cluster_cache = []
 
     def parse(self) -> Dict[str, Any]:
         log.info(f"Parsing CAN ARXML: {self.file_path}")
@@ -28,11 +30,11 @@ class CANSignalParser(BaseParser):
         tree = etree.parse(self.file_path, parser)
         root = tree.getroot()
         self.ns = {'as': root.tag.split('}')[0].strip('{')}
-        _ns = self.ns 
+        _ns = self.ns
 
         self._index_compu_methods(root)
         self._index_signals(root)
-        
+
         # 1. Cache ECUs and their port text
         for ecu in root.xpath("//as:ECU-INSTANCE", namespaces=_ns):
             e_name = ecu.findtext("as:SHORT-NAME", namespaces=_ns)
@@ -49,7 +51,7 @@ class CANSignalParser(BaseParser):
         # 2. Cache PDU Groups
         for gp in root.xpath("//as:I-SIGNAL-I-PDU-GROUP[as:COMMUNICATION-DIRECTION='OUT']", namespaces=_ns):
             self._group_cache.append({
-                'name': gp.findtext("as:SHORT-NAME", namespaces=_ns), 
+                'name': gp.findtext("as:SHORT-NAME", namespaces=_ns),
                 'text': "".join(gp.xpath(".//text()"))
             })
 
@@ -119,7 +121,7 @@ class CANSignalParser(BaseParser):
             if den_val: v2 = float(den_val)
             res, off = v1 / v2, v0 / v2
             if res == 0: res = 1.0
-            
+
             enums = {}
             for s in cm.xpath(".//as:COMPU-SCALE", namespaces=_ns):
                 vt = s.findtext(".//as:VT", namespaces=_ns)
@@ -133,13 +135,13 @@ class CANSignalParser(BaseParser):
                 'res': res, 'off': off,
                 'low_raw': cm.findtext(".//as:LOWER-LIMIT", namespaces=_ns) or "0",
                 'upp_raw': cm.findtext(".//as:UPPER-LIMIT", namespaces=_ns) or "0",
-                'enums': enums, 
+                'enums': enums,
                 'unit': "\u00b0C" if raw_unit == "X_C" else (raw_unit if raw_unit else "None")
             }
 
     def _index_signals(self, root):
         _ns = self.ns
-        sys_sig_to_cm = {ss.findtext("as:SHORT-NAME", namespaces=_ns): 
+        sys_sig_to_cm = {ss.findtext("as:SHORT-NAME", namespaces=_ns):
                          (ss.findtext(".//as:COMPU-METHOD-REF", namespaces=_ns) or "").split('/')[-1]
                          for ss in root.xpath("//as:SYSTEM-SIGNAL", namespaces=_ns)}
         for i_sig in root.xpath("//as:I-SIGNAL", namespaces=_ns):
@@ -168,7 +170,7 @@ class CANSignalParser(BaseParser):
             db = s_info.get('db_attr', {})
             res, off = db.get('res', 1.0), db.get('off', 0.0)
             low, upp = float(db.get('low_raw', 0) or 0), float(db.get('upp_raw', 0) or 0)
-            
+
             results[sig_name] = {
                 "Status": "Resolved",
                 "Attributes": {
