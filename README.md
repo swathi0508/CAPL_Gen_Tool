@@ -105,7 +105,7 @@ To ship the tool to clients or users without Python installed, we package the ap
   pyinstaller build_config.spec --clean
   ```
 
-  The standalone executable will be generated inside the dist/ folder as CAPL_Gen_Tool.exe.
+  The standalone executable will be generated inside the dist/ folder as CAPL_BOLT.exe.
 
 ## 🤝 Contributing Guidelines
 

@@ -2,9 +2,9 @@ import logging
 import sys
 from pathlib import Path
 
-def setup_logger(log_file: str = "capl_gen.log") -> logging.Logger:
+def setup_logger(log_file: str = "capl_bolt.log") -> logging.Logger:
     """Configures console and file logging, adapting to Prod vs Dev environments."""
-    logger = logging.getLogger("CAPL_Gen")
+    logger = logging.getLogger("CAPL_BOLT")
     
     # 1. SECURITY LOCK: Detect if we are running as a compiled executable
     is_production = getattr(sys, 'frozen', False)
