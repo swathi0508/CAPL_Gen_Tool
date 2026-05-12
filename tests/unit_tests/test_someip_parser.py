@@ -1,7 +1,9 @@
 import os
-from signals.someip_event_parser import SomeIPEventParser
-from core.logger import log
+
 from cache_cleanup import cleanup_pycache
+
+from core.logger import log
+from signals.someip_event_parser import SomeIPEventParser
 
 # Clean __pycache__ at test start
 cleanup_pycache()
@@ -17,7 +19,7 @@ def test_someip_parsing(arxml_path: str, json_cache: str):
     # 1. Initialize and Parse into RAM
     parser = SomeIPEventParser(arxml_path)
     signals_dict = parser.parse()
-    
+
     if not signals_dict:
         log.error("❌ Parsing failed. Dictionary is empty.")
         return
@@ -30,5 +32,5 @@ def test_someip_parsing(arxml_path: str, json_cache: str):
 if __name__ == "__main__":
     ARXML_FILE = "../ETH_CAN.arxml"
     CACHE_FILE = "someip_db_cache.json"
-    
+
     test_someip_parsing(ARXML_FILE, CACHE_FILE)

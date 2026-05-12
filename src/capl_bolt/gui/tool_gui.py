@@ -1,14 +1,26 @@
-import sys
 import os
-import time
+import sys
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
-                             QHBoxLayout, QLabel, QLineEdit, QPushButton,
-                             QComboBox, QTextEdit, QFileDialog, QCheckBox, QMessageBox)
-from PyQt6.QtGui import QPixmap, QPainter, QColor, QFont, QIcon
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
+
+from PyQt6.QtCore import QObject, Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
+from PyQt6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 from core.logger import log
 from pipeline.main_pipeline import CaplGenerationPipeline
@@ -32,7 +44,7 @@ class CommSignals(QObject):
 class CaplGenGUI(QMainWindow):
     def __init__(self, root_dummy=None):
         super().__init__()
-       
+
         self.setWindowTitle("Randstad Digital - CAPL Generator")
         self.setMinimumSize(1150, 850)
         self.resize(1150, 850)
@@ -40,15 +52,15 @@ class CaplGenGUI(QMainWindow):
         icon_path = get_asset_path("app_icon.ico")
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
-       
+
         self.pre_process_done = False
         self.pipeline = CaplGenerationPipeline()
         self.signals = CommSignals()
-       
+
         # Connect signals
         self.signals.log_signal.connect(self.write_log)
         self.signals.finished_signal.connect(self._on_pre_process_complete)
-       
+
         # Colors
         self.clr_title = "#F8F9FA"
         self.clr_label = "#E5E7EB"
@@ -151,7 +163,7 @@ class CaplGenGUI(QMainWindow):
         btn_br_arxml.setObjectName("util_btn")
         btn_br_arxml.setGeometry(760, 25, 90, 32)
         btn_br_arxml.clicked.connect(self._browse_arxml_file)
-        
+
         QLabel("Input Requirement Sheet:", container).move(0, 75)
         self.req_path_edit = QLineEdit(container)
         self.req_path_edit.setGeometry(0, 100, 750, 32)
@@ -160,7 +172,7 @@ class CaplGenGUI(QMainWindow):
         btn_br_req.setObjectName("util_btn")
         btn_br_req.setGeometry(760, 100, 90, 32)
         btn_br_req.clicked.connect(self._browse_file)
-       
+
         self.btn_preprocess = QPushButton("PRE-PROCESS", container)
         self.btn_preprocess.setEnabled(False)
         self.btn_preprocess.setGeometry(860, 62, 140, 38)
@@ -177,12 +189,12 @@ class CaplGenGUI(QMainWindow):
         self.cat_combo = QComboBox(container)
         self.cat_combo.addItems(["E2E_CAN", "E2E_ETH"])
         self.cat_combo.setGeometry(0, 25, 850, 32)
-        
+
         QLabel("Test Type:", container).move(0, 75)
         self.typ_combo = QComboBox(container)
         self.typ_combo.addItems(["CAN->SOMEIP", "CAN->SOMEIP_FF", "CAN->SWC", "SWC->CAN", "SOMEIP->CAN"])
         self.typ_combo.setGeometry(0, 100, 850, 32)
-        
+
         self.btn_gen = QPushButton("GENERATE SCRIPTS", container)
         self.btn_gen.setEnabled(False)
         self.btn_gen.setGeometry(860, 62, 140, 38)
@@ -197,7 +209,7 @@ class CaplGenGUI(QMainWindow):
         container.setFixedWidth(1000)
         layout = QVBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
-       
+
         header = QHBoxLayout()
         header.addWidget(QLabel("EXECUTION LOGS"))
         header.addStretch()
@@ -205,16 +217,16 @@ class CaplGenGUI(QMainWindow):
             btn = QPushButton(text); btn.setObjectName("util_btn"); btn.clicked.connect(func)
             header.addWidget(btn)
         layout.addLayout(header)
-        
+
         self.log_text = QTextEdit(); self.log_text.setReadOnly(True)
         self.log_text.setStyleSheet("background-color: #000000; color: #cbd5e1; font-family: Consolas; border: 1px solid #2d3748; border-radius: 4px;")
         layout.addWidget(self.log_text)
-        
+
         # --- SECURITY LOCK: Hide Dev Mode Checkbox in Production ---
         # self.cb_verbose = QCheckBox("Enable Verbose Log / Dev Mode")
         # if not getattr(sys, 'frozen', False):
         #     layout.addWidget(self.cb_verbose)
-            
+
         self.main_layout.addWidget(container, 1)
 
     # --- Thread Safe Helpers ---
@@ -276,17 +288,17 @@ class CaplGenGUI(QMainWindow):
 
         arxml = self.arxml_path_edit.text()
         req = self.req_path_edit.text()
-        
+
         # Pass the UI state down to the pipeline
         self.pipeline.enable_log = self.cb_verbose.isChecked() if hasattr(self, 'cb_verbose') else False
-        
+
         self.btn_preprocess.setEnabled(False)
         self.btn_preprocess.setStyleSheet("""
             QPushButton { background-color: #d68910; color: white; border-radius: 4px; font-weight: bold; border: none; }
             QPushButton:hover { background-color: #b9770e; }
             QPushButton:pressed { background-color: #9c640c; }
         """)
-        
+
         self.pre_process_done = False
         self.btn_gen.setEnabled(False)
         self.btn_gen.setStyleSheet("background-color: #3b3e40; color: #94a3b8; border-radius: 4px; border: none;")
@@ -298,41 +310,41 @@ class CaplGenGUI(QMainWindow):
                 # --- PHASE 1: PARSING / CACHE VALIDATION ---
                 parse_start = time.time()
                 self.signals.log_signal.emit("⚙️ Validating ARXML and Network Databases...")
-                
+
                 can_built, eth_built = self.pipeline.build_databases(arxml)
                 parse_time = self._format_time(time.time() - parse_start)
-                
+
                 if not can_built and not eth_built:
-                    self.signals.log_signal.emit(f"⚡ Valid Database cache was found. Arxml Re-Parsing skipped.")
+                    self.signals.log_signal.emit("⚡ Valid Database cache was found. Arxml Re-Parsing skipped.")
                 else:
                     self.signals.log_signal.emit(f"✅ Arxml Databases parsed successfully. (Time: {parse_time})")
-                
+
                 # --- PHASE 2: PRE-PROCESSING ---
                 pre_start = time.time()
                 self.signals.log_signal.emit("⚙️ [(Pre-Processing)] Analyzing requirement specifications ...")
-                
+
                 self.pipeline.run_preprocessing_memory(req, "GeneratedTestScripts")
-                
+
                 # --- MISSING SIGNALS UI SUMMARIZATION ---
                 if hasattr(self.pipeline, 'missing_signals') and self.pipeline.missing_signals:
                     total_missing = len(self.pipeline.missing_signals)
                     self.signals.log_signal.emit(f"⚠️ WARNING: {total_missing} signals from your Requirement Excel were NOT found.")
-                    
+
                     # Only print the first 5 to the UI to prevent log spam
                     display_limit = 5
                     for sig in self.pipeline.missing_signals[:display_limit]:
                         self.signals.log_signal.emit(f"   - Missing: {sig}")
-                    
+
                     if total_missing > display_limit:
                         self.signals.log_signal.emit(f"   ... plus {total_missing - display_limit} more. (Check console for full list )")
-                
+
                 pre_time = self._format_time(time.time() - pre_start)
                 self.signals.log_signal.emit(f"✅ Pre-Processing mapping complete. (Time: {pre_time})")
-                
+
                 # --- COMPLETION ---
                 total_time = self._format_time(time.time() - total_start_time)
                 self.signals.log_signal.emit(f"🏁 System Ready. (Total Elapsed Time: {total_time})")
-                
+
                 self.signals.finished_signal.emit()
             except Exception as e:
                 self.signals.log_signal.emit("❌ Error: Failed to process files. Please verify input documents.")
@@ -347,21 +359,21 @@ class CaplGenGUI(QMainWindow):
         category = self.cat_combo.currentText()
         test_type = self.typ_combo.currentText()
         out_dir = "GeneratedTestScripts"
-        
+
         self.write_log(f"📋 Selected Test Category: {category}")
         self.write_log(f"📋 Selected Test Type: {test_type}")
-        
+
         start_time = time.time()
         try:
-            self.write_log(f"⚙️ CAPL Scripts Generation Started...")
+            self.write_log("⚙️ CAPL Scripts Generation Started...")
             self.pipeline.run_generation(out_dir, category, test_type)
-            
+
             formatted_time = self._format_time(time.time() - start_time)
-            
+
             self.write_log(f"✅ CAPL Scripts Generated Successfully. (Execution Time: {formatted_time})")
             self.write_log(f"📂 Output Location: {os.path.abspath(out_dir)}")
-            
-        except Exception as e: 
+
+        except Exception as e:
             # Passes the exact generation error (e.g., "Template missing" or "Folder locked") to the UI
             self.write_log(f"❌ Generation failed: {str(e)}")
             log.error(f"Internal Generation Error: {e}")
@@ -381,14 +393,14 @@ class CaplGenGUI(QMainWindow):
             if f != self.arxml_path_edit.text():
                 self.pipeline.can_db_data = {}
                 self.pipeline.eth_db_data = {}
-            
+
             self.arxml_path_edit.setText(f)
             self.write_log(f"🌐 ARXML Selected: {os.path.basename(f)}")
 
 
     def _clear_log(self):
         self.log_text.clear()
-   
+
     def download_logs(self):
         timestamp = datetime.now().strftime("%d_%m_%Y__%H_%M_%S")
         filename = f"CaplGenLogs_{timestamp}.txt"

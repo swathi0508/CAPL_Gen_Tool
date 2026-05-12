@@ -1,7 +1,9 @@
-import pandas as pd
 import os
 from pathlib import Path
+
+import pandas as pd
 from jinja2 import Environment, FileSystemLoader
+
 from core.logger import log
 
 pd.set_option('future.no_silent_downcasting', True)
@@ -11,10 +13,10 @@ class CaplCanToSomeipBasicFuncAndVarsGenerator:
         self.env = Environment(loader=FileSystemLoader(template_dir))
         self.func_template = "can_to_someip_basic_functions_template.j2"
         self.var_template = "variables_template.j2"
-        
+
         # --- UPDATED TO MATCH NEW UNIFIED COLUMN NAMES ---
         self.j2_columns = [
-            'CAN_PORT', 'CAN_DB_SIGNAL_NAME', 'SOMEIP_DB_SIGNAL_NAME', 
+            'CAN_PORT', 'CAN_DB_SIGNAL_NAME', 'SOMEIP_DB_SIGNAL_NAME',
             'SOMEIP_DB_SIGNAL_VALUESTATE', 'CAN_ENUM', 'SOMEIP_ENUM',
             'SOMEIP_PORT', 'ATTRIBUTE_VALUE', 'BASIC_FUNCTION_NAME',
             'CAN_OFFSET', 'CAN_RESOLUTION', 'IS_ENUM',
@@ -25,7 +27,7 @@ class CaplCanToSomeipBasicFuncAndVarsGenerator:
     def _validate_and_clean(self, df: pd.DataFrame) -> pd.DataFrame:
         if df.empty:
             return df
-            
+
         # Fill missing required columns
         missing_cols = [c for c in self.j2_columns if c not in df.columns]
         for c in missing_cols: df[c] = pd.NA
@@ -34,17 +36,17 @@ class CaplCanToSomeipBasicFuncAndVarsGenerator:
         def clean_bounds(val):
             if pd.isna(val) or str(val).strip() in ["", "N/A", "nan", "None", "MISSING_DATA"]:
                 return "MISSING_DATA"
-            
+
             if isinstance(val, float) and val.is_integer():
                 return str(int(val))
-                
+
             if isinstance(val, str) and val.endswith(".0"):
                 try:
                     float(val)
                     return val[:-2]
                 except ValueError:
                     pass
-                    
+
             return str(val).strip()
 
         # 2. STRICT FLOAT CLEANER for OFFSET and RESOLUTION (Forces Decimals)
@@ -71,7 +73,7 @@ class CaplCanToSomeipBasicFuncAndVarsGenerator:
                 df[col] = df[col].apply(clean_float)
             else:
                 df[col] = df[col].apply(clean_standard)
-            
+
         return df
 
     def render(self, data_frames: dict, test_type: str, output_root: str):
@@ -86,13 +88,13 @@ class CaplCanToSomeipBasicFuncAndVarsGenerator:
                     # Apply test_type filter immediately per sheet
                     df_filtered = df_temp[df_temp['TEST_TYPE'].astype(str).str.strip() == test_type]
                     valid_dfs.append(df_filtered)
-            
+
             if not valid_dfs:
                 log.warning(f"No data for {test_type} in {target_sheets}")
                 return
 
             full_df = pd.concat(valid_dfs, ignore_index=True)
-            
+
             # Run the column-aware cleaner
             full_df = self._validate_and_clean(full_df)
 
@@ -141,10 +143,10 @@ class CaplCanToSomeipBasicFuncAndVarsGenerator:
             # Render Variables File
             with open(v_dir / "can_to_someip_variables.cin", "w") as f:
                 f.write(self.env.get_template(self.var_template).render(
-                    standard_vars=std_vars, 
+                    standard_vars=std_vars,
                     can_enums=can_enums,
                     eth_enums=eth_enums,
-                    ethernet_signals=unique_signals 
+                    ethernet_signals=unique_signals
                 ))
 
             log.info(f"Generated {len(func_records)} functions. ValueState metadata excluded.")

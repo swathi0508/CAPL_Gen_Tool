@@ -1,10 +1,11 @@
-import os
+import ast
+import difflib
 import math
 import re
 import warnings
+
 import pandas as pd
-import difflib
-import ast
+
 from core.logger import log
 
 # Suppress the warning natively without altering Pandas' internal data types
@@ -16,7 +17,7 @@ class CrossValidator:
     def __init__(self, can_db: dict, eth_db: dict):
         self.can_lookup = {str(k).lower(): v for k, v in can_db.items()}
         self.eth_lookup = {}
-        for sig_str, data in eth_db.items():
+        for _sig_str, data in eth_db.items():
             meth = str(data.get('Method', data.get('Attribute_Value', ''))).strip().lower()
             if meth:
                 self.eth_lookup[meth] = data
@@ -73,7 +74,7 @@ class CrossValidator:
         c_dir = "b_to_m" if "battery_to_motor" in c_raw or "battery_to_rear" in c_raw else "m_to_b" if "motor_to_battery" in c_raw or "rear_motor_to_battery" in c_raw else "none"
         s_dir = "b_to_m" if "battery_to_motor" in s_raw else "m_to_b" if "motor_to_battery" in s_raw else "none"
         if c_dir != "none" and s_dir != "none" and c_dir != s_dir:
-            return -10000 
+            return -10000
 
         if ratio >= 0.90 or c_norm in s_norm or s_norm in c_norm:
             if CrossValidator.get_polarity(cval) == CrossValidator.get_polarity(sval):
@@ -111,7 +112,7 @@ class CrossValidator:
 
     @staticmethod
     def extract_dict(data):
-        if pd.isna(data) or str(data).strip() in ['N/A', '', 'nan', '{}']: 
+        if pd.isna(data) or str(data).strip() in ['N/A', '', 'nan', '{}']:
             return {}
         content = str(data).strip()
         try:
@@ -134,15 +135,15 @@ class CrossValidator:
         """Processes the logic purely in-memory for production-grade speed."""
         updated_rows = []
 
-        for idx, row in df.iterrows():
+        for _idx, row in df.iterrows():
             new_row = row.to_dict()
-            
+
             try:
                 can_sig, eth_sig = None, None
                 row_upper = {str(k).strip().upper(): v for k, v in new_row.items()}
 
                 if is_can_sheet:
-                    raw_can = str(row_upper.get('CAN_PORT', '')).strip().lower() 
+                    raw_can = str(row_upper.get('CAN_PORT', '')).strip().lower()
                     if raw_can and raw_can != 'nan': can_sig = ("i" + raw_can).lower()
                     raw_eth = str(row_upper.get('ATTRIBUTE_VALUE', '')).strip().lower()
                     if raw_eth and raw_eth != 'nan': eth_sig = raw_eth
@@ -156,7 +157,7 @@ class CrossValidator:
                 can_raw_dict = {}
                 if can_sig and can_sig in self.can_lookup:
                     can_raw_dict = self.extract_dict(self.can_lookup[can_sig].get('Attributes', {}).get('Enums', {}))
-                
+
                 sip_raw_dict = {}
                 if eth_sig and eth_sig in self.eth_lookup:
                     sip_raw_dict = self.extract_dict(self.eth_lookup[eth_sig].get('Enums', {}))
@@ -167,7 +168,7 @@ class CrossValidator:
                 # --- GUARANTEE IS_ENUM & PRE-COMPUTE RAW BOUNDARIES ---
                 is_enum = bool(can_raw_dict or sip_raw_dict)
                 new_row['IS_ENUM'] = is_enum
-                
+
                 can_min, can_mid, can_max = "N/A", "N/A", "N/A"
                 sip_min, sip_mid, sip_max = "N/A", "N/A", "N/A"
 
@@ -194,7 +195,7 @@ class CrossValidator:
 
                     match_pool.sort(key=lambda x: x['score'], reverse=True)
                     final_mapping, used_sip = {}, set()
-                    
+
                     for m in match_pool:
                         if m['cid'] not in final_mapping and m['sid'] not in used_sip:
                             if m['score'] > -5000:
@@ -208,7 +209,7 @@ class CrossValidator:
                     if n >= 2:
                         idx_min, idx_mid, idx_max = (1 if n > 3 else 0), n // 2, n - 1
                         m_min, m_mid, m_max = valid_results[idx_min], valid_results[idx_mid], valid_results[idx_max]
-                        
+
                         # OVERWRITE the fallback bounds with strictly mapped pairs
                         can_min, can_mid, can_max = m_min['c_id'], m_mid['c_id'], m_max['c_id']
                         sip_min, sip_mid, sip_max = m_min['s_id'], m_mid['s_id'], m_max['s_id']
@@ -236,11 +237,11 @@ class CrossValidator:
                 for suffix in ['MIN', 'MID', 'MAX']:
                     s_key = f'COMPUTED_SOMEIP_VALUE_{suffix}'
                     c_key = f'COMPUTED_CAN_VALUE_{suffix}'
-                    
+
                     s_val = new_row.get(s_key)
                     if s_val in [None, '', 'N/A'] and new_row.get(c_key) not in [None, '', 'N/A']:
                         new_row[s_key] = new_row[c_key]
-                            
+
             except Exception as e:
                 log.debug(f"Row error safely bypassed: {e}")
 
