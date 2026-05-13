@@ -42,8 +42,10 @@ def main():
     parser = argparse.ArgumentParser(description="CAPL Generation Tool Pipeline.")
     parser.add_argument("--cli", action="store_true", help=" INTERFACE TEST - CAPL SCRIPT GENERATOR TOOL")
     parser.add_argument("--enable-log", action="store_true")
-    parser.add_argument("--req_excel", type=Path, required=True, help="Path to Input Requirement.xlsx")
+    parser.add_argument("--req_excel", type=Path, required=True, help="Path to Input Requirements.xlsx")
     parser.add_argument("--arxml", type=str, required=True, help="Path to the ETH_CAN.arxml File")
+    parser.add_argument("--aacp-sysvar", type=str, required=True, help="Path to the AACP sysvar (aacp.vsysvar) File")
+    parser.add_argument("--someip-sysvar", type=str, required=True, help="Path to the SOMEIP_FF sysvar (SysVarDef.xml) File")
     parser.add_argument("--out", type=Path, default=Path("./Output_CAPL_Scripts"), help="Output directory for generated CAPL Scripts")
     parser.add_argument("--can-cache", default="can_db_cache.json")
     parser.add_argument("--eth-cache", default="someip_db_cache.json")
@@ -60,6 +62,8 @@ def main():
         category=args.category,
         test_type=args.type,
         raw_arxml=args.arxml,
+        someip_sysvar_xml=args.someip_sysvar,
+        aacp_sysvar_vsysvar=args.aacp_sysvar,
         enable_log=args.enable_log
     )
 
