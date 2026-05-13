@@ -145,62 +145,31 @@ class CaplGenerationPipeline:
         return can_built, eth_built, ff_built, aacp_built
 
     def run_preprocessing_memory(self, input_excel: str, output_dir: str):
-        """PHASE 1: Maps and processes data using Orchestrator (Steps 1-8)."""
+        """PHASE 1: Maps and processes data using Orchestrator (Steps 1-7)."""
         start_time = time.time()
         log.info("=== STARTING IN-MEMORY PRE-PROCESSING ===")
 
+        # Safety Check: Ensure databases were built/loaded first
         if not self.can_db_data or not self.eth_db_data:
-            raise RuntimeError("Databases not loaded into memory. Run build_databases first.")
+            raise RuntimeError("Databases not loaded. Run build_databases() first.")
 
         out_path = Path(output_dir)
         out_path.mkdir(parents=True, exist_ok=True)
-        
-        self.missing_signals = []
 
         try:
             # --- THE ORCHESTRATION ---
-            # Instantiate Processor and Orchestrator
-            from preprocessor_core.common_processor import CommonProcessor # Ensure correct import path
-            processor = CommonProcessor(self.can_db_data, self.eth_db_data)
-            orchestrator = MapperOrchestrator(processor)
+            # We pass the raw dicts; Orchestrator handles the CommonProcessor internally.
+            orchestrator = MapperOrchestrator(self.can_db_data, self.eth_db_data)
             
-            # This single call now executes all 7 steps defined in Step-by-Step logic
-            log.info("-> Executing 7-Step Mapping Pipeline...")
+            log.info(f"-> Processing {os.path.basename(input_excel)}...")
             self.in_memory_dfs = orchestrator.process_to_dataframes(input_excel)
 
-            # --- MISSING SIGNALS CAPTURE ---
-            # We keep this here as it is a validation step, not a mapping step.
-            can_keys = {str(k).lower() for k in self.can_db_data.keys()}
-            eth_keys = {str(v.get('Method', v.get('Attribute_Value', ''))).strip().lower() 
-                        for v in self.eth_db_data.values() if isinstance(v, dict)}
-
-            for sheet_name, df in self.in_memory_dfs.items():
-                # Skip capture if sheet is empty or failed
-                if df.empty: continue
-                
-                for _, row in df.iterrows():
-                    req_id = str(row.get('E2E_ETH_REQ_ID', row.get('E2E_CAN_REQ_ID', 'Unknown'))).strip()
-                    
-                    # Check CAN Port existence
-                    can_port = str(row.get('CAN_PORT', '')).strip()
-                    if can_port and can_port.lower() not in ['nan', 'none', '', 'n/a']:
-                        search_key = f"i{can_port.lower()}"
-                        if search_key not in can_keys:
-                            self.missing_signals.append(f"CAN Port '{can_port}' [Req: {req_id}]")
-
-                    # Check ETH Attribute existence
-                    eth_attr = str(row.get('ATTRIBUTE_VALUE', '')).strip()
-                    if eth_attr and eth_attr.lower() not in ['nan', 'none', '', 'n/a']:
-                        if eth_attr.lower() not in eth_keys:
-                            self.missing_signals.append(f"ETH Attr '{eth_attr}' [Req: {req_id}]")
-            
-            self.missing_signals = list(dict.fromkeys(self.missing_signals))
-
-            # --- DEV MODE DISK DUMP ---
+            # --- OPTIONAL: DEV MODE DISK DUMP ---
+            # Only saves the intermediate file if logging is enabled and not a production build.
             if self.write_to_disk:
                 base_name = Path(input_excel).name.replace(".xlsx", "_Intermediate.xlsx")
                 intermediate_excel = out_path / base_name
-                log.info(f"🛠️ DEV MODE: Saving debug intermediate file to: {intermediate_excel}")
+                log.info(f"🛠️  DEV MODE: Dumping intermediate results to: {intermediate_excel}")
                 with pd.ExcelWriter(intermediate_excel, engine='openpyxl') as writer:
                     for sheet_name, df in self.in_memory_dfs.items():
                         df.to_excel(writer, sheet_name=sheet_name, index=False)

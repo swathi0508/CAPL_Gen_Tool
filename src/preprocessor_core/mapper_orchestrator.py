@@ -54,4 +54,3 @@ class MapperOrchestrator:
 
         log.info("Completed 7-step orchestration sequence.")
         return final_results
-    
