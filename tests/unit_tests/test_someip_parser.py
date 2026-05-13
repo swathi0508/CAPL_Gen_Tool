@@ -2,8 +2,8 @@ import os
 
 from cache_cleanup import cleanup_pycache
 
-from core.logger import log
-from signals.someip_event_parser import SomeIPEventParser
+from logger import log
+from signal_parsers.someip_event_parser import SomeIPEventParser
 
 # Clean __pycache__ at test start
 cleanup_pycache()

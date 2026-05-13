@@ -3,7 +3,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
-from core.logger import log
+from logger import log
 
 
 class CaplSignalValidationLibGenerator:

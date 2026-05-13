@@ -2,8 +2,8 @@ import os
 
 from cache_cleanup import cleanup_pycache
 
-from core.logger import log
-from signals.can_parser import CANSignalParser
+from logger import log
+from signal_parsers.can_parser import CANSignalParser
 
 # Clean __pycache__ at test start
 cleanup_pycache()

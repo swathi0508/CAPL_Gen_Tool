@@ -7,13 +7,13 @@ from pathlib import Path
 
 import pandas as pd
 
-from core.logger import log
+from logger import log
 from generator.jinja_engine import JinjaEngine
-from mappers.mapper_orchestrator import MapperOrchestrator
-from signals.can_parser import CANSignalParser
-from signals.someip_event_parser import SomeIPEventParser
-from signals.someip_ff_parser import SomeipFFParser
-from signals.aacp_sysvar_parser import AacpSysVarParser 
+from preprocessor_core.mapper_orchestrator import MapperOrchestrator
+from signal_parsers.can_parser import CANSignalParser
+from signal_parsers.someip_event_parser import SomeIPEventParser
+from signal_parsers.someip_ff_parser import SomeipFFParser
+from signal_parsers.aacp_sysvar_parser import AacpSysVarParser 
 
 class CaplGenerationPipeline:
     """The central brain orchestrating Parsers, Mappers, and Generators strictly in RAM."""
@@ -160,7 +160,7 @@ class CaplGenerationPipeline:
         try:
             # --- THE ORCHESTRATION ---
             # Instantiate Processor and Orchestrator
-            from mappers.common_processor import CommonProcessor # Ensure correct import path
+            from preprocessor_core.common_processor import CommonProcessor # Ensure correct import path
             processor = CommonProcessor(self.can_db_data, self.eth_db_data)
             orchestrator = MapperOrchestrator(processor)
             

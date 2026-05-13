@@ -1,7 +1,7 @@
 import os
 import pandas as pd
-from core.logger import log
-from mappers.common_processor import CommonProcessor
+from logger import log
+from preprocessor_core.common_processor import CommonProcessor
 
 class MapperOrchestrator:
     """Coordinates the 7-step mapping sequence into in-memory DataFrames."""

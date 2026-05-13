@@ -2,8 +2,8 @@ import os
 
 import pandas as pd
 
-from core.logger import log
-from signals.can_parser import CANSignalParser
+from logger import log
+from signal_parsers.can_parser import CANSignalParser
 
 
 def update_can_intermediate_sheet(arxml_path, excel_path, sheet_name="E2E_CAN", json_cache="can_db_cache.json"):

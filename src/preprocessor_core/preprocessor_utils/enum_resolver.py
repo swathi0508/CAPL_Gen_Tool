@@ -6,7 +6,6 @@ import pandas as pd
 class EnumResolver:
     """
     Generic boundary selection and lexical mapping engine.
-    Ensures 'Perfect Logic' from CrossValidator is maintained across all protocols.
     """
 
     def resolve_enum_mapping(self, df: pd.DataFrame, sig1_col: str, sig2_col: str) -> pd.DataFrame:
@@ -133,7 +132,6 @@ class EnumResolver:
         return res
 
     def _pick_boundaries_from_list(self, items):
-        """CRITICAL: Exact index selection rules from CrossValidator."""
         n = len(items)
         if n == 0: return "N/A", "N/A", "N/A"
         if n == 1: return items[0], items[0], items[0]

@@ -1,5 +1,5 @@
 import pandas as pd
-from mappers.base_mapper import BaseMapper
+from preprocessor_core.db_mappers.base_mapper import BaseMapper
 
 class SomeIPMapper(BaseMapper):
     def _load_database(self) -> dict:

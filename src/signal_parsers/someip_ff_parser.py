@@ -4,8 +4,8 @@ from typing import Any, Dict, List
 from lxml import etree
 from datetime import timedelta
 
-from signals.base_parser import BaseParser
-from core.logger import log
+from signal_parsers.base_parser import BaseParser
+from logger import log
 
 class SomeipFFParser(BaseParser):
     """

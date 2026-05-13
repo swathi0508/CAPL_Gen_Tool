@@ -8,7 +8,7 @@ from capl_bolt.cli import run_headless_generation
 from capl_bolt.gui.tool_gui import launch_gui
 
 # core is at the root, so it stays the same
-from core.logger import log
+from logger import log
 
 
 # --- SECURITY SHIELD: Global Exception Handler ---

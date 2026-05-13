@@ -1,6 +1,6 @@
 import os
-from signals.aacp_sysvar_parser import AacpSysVarParser
-from core.logger import log
+from signal_parsers.aacp_sysvar_parser import AacpSysVarParser
+from logger import log
 from cache_cleanup import cleanup_pycache
 
 # Clean __pycache__ at test start to ensure fresh imports

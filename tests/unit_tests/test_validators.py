@@ -4,9 +4,8 @@ from pathlib import Path
 import pandas as pd
 from cache_cleanup import cleanup_pycache
 
-from core.logger import log
-from mappers.mapper_orchestrator import MapperOrchestrator
-from validators.cross_validator import CrossValidator
+from logger import log
+from preprocessor_core.mapper_orchestrator import MapperOrchestrator
 
 # Clean __pycache__ at test start
 cleanup_pycache()
@@ -39,15 +38,9 @@ def test_mapper_and_validator(input_excel: str, output_dir: str, can_cache: str,
         in_memory_dfs = orchestrator.process_to_dataframes(input_excel)
 
         # ---------------------------------------------------------
-        # PHASE 2: CROSS VALIDATION (Memory DataFrames)
+        # PHASE 2: CROSS VALIDATION REMOVED
         # ---------------------------------------------------------
-        log.info("--- PHASE 2: CROSS-VALIDATING IN RAM ---")
-        validator = CrossValidator(can_db=orchestrator.can_mapper.db, eth_db=orchestrator.eth_mapper.db)
-
-        if "E2E_CAN_PARSED" in in_memory_dfs:
-            in_memory_dfs["E2E_CAN_PARSED"] = validator.process_dataframe(in_memory_dfs["E2E_CAN_PARSED"], is_can_sheet=True)
-        if "E2E_ETH_PARSED" in in_memory_dfs:
-            in_memory_dfs["E2E_ETH_PARSED"] = validator.process_dataframe(in_memory_dfs["E2E_ETH_PARSED"], is_can_sheet=False)
+        log.info("--- PHASE 2: SKIPPING CROSS VALIDATION ---")
 
         # ---------------------------------------------------------
         # TEST VERIFICATION: Save to Disk
