@@ -1,6 +1,6 @@
 import os
-from signals.someip_ff_parser import SomeipFFParser
-from core.logger import log
+from signal_parsers.someip_ff_parser import SomeipFFParser
+from logger import log
 from cache_cleanup import cleanup_pycache
 
 # Clean __pycache__ at test start to ensure fresh imports

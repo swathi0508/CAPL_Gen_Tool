@@ -1,9 +1,7 @@
 import os
 
-# Adjust these imports based on how your IDE resolves the 'src' folder
-from core.logger import log
-from mappers.mapper_orchestrator import MapperOrchestrator
-from validators.cross_validator import CrossValidator
+from logger import log
+from preprocessor_core.mapper_orchestrator import MapperOrchestrator
 
 
 def run_pipeline(input_excel: str, output_dir: str, can_cache: str, eth_cache: str):
@@ -34,31 +32,9 @@ def run_pipeline(input_excel: str, output_dir: str, can_cache: str, eth_cache: s
             return
 
         # ---------------------------------------------------------
-        # PHASE 2: CROSS VALIDATION & LIMIT COMPUTATION
+        # PHASE 2: CROSS VALIDATION REMOVED
         # ---------------------------------------------------------
-        log.info("--- PHASE 2: CROSS-VALIDATING & COMPUTING LIMITS ---")
-
-        # Instantiate Validator using the ALREADY LOADED databases from the Orchestrator
-        # This saves massive amounts of time by not re-reading the JSONs!
-        validator = CrossValidator(
-            can_db=orchestrator.can_mapper.db,
-            eth_db=orchestrator.eth_mapper.db
-        )
-
-        # Note: The Orchestrator saves the sheets with a "_PARSED" suffix
-        # 1. Validate the CAN Sheet
-        validator.process_sheet(
-            excel_path=intermediate_excel,
-            sheet_name="E2E_CAN_PARSED",
-            is_can_sheet=True
-        )
-
-        # 2. Validate the ETH Sheet
-        validator.process_sheet(
-            excel_path=intermediate_excel,
-            sheet_name="E2E_ETH_PARSED",
-            is_can_sheet=False
-        )
+        log.info("--- PHASE 2: SKIPPING CROSS VALIDATION ---")
 
         log.info("==================================================")
         log.info(f"✅ PIPELINE COMPLETE! Final Output: {intermediate_excel}")

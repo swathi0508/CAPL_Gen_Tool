@@ -1,11 +1,11 @@
 import math
 import pandas as pd
-from core.logger import log
-from mappers.base_mapper import BaseMapper
-from mappers.can_mapper import CANMapper
-from mappers.someip_mapper import SomeIPMapper
-from .basic_function_resolver import BasicFunctionResolver
-from .enum_resolver import EnumResolver
+from logger import log
+from preprocessor_core.db_mappers.base_mapper import BaseMapper
+from preprocessor_core.db_mappers.can_mapper import CANMapper
+from preprocessor_core.db_mappers.someip_mapper import SomeIPMapper
+from preprocessor_core.preprocessor_utils.basic_function_resolver import BasicFunctionResolver
+from preprocessor_core.preprocessor_utils.enum_resolver import EnumResolver
 
 class CommonProcessor:
     def __init__(self, can_db_data: dict, eth_db_data: dict):

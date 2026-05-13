@@ -1,6 +1,6 @@
 from cache_cleanup import cleanup_pycache
 
-from core.logger import log
+from logger import log
 from pipeline.main_pipeline import CaplGenerationPipeline
 
 # Clean __pycache__ at test start

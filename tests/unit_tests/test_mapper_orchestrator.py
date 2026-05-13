@@ -5,8 +5,8 @@ from pathlib import Path
 import pandas as pd
 from cache_cleanup import cleanup_pycache
 
-from core.logger import log
-from mappers.mapper_orchestrator import MapperOrchestrator
+from logger import log
+from preprocessor_core.mapper_orchestrator import MapperOrchestrator
 
 # Clean __pycache__ at test start
 cleanup_pycache()

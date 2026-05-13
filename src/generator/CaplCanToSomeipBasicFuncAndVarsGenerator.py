@@ -4,7 +4,7 @@ from pathlib import Path
 import pandas as pd
 from jinja2 import Environment, FileSystemLoader
 
-from core.logger import log
+from logger import log
 
 pd.set_option('future.no_silent_downcasting', True)
 

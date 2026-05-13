@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-from core.logger import log
+from logger import log
 from pipeline.main_pipeline import CaplGenerationPipeline
 
 def run_headless_generation(excel_path: Path, output_dir: Path, can_db: str, eth_db: str, category: str, test_type: str, raw_arxml: str, someip_sysvar_xml: str, aacp_sysvar_vsysvar: str, enable_log: bool):

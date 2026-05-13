@@ -4,7 +4,7 @@ import os
 import pandas as pd
 from cache_cleanup import cleanup_pycache
 
-from core.logger import log
+from logger import log
 from generator.jinja_engine import JinjaEngine
 
 # Clean __pycache__ at test start

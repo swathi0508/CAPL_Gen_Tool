@@ -6,7 +6,7 @@ import warnings
 
 import pandas as pd
 
-from core.logger import log
+from logger import log
 
 # Suppress the warning natively without altering Pandas' internal data types
 warnings.simplefilter(action='ignore', category=FutureWarning)

@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from core.logger import log
+from logger import log
 from pipeline.main_pipeline import CaplGenerationPipeline
 
 

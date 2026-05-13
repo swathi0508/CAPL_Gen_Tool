@@ -2,8 +2,8 @@ import os
 
 import pandas as pd
 
-from core.logger import log
-from signals.someip_event_parser import SomeIPEventParser
+from logger import log
+from signal_parsers.someip_event_parser import SomeIPEventParser
 
 
 def update_eth_intermediate_sheet(arxml_path: str, excel_path: str, sheet_name: str = "E2E_ETH", json_cache: str = None):

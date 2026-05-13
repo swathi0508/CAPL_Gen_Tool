@@ -1,7 +1,7 @@
 import os
 
 # Adjust imports based on your IDE/environment pathing
-from core.logger import log
+from logger import log
 from generator.jinja_engine import JinjaEngine
 
 

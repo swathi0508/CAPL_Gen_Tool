@@ -9,7 +9,7 @@ src_path = current_file.parent.parent
 if str(src_path) not in sys.path:
     sys.path.append(str(src_path))
 
-from core.logger import log
+from logger import log
 from generator.CaplCampaignGenerator import CaplCampaignGenerator
 from generator.CaplCanToSomeipBasicFuncAndVarsGenerator import (
     CaplCanToSomeipBasicFuncAndVarsGenerator,
