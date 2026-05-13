@@ -12,12 +12,11 @@ from generator.jinja_engine import JinjaEngine
 from mappers.mapper_orchestrator import MapperOrchestrator
 from signals.can_parser import CANSignalParser
 from signals.someip_event_parser import SomeIPEventParser
-from validators.cross_validator import CrossValidator
 from signals.someip_ff_parser import SomeipFFParser
 from signals.aacp_sysvar_parser import AacpSysVarParser 
 
 class CaplGenerationPipeline:
-    """The central brain orchestrating Parsers, Mappers, Validators, and Generators strictly in RAM."""
+    """The central brain orchestrating Parsers, Mappers, and Generators strictly in RAM."""
 
     def __init__(self, can_db_cache: str = "can_db_cache.json", 
                  eth_db_cache: str = "someip_db_cache.json", 
@@ -35,6 +34,7 @@ class CaplGenerationPipeline:
         self.ff_db_data = {}
         self.aacp_db_data = {}
         self.in_memory_dfs = {}
+        self.missing_signals = []
 
         # Security Lock: If running as compiled EXE, forcefully block file dumping
         self.is_production = getattr(sys, 'frozen', False)
@@ -145,7 +145,7 @@ class CaplGenerationPipeline:
         return can_built, eth_built, ff_built, aacp_built
 
     def run_preprocessing_memory(self, input_excel: str, output_dir: str):
-        """PHASE 1 & 2: Maps and Validates strictly via DataFrames."""
+        """PHASE 1: Maps and processes data using Orchestrator (Steps 1-8)."""
         start_time = time.time()
         log.info("=== STARTING IN-MEMORY PRE-PROCESSING ===")
 
@@ -158,40 +158,45 @@ class CaplGenerationPipeline:
         self.missing_signals = []
 
         try:
-            # 1. Map requirements (Now returns dict of DataFrames)
-            log.info("-> Phase 1: Mapping Databases to Requirements")
-            orchestrator = MapperOrchestrator(self.can_db_data, self.eth_db_data)
+            # --- THE ORCHESTRATION ---
+            # Instantiate Processor and Orchestrator
+            from mappers.common_processor import CommonProcessor # Ensure correct import path
+            processor = CommonProcessor(self.can_db_data, self.eth_db_data)
+            orchestrator = MapperOrchestrator(processor)
+            
+            # This single call now executes all 7 steps defined in Step-by-Step logic
+            log.info("-> Executing 7-Step Mapping Pipeline...")
             self.in_memory_dfs = orchestrator.process_to_dataframes(input_excel)
 
             # --- MISSING SIGNALS CAPTURE ---
+            # We keep this here as it is a validation step, not a mapping step.
             can_keys = {str(k).lower() for k in self.can_db_data.keys()}
-            eth_keys = {str(k).lower() for k in self.eth_db_data.keys()}
+            eth_keys = {str(v.get('Method', v.get('Attribute_Value', ''))).strip().lower() 
+                        for v in self.eth_db_data.values() if isinstance(v, dict)}
 
             for sheet_name, df in self.in_memory_dfs.items():
+                # Skip capture if sheet is empty or failed
+                if df.empty: continue
+                
                 for _, row in df.iterrows():
-                    req_id = str(row.get('REQ ID', 'Unknown')).strip()
+                    req_id = str(row.get('E2E_ETH_REQ_ID', row.get('E2E_CAN_REQ_ID', 'Unknown'))).strip()
+                    
+                    # Check CAN Port existence
                     can_port = str(row.get('CAN_PORT', '')).strip()
-                    if can_port and can_port.lower() not in ['nan', 'none', '']:
+                    if can_port and can_port.lower() not in ['nan', 'none', '', 'n/a']:
                         search_key = f"i{can_port.lower()}"
                         if search_key not in can_keys:
                             self.missing_signals.append(f"CAN Port '{can_port}' [Req: {req_id}]")
 
+                    # Check ETH Attribute existence
                     eth_attr = str(row.get('ATTRIBUTE_VALUE', '')).strip()
-                    if eth_attr and eth_attr.lower() not in ['nan', 'none', '']:
+                    if eth_attr and eth_attr.lower() not in ['nan', 'none', '', 'n/a']:
                         if eth_attr.lower() not in eth_keys:
                             self.missing_signals.append(f"ETH Attr '{eth_attr}' [Req: {req_id}]")
             
             self.missing_signals = list(dict.fromkeys(self.missing_signals))
 
-            # 2. Compute Limits and Validate
-            log.info("-> Phase 2: Cross-Validating Signals & Computing Bounds")
-            validator = CrossValidator(orchestrator.can_mapper.db, orchestrator.eth_mapper.db)
-
-            if "E2E_CAN_PARSED" in self.in_memory_dfs:
-                self.in_memory_dfs["E2E_CAN_PARSED"] = validator.process_dataframe(self.in_memory_dfs["E2E_CAN_PARSED"], is_can_sheet=True)
-            if "E2E_ETH_PARSED" in self.in_memory_dfs:
-                self.in_memory_dfs["E2E_ETH_PARSED"] = validator.process_dataframe(self.in_memory_dfs["E2E_ETH_PARSED"], is_can_sheet=False)
-
+            # --- DEV MODE DISK DUMP ---
             if self.write_to_disk:
                 base_name = Path(input_excel).name.replace(".xlsx", "_Intermediate.xlsx")
                 intermediate_excel = out_path / base_name
@@ -209,7 +214,7 @@ class CaplGenerationPipeline:
             raise
 
     def run_generation(self, output_dir: str, category: str, test_type: str):
-        """PHASE 3: Passes the memory dict directly to the Jinja Engine."""
+        """PHASE 2: Passes the memory dict directly to the Jinja Engine."""
         start_time = time.time()
         log.info(f"=== STARTING CAPL GENERATION ({category} | {test_type}) ===")
         if not self.in_memory_dfs:

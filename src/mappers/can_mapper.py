@@ -1,7 +1,5 @@
 import pandas as pd
-
 from mappers.base_mapper import BaseMapper
-
 
 class CANMapper(BaseMapper):
     def _load_database(self) -> dict:
@@ -45,3 +43,25 @@ class CANMapper(BaseMapper):
             "CAN_OFFSET": attr.get("Offset"),
             "CAN_RESOLUTION": attr.get("Resolution")
         }
+
+    def resolve(self, df_subset: pd.DataFrame) -> pd.DataFrame:
+        """Mapper only handles data lookup and column formatting."""
+        cols = ["CAN_DB_SIGNAL_NAME", "CAN_ENUM", "CAN_MIN_RAW", "CAN_MAX_RAW",
+                "CAN_PERIODICITY", "CAN_OFFSET", "CAN_RESOLUTION", "IS_ENUM"]
+
+        def process_row(r):
+            data = self.get_signal_data(r.get("CAN_PORT"), r.get("CAN_CLUSTER"))
+            
+            # Check for Enum presence
+            enum_val = str(data.get("CAN_ENUM", "")).strip().upper()
+            is_enum = enum_val not in ["", "NONE", "NAN", "N/A"]
+            
+            # Safe update for IS_ENUM (Don't overwrite True if already set)
+            existing_is_enum = str(r.get("IS_ENUM")).upper() == "TRUE"
+            data["IS_ENUM"] = True if (is_enum or existing_is_enum) else False
+            return data
+
+        # Apply logic to the subset passed by the processor
+        res = df_subset.apply(process_row, axis=1, result_type='expand')
+        df_subset.loc[:, cols] = res[cols].values
+        return df_subset
