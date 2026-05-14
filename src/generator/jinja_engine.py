@@ -14,6 +14,7 @@ from generator.CaplCampaignGenerator import CaplCampaignGenerator
 from generator.CaplCanToSomeipBasicFuncAndVarsGenerator import CaplCanToSomeipBasicFuncAndVarsGenerator
 from generator.CaplSomeipToCanBasicFuncAndVarsGenerator import CaplSomeipToCanBasicFuncAndVarsGenerator
 from generator.CaplCanToSomeipAacpBasicFuncAndVarsGenerator import CaplCanToSomeipAacpBasicFuncAndVarsGenerator
+from generator.CaplCanToSomeipFFBasicFuncAndVarsGenerator import CaplCanToSomeipFFBasicFuncAndVarsGenerator
 from generator.CaplSignalValidationLibGenerator import CaplSignalValidationLibGenerator
 
 
@@ -21,7 +22,7 @@ class JinjaEngine:
     GENERATOR_REGISTRY = {
         "CAN->SOMEIP": CaplCanToSomeipBasicFuncAndVarsGenerator,
         "CAN->SOMEIP_AACP": CaplCanToSomeipAacpBasicFuncAndVarsGenerator,
-        # Future additions:
+        "CAN->SOMEIP_FF": CaplCanToSomeipFFBasicFuncAndVarsGenerator,
         "SOMEIP->CAN": CaplSomeipToCanBasicFuncAndVarsGenerator,
     }
 
