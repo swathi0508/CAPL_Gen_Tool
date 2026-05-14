@@ -34,7 +34,6 @@ class CaplGenerationPipeline:
         self.ff_db_data = {}
         self.aacp_db_data = {}
         self.in_memory_dfs = {}
-        self.missing_signals = []
 
         # Security Lock: If running as compiled EXE, forcefully block file dumping
         self.is_production = getattr(sys, 'frozen', False)

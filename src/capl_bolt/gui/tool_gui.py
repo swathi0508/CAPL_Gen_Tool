@@ -19,11 +19,12 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QTextEdit,
     QVBoxLayout,
-    QWidget
+    QWidget,
 )
 
 from logger import log
 from pipeline.main_pipeline import CaplGenerationPipeline
+
 
 def get_asset_path(filename: str) -> Path:
     if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
@@ -33,9 +34,11 @@ def get_asset_path(filename: str) -> Path:
     if script_path.exists(): return script_path
     return Path(__file__).parent.parent.parent / filename
 
+
 class CommSignals(QObject):
     log_signal = pyqtSignal(str)
-    finished_signal = pyqtSignal(str) # Updated to pass the time string
+    finished_signal = pyqtSignal()
+
 
 class CaplGenGUI(QMainWindow):
     def __init__(self, root_dummy=None):
@@ -65,12 +68,11 @@ class CaplGenGUI(QMainWindow):
         self.LBL_W = 230
         self.EDIT_W = 510
         self.BROWSE_W = 90
-        self.ACTION_W = 150    # Symmetrical width for both action buttons
+        self.ACTION_W = 150
         self.SP_H = 10
-        self.ACTION_GAP = 35  # Increased spacing before the action buttons
-        
-        self.ROW_W = self.LBL_W + self.EDIT_W + self.BROWSE_W + (self.SP_H * 2) # Exactly 850px
-        self.TOTAL_W = self.ROW_W + self.ACTION_GAP + self.ACTION_W # Exactly 1035px
+        self.ACTION_GAP = 35
+        self.ROW_W = self.LBL_W + self.EDIT_W + self.BROWSE_W + (self.SP_H * 2)
+        self.TOTAL_W = self.ROW_W + self.ACTION_GAP + self.ACTION_W
 
         self._setup_canvas()
         self._build_ui_container()
@@ -101,7 +103,7 @@ class CaplGenGUI(QMainWindow):
         self.content_widget.setFixedWidth(1060)
         self.main_layout = QVBoxLayout(self.content_widget)
         self.main_layout.setContentsMargins(10, 40, 10, 40)
-        self.main_layout.setSpacing(25) # Clean gap between logical sections
+        self.main_layout.setSpacing(25)
 
         self.outer_layout.addStretch()
         self.outer_layout.addWidget(self.content_widget)
@@ -123,33 +125,11 @@ class CaplGenGUI(QMainWindow):
         """)
 
         self._build_header()
-        
-        # Added vertical space between header/tool name and the input fields
-        self.main_layout.addSpacing(30) 
-        
+        self.main_layout.addSpacing(30)
         self._build_input_section()
         self._build_config_section()
-        
-        # Added requested vertical space before EXECUTION LOGS
-        self.main_layout.addSpacing(30) 
+        self.main_layout.addSpacing(30)
         self._build_log_section()
-
-    def _build_header(self):
-        header_widget = QWidget()
-        header_widget.setFixedWidth(self.TOTAL_W)
-        header = QHBoxLayout(header_widget)
-        header.setContentsMargins(0, 0, 0, 0)
-        logo_path = get_asset_path("logo.png")
-        if logo_path.exists():
-            l_lbl = QLabel()
-            l_pix = QPixmap(str(logo_path)).scaledToHeight(55, Qt.TransformationMode.SmoothTransformation)
-            l_lbl.setPixmap(l_pix)
-            header.addWidget(l_lbl)
-        title = QLabel("CAPLBolt | <i>Instant Interface Test Script Generator</i>")
-        title.setStyleSheet(f"font-size: 24px; color: {self.clr_title}; font-weight: bold;")
-        header.addWidget(title)
-        header.addStretch()
-        self.main_layout.addWidget(header_widget)
 
     def _create_input_row(self, label_text, edit_obj, btn_obj):
         row = QWidget()
@@ -157,18 +137,10 @@ class CaplGenGUI(QMainWindow):
         layout = QHBoxLayout(row)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(self.SP_H)
-
-        lbl = QLabel(label_text)
-        lbl.setFixedSize(self.LBL_W, 32)
-        lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        lbl = QLabel(label_text); lbl.setFixedSize(self.LBL_W, 32)
         layout.addWidget(lbl)
-
-        edit_obj.setFixedSize(self.EDIT_W, 32)
-        layout.addWidget(edit_obj)
-
-        btn_obj.setFixedSize(self.BROWSE_W, 32)
-        layout.addWidget(btn_obj)
-
+        edit_obj.setFixedSize(self.EDIT_W, 32); layout.addWidget(edit_obj)
+        btn_obj.setFixedSize(self.BROWSE_W, 32); layout.addWidget(btn_obj)
         return row
 
     def _build_input_section(self):
@@ -176,34 +148,26 @@ class CaplGenGUI(QMainWindow):
         container.setFixedSize(self.TOTAL_W, 160)
         layout = QHBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0) # 0 Spacing so we can inject EXACT ACTION_GAP below
+        layout.setSpacing(0)
 
         inputs_vbox = QVBoxLayout()
         inputs_vbox.setContentsMargins(0, 0, 0, 0)
         inputs_vbox.setSpacing(10)
 
-        self.req_path_edit = QLineEdit()
-        self.req_path_edit.textChanged.connect(self._check_logic_states)
-        btn_req = QPushButton("BROWSE"); btn_req.setObjectName("util_btn")
-        btn_req.clicked.connect(self._browse_file)
+        self.req_path_edit = QLineEdit(); self.req_path_edit.textChanged.connect(self._check_logic_states)
+        btn_req = QPushButton("BROWSE"); btn_req.setObjectName("util_btn"); btn_req.clicked.connect(self._browse_file)
         inputs_vbox.addWidget(self._create_input_row("Input Requirements Sheet (.xlsx):", self.req_path_edit, btn_req))
 
-        self.arxml_path_edit = QLineEdit()
-        self.arxml_path_edit.textChanged.connect(self._check_logic_states)
-        btn_arxml = QPushButton("BROWSE"); btn_arxml.setObjectName("util_btn")
-        btn_arxml.clicked.connect(self._browse_arxml_file)
+        self.arxml_path_edit = QLineEdit(); self.arxml_path_edit.textChanged.connect(self._check_logic_states)
+        btn_arxml = QPushButton("BROWSE"); btn_arxml.setObjectName("util_btn"); btn_arxml.clicked.connect(self._browse_arxml_file)
         inputs_vbox.addWidget(self._create_input_row("Input Signal DB (ETH_CAN.arxml):", self.arxml_path_edit, btn_arxml))
 
-        self.aacp_path_edit = QLineEdit()
-        self.aacp_path_edit.textChanged.connect(self._check_logic_states)
-        btn_aacp = QPushButton("BROWSE"); btn_aacp.setObjectName("util_btn")
-        btn_aacp.clicked.connect(lambda: self._browse_specific(self.aacp_path_edit, "AACP Sysvar", "vsysvar (*.vsysvar)"))
+        self.aacp_path_edit = QLineEdit(); self.aacp_path_edit.textChanged.connect(self._check_logic_states)
+        btn_aacp = QPushButton("BROWSE"); btn_aacp.setObjectName("util_btn"); btn_aacp.clicked.connect(self._browse_aacp_file)
         inputs_vbox.addWidget(self._create_input_row("Input AACP sysvar (aacp.vsysvar):", self.aacp_path_edit, btn_aacp))
 
-        self.someip_path_edit = QLineEdit()
-        self.someip_path_edit.textChanged.connect(self._check_logic_states)
-        btn_someip = QPushButton("BROWSE"); btn_someip.setObjectName("util_btn")
-        btn_someip.clicked.connect(lambda: self._browse_specific(self.someip_path_edit, "SOMEIP FF", "XML Files (*.xml)"))
+        self.someip_path_edit = QLineEdit(); self.someip_path_edit.textChanged.connect(self._check_logic_states)
+        btn_someip = QPushButton("BROWSE"); btn_someip.setObjectName("util_btn"); btn_someip.clicked.connect(self._browse_someip_file)
         inputs_vbox.addWidget(self._create_input_row("Input SOMEIP_FF sysvar (SysVarDef.xml):", self.someip_path_edit, btn_someip))
 
         layout.addLayout(inputs_vbox)
@@ -216,168 +180,145 @@ class CaplGenGUI(QMainWindow):
         self.btn_preprocess.setStyleSheet("background-color: #3b3e40; color: #94a3b8; border-radius: 4px; border: none;")
         self.btn_preprocess.clicked.connect(self.run_preprocess)
         layout.addWidget(self.btn_preprocess, alignment=Qt.AlignmentFlag.AlignVCenter)
-
         self.main_layout.addWidget(container)
 
     def _build_config_section(self):
-        container = QWidget()
-        container.setFixedSize(self.TOTAL_W, 40)
-        layout = QHBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        container = QWidget(); container.setFixedSize(self.TOTAL_W, 40)
+        layout = QHBoxLayout(container); layout.setContentsMargins(0, 0, 0, 0); layout.setSpacing(0)
+        config_left = QWidget(); config_left.setFixedSize(self.ROW_W, 32)
+        c_layout = QHBoxLayout(config_left); c_layout.setContentsMargins(0, 0, 0, 0); c_layout.setSpacing(self.SP_H)
+        
+        lbl_cat = QLabel("Test Category:"); lbl_cat.setFixedSize(95, 32); c_layout.addWidget(lbl_cat)
+        self.cat_combo = QComboBox(); self.cat_combo.addItems(["E2E_CAN", "E2E_ETH"]); self.cat_combo.setFixedSize(325, 32); c_layout.addWidget(self.cat_combo)
+        
+        lbl_typ = QLabel("Test Type:"); lbl_typ.setFixedSize(75, 32); lbl_typ.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter); c_layout.addWidget(lbl_typ)
+        self.typ_combo = QComboBox(); self.typ_combo.addItems(["CAN->SOMEIP", "CAN->SOMEIP_FF", "CAN->SWC", "SWC->CAN", "SOMEIP->CAN"]); self.typ_combo.setFixedSize(325, 32); c_layout.addWidget(self.typ_combo)
 
-        # Left block exactly equal to 850px
-        config_left = QWidget()
-        config_left.setFixedSize(self.ROW_W, 32)
-        c_layout = QHBoxLayout(config_left)
-        c_layout.setContentsMargins(0, 0, 0, 0)
-        c_layout.setSpacing(self.SP_H)
-
-        # Label shrunk to 95 to close the gap, kept left aligned
-        lbl_cat = QLabel("Test Category:")
-        lbl_cat.setFixedSize(95, 32)
-        lbl_cat.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        c_layout.addWidget(lbl_cat)
-
-        self.cat_combo = QComboBox()
-        self.cat_combo.addItems(["E2E_CAN", "E2E_ETH"])
-        self.cat_combo.setFixedSize(325, 32) # Both combos now identical length
-        c_layout.addWidget(self.cat_combo)
-
-        lbl_typ = QLabel("Test Type:")
-        lbl_typ.setFixedSize(75, 32)
-        lbl_typ.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        c_layout.addWidget(lbl_typ)
-
-        self.typ_combo = QComboBox()
-        self.typ_combo.addItems(["CAN->SOMEIP", "CAN->SOMEIP_FF", "CAN->SWC", "SWC->CAN", "SOMEIP->CAN"])
-        self.typ_combo.setFixedSize(325, 32) # Both combos now identical length
-        c_layout.addWidget(self.typ_combo)
-
-        layout.addWidget(config_left)
-        layout.addSpacing(self.ACTION_GAP)
-
-        self.btn_gen = QPushButton("GENERATE SCRIPTS")
-        self.btn_gen.setEnabled(False)
-        self.btn_gen.setFixedSize(self.ACTION_W, 38)
-        self.btn_gen.setFont(QFont("Helvetica", 9, QFont.Weight.Bold))
-        self.btn_gen.setStyleSheet("background-color: #3b3e40; color: #94a3b8; border-radius: 4px; border: none;")
-        self.btn_gen.clicked.connect(self.run_generation)
-        layout.addWidget(self.btn_gen, alignment=Qt.AlignmentFlag.AlignVCenter)
-
+        layout.addWidget(config_left); layout.addSpacing(self.ACTION_GAP)
+        self.btn_gen = QPushButton("GENERATE SCRIPTS"); self.btn_gen.setEnabled(False); self.btn_gen.setFixedSize(self.ACTION_W, 38)
+        self.btn_gen.setFont(QFont("Helvetica", 9, QFont.Weight.Bold)); self.btn_gen.setStyleSheet("background-color: #3b3e40; color: #94a3b8; border-radius: 4px; border: none;")
+        self.btn_gen.clicked.connect(self.run_generation); layout.addWidget(self.btn_gen, alignment=Qt.AlignmentFlag.AlignVCenter)
         self.main_layout.addWidget(container)
-
-    def _build_log_section(self):
-        container = QWidget()
-        container.setFixedWidth(self.TOTAL_W)
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-
-        header = QHBoxLayout()
-        header.addWidget(QLabel("EXECUTION LOGS"))
-        header.addStretch()
-        for text, func in [("SAVE", self.download_logs), ("CLEAR", self._clear_log)]:
-            btn = QPushButton(text)
-            btn.setObjectName("util_btn")
-            btn.setFixedSize(90, 30)
-            btn.clicked.connect(func)
-            header.addWidget(btn)
-        layout.addLayout(header)
-
-        self.log_text = QTextEdit(); self.log_text.setReadOnly(True)
-        self.log_text.setStyleSheet("background-color: #000000; color: #cbd5e1; font-family: Consolas; border: 1px solid #2d3748; border-radius: 4px;")
-        layout.addWidget(self.log_text)
-
-        self.main_layout.addWidget(container, 1)
-
-    # --- Standard Handlers ---
-    def write_log(self, message: str):
-        ts = datetime.now().strftime("%H:%M:%S")
-        self.log_text.append(f"[{ts}] : > {message}")
-        self.log_text.ensureCursorVisible()
-
-    def _format_time(self, elapsed: float) -> str:
-        m, s = divmod(elapsed, 60)
-        ms = int((s - int(s)) * 1000)
-        return f"{int(m):02d}m {int(s):02d}s {ms:03d}ms"
-
-    def _on_pre_process_complete(self, time_str):
-        self.pre_process_done = True
-        self.write_log(f"✅ Pre-Processing is complete. (Time: {time_str})")
-        self._update_gen_button_ui()
-        self._check_logic_states()
-
-    def _check_logic_states(self):
-        paths = [self.req_path_edit.text(), self.arxml_path_edit.text(), self.aacp_path_edit.text(), self.someip_path_edit.text()]
-        if all(p.strip() for p in paths):
-            self.btn_preprocess.setEnabled(True)
-            self.btn_preprocess.setStyleSheet("background-color: #1e8449; color: white; border-radius: 4px; font-weight: bold; border: none;")
-        else:
-            self.btn_preprocess.setEnabled(False)
-            self.btn_preprocess.setStyleSheet("background-color: #3b3e40; color: #94a3b8; border-radius: 4px; border: none;")
-
-    def _update_gen_button_ui(self):
-        if self.pre_process_done:
-            self.btn_gen.setEnabled(True)
-            self.btn_gen.setStyleSheet("background-color: #1e8449; color: white; border-radius: 4px; font-weight: bold; border: none;")
 
     def run_preprocess(self):
         if self.pre_process_done:
-            rep = QMessageBox.question(self, 'Pre-Process Again?', 'Previous data exists. Re-process?', QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-            if rep == QMessageBox.StandardButton.No: return
-        self.btn_preprocess.setEnabled(False)
-        self.btn_preprocess.setStyleSheet("background-color: #d68910; color: white; border-radius: 4px; border: none;")
-        self.pre_process_done = False
-        self.btn_gen.setEnabled(False)
-        
-        # Log immediately when the button is clicked
-        self.write_log("▶️ Pre-Processing started...")
-        
-        threading.Thread(target=self._task_preprocess, daemon=True).start()
+            reply = QMessageBox.question(self, 'Pre-Process Again?', 'Previous data exists. Re-process?', QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if reply == QMessageBox.StandardButton.No: return
 
-    def _task_preprocess(self):
-        ts = time.time()
-        try:
-            self.signals.log_signal.emit("⚙️ Validating ARXML and Network Databases...")
-            
-            self.pipeline.build_databases(
-                self.arxml_path_edit.text(),
-                self.someip_path_edit.text(),
-                self.aacp_path_edit.text()
-            )
-            
-            self.signals.log_signal.emit("⚙️ [(Pre-Processing)] Analyzing requirement specifications ...")
-            self.pipeline.run_preprocessing_memory(self.req_path_edit.text(), "GeneratedTestScripts")
-            self.signals.log_signal.emit("🏁 System Ready.")
-            
-            # Calculate time and emit to the main thread
-            time_str = self._format_time(time.time() - ts)
-            self.signals.finished_signal.emit(time_str)
-        except Exception as e:
-            self.signals.log_signal.emit(f"❌ Error: {e}")
-            QTimer.singleShot(0, self._check_logic_states)
+        self.btn_preprocess.setEnabled(False); self.btn_preprocess.setStyleSheet("background-color: #d68910; color: white; border-radius: 4px; border: none;")
+        self.pre_process_done = False; self.btn_gen.setEnabled(False); self.btn_gen.setStyleSheet("background-color: #3b3e40; color: #94a3b8; border-radius: 4px; border: none;")
 
-    def run_generation(self):
-        self.write_log(f"📋 Generating: {self.cat_combo.currentText()} / {self.typ_combo.currentText()}")
-        ts = time.time()
-        try:
-            self.pipeline.run_generation("GeneratedTestScripts", self.cat_combo.currentText(), self.typ_combo.currentText())
-            time_str = self._format_time(time.time() - ts)
-            self.write_log(f"✅ CAPL Scripts Generated Successfully. (Time: {time_str})")
-        except Exception as e: 
-            self.write_log(f"❌ Generation failed: {e}")
+        def task():
+            total_start_time = time.time()
+            try:
+                # --- PHASE 1: PARSING / CACHE VALIDATION ---
+                parse_start = time.time()
+                self.signals.log_signal.emit("⚙️ Pre-Processing Started: Validating and Parsing ARXML, AACP, and SOMEIP_FF Databases...")
+
+                # Unpacking all 4 return values from the pipeline
+                can_built, eth_built, aacp_built, someip_built = self.pipeline.build_databases(
+                    self.arxml_path_edit.text(),
+                    self.someip_path_edit.text(),
+                    self.aacp_path_edit.text()
+                )
+                parse_time = self._format_time(time.time() - parse_start)
+
+                if not any([can_built, eth_built, aacp_built, someip_built]):
+                    self.signals.log_signal.emit("⚡ Valid Database/Sysvar cache was found. Re-Parsing skipped.")
+                else:
+                    if can_built or eth_built: self.signals.log_signal.emit("✅ ARXML Databases parsed successfully.")
+                    if aacp_built: self.signals.log_signal.emit("✅ AACP System Variables processed.")
+                    if someip_built: self.signals.log_signal.emit("✅ SOMEIP_FF Definitions processed.")
+                    self.signals.log_signal.emit(f"⏱️ Parsing Phase Time: {parse_time}")
+
+                # --- PHASE 2: PRE-PROCESSING ---
+                pre_start = time.time()
+                self.signals.log_signal.emit("⚙️ Pre-Processing Input requirement specifications ...")
+                self.pipeline.run_preprocessing_memory(self.req_path_edit.text(), "GeneratedTestScripts")
+
+                pre_time = self._format_time(time.time() - pre_start)
+                self.signals.log_signal.emit(f"✅ Requirements mapping complete. (Time: {pre_time})")
+                
+                total_time = self._format_time(time.time() - total_start_time)
+                self.signals.log_signal.emit(f"🏁 Pre-Processing Complete. (Total Elapsed Time: {total_time})")
+                self.signals.finished_signal.emit()
+
+            except Exception as e:
+                self.signals.log_signal.emit(f"❌ Error: {str(e)}")
+                log.error(f"Internal Pre-Processing Error: {e}")
+                QTimer.singleShot(0, self._check_logic_states)
+
+        threading.Thread(target=task, daemon=True).start()
 
     def _browse_file(self):
-        f, _ = QFileDialog.getOpenFileName(self, "Select Excel", "", "Excel Files (*.xlsx *.xls)")
+        f, _ = QFileDialog.getOpenFileName(self, "Select Requirements", "", "Excel Files (*.xlsx *.xls)")
         if f: self.req_path_edit.setText(f); self.write_log(f"📄 Excel Selected: {os.path.basename(f)}")
 
     def _browse_arxml_file(self):
         f, _ = QFileDialog.getOpenFileName(self, "Select ARXML", "", "ARXML Files (*.arxml)")
-        if f: self.arxml_path_edit.setText(f); self.write_log(f"🌐 ARXML Selected: {os.path.basename(f)}")
+        if f:
+            if f != self.arxml_path_edit.text():
+                self.pipeline.can_db_data = {}; self.pipeline.eth_db_data = {}
+            self.arxml_path_edit.setText(f); self.write_log(f"🌐 ARXML Selected: {os.path.basename(f)}")
 
-    def _browse_specific(self, edit, title, filter_ext):
-        f, _ = QFileDialog.getOpenFileName(self, f"Select {title}", "", filter_ext)
-        if f: edit.setText(f); self.write_log(f"🔗 {title} Selected: {os.path.basename(f)}")
+    def _browse_aacp_file(self):
+        f, _ = QFileDialog.getOpenFileName(self, "Select AACP Sysvar", "", "vsysvar Files (*.vsysvar)")
+        if f:
+            if f != self.aacp_path_edit.text():
+                self.pipeline.aacp_data = {} # Assuming your pipeline tracks this cache
+            self.aacp_path_edit.setText(f); self.write_log(f"🔗 AACP Selected: {os.path.basename(f)}")
+
+    def _browse_someip_file(self):
+        f, _ = QFileDialog.getOpenFileName(self, "Select SOMEIP FF", "", "XML Files (*.xml)")
+        if f:
+            if f != self.someip_path_edit.text():
+                self.pipeline.someip_ff_data = {} # Assuming your pipeline tracks this cache
+            self.someip_path_edit.setText(f); self.write_log(f"🔗 SOMEIP_FF Selected: {os.path.basename(f)}")
+
+    def _build_header(self):
+        header_widget = QWidget(); header_widget.setFixedWidth(self.TOTAL_W)
+        header = QHBoxLayout(header_widget); header.setContentsMargins(0, 0, 0, 0)
+        logo_path = get_asset_path("logo.png")
+        if logo_path.exists():
+            l_lbl = QLabel(); l_pix = QPixmap(str(logo_path)).scaledToHeight(55, Qt.TransformationMode.SmoothTransformation); l_lbl.setPixmap(l_pix); header.addWidget(l_lbl)
+        title = QLabel("CAPLBolt | <i>Instant Interface Test Script Generator</i>"); title.setStyleSheet(f"font-size: 24px; color: {self.clr_title}; font-weight: bold;"); header.addWidget(title); header.addStretch(); self.main_layout.addWidget(header_widget)
+
+    def _build_log_section(self):
+        container = QWidget(); container.setFixedWidth(self.TOTAL_W); layout = QVBoxLayout(container); layout.setContentsMargins(0, 0, 0, 0)
+        header = QHBoxLayout(); header.addWidget(QLabel("EXECUTION LOGS")); header.addStretch()
+        for text, func in [("SAVE", self.download_logs), ("CLEAR", self._clear_log)]:
+            btn = QPushButton(text); btn.setObjectName("util_btn"); btn.setFixedSize(90, 30); btn.clicked.connect(func); header.addWidget(btn)
+        layout.addLayout(header)
+        self.log_text = QTextEdit(); self.log_text.setReadOnly(True); self.log_text.setStyleSheet("background-color: #000000; color: #cbd5e1; font-family: Consolas; border: 1px solid #2d3748; border-radius: 4px;")
+        layout.addWidget(self.log_text); self.main_layout.addWidget(container, 1)
+
+    def write_log(self, message: str):
+        ts = datetime.now().strftime("%H:%M:%S"); self.log_text.append(f"[{ts}] : > {message}"); self.log_text.ensureCursorVisible()
+
+    def _format_time(self, elapsed: float) -> str:
+        m, s = divmod(elapsed, 60); ms = int((s - int(s)) * 1000); return f"{int(m):02d}m {int(s):02d}s {ms:03d}ms"
+
+    def _on_pre_process_complete(self):
+        self.pre_process_done = True; self._update_gen_button_ui(); self._check_logic_states()
+
+    def _check_logic_states(self):
+        paths = [self.req_path_edit.text(), self.arxml_path_edit.text(), self.aacp_path_edit.text(), self.someip_path_edit.text()]
+        if all(p.strip() for p in paths):
+            self.btn_preprocess.setEnabled(True); self.btn_preprocess.setStyleSheet("background-color: #1e8449; color: white; border-radius: 4px; font-weight: bold; border: none;")
+        else:
+            self.btn_preprocess.setEnabled(False); self.btn_preprocess.setStyleSheet("background-color: #3b3e40; color: #94a3b8; border-radius: 4px; border: none;")
+
+    def _update_gen_button_ui(self):
+        if self.pre_process_done:
+            self.btn_gen.setEnabled(True); self.btn_gen.setStyleSheet("background-color: #1e8449; color: white; border-radius: 4px; font-weight: bold; border: none;")
+
+    def run_generation(self):
+        ts = time.time()
+        try:
+            self.write_log(f"📋 Generating: {self.cat_combo.currentText()} / {self.typ_combo.currentText()}")
+            self.pipeline.run_generation("GeneratedTestScripts", self.cat_combo.currentText(), self.typ_combo.currentText())
+            self.write_log(f"✅ CAPL Scripts Generated Successfully. (Time: {self._format_time(time.time() - ts)})")
+        except Exception as e: self.write_log(f"❌ Generation failed: {e}")
 
     def _clear_log(self): self.log_text.clear()
 
@@ -388,7 +329,4 @@ class CaplGenGUI(QMainWindow):
             with open(f, 'w', encoding='utf-8') as file: file.write(self.log_text.toPlainText())
 
 def launch_gui():
-    app = QApplication(sys.argv)
-    gui = CaplGenGUI()
-    gui.show()
-    sys.exit(app.exec())
+    app = QApplication(sys.argv); gui = CaplGenGUI(); gui.show(); sys.exit(app.exec())
