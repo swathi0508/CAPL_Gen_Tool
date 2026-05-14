@@ -1,0 +1,30 @@
+/* ============================================================================
+   AUTO-GENERATED CAPL TEST SCRIPTS : CAN -> SOME/IP FF
+   ============================================================================ */
+
+{% for row in requirements %}
+void {{ row.Basic_Function | default('MISSING_DATA') }}()
+{
+  {% for label in row.labels %}
+  testStep("#1 Action", "Set {{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ row.CAN_PORT | default('MISSING_DATA') }}_{{ label }}");
+  {% if row.IS_ENUM | string | upper == 'TRUE' %}
+  SETCHECK_CAN_SIGNAL("{{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_PORT | default('MISSING_DATA') }}_{{ label }}, 0, 1, CAN_TIMEOUT);
+  {% else %}
+  SETCHECK_CAN_SIGNAL("{{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_PORT | default('MISSING_DATA') }}_{{ label }}, I{{ row.CAN_PORT | default('MISSING_DATA') }}_Offset, I{{ row.CAN_PORT | default('MISSING_DATA') }}_Resolution, CAN_TIMEOUT);
+  {% endif %}
+
+  testStep("#2 Verify", "Check SOME/IP FF SysVar '{{ row.SOMEIP_DB_SIGNAL_NAME | default('MISSING_DATA') }}' for expected {{ label }} value");
+  {% if row.IS_ENUM | string | upper == 'TRUE' %}
+  SETCHECK_SYSVAR_INT("{{ row.SOMEIP_NS }}", "{{ row.SOMEIP_NAME }}", O{{ row.SOMEIP_PORT }}_{{ row.ATTRIBUTE_VALUE }}_{{ label }}, SOMEIP_TIMEOUT);
+  {% else %}
+    {% if row.DATATYPE | lower in ['float', 'double', 'real'] %}
+  SETCHECK_SYSVAR_FLOAT("{{ row.SOMEIP_NS }}", "{{ row.SOMEIP_NAME }}", O{{ row.CAN_PORT }}_{{ label }}, SOMEIP_TIMEOUT);
+    {% else %}
+  SETCHECK_SYSVAR_INT("{{ row.SOMEIP_NS }}", "{{ row.SOMEIP_NAME }}", O{{ row.CAN_PORT }}_{{ label }}, SOMEIP_TIMEOUT);
+    {% endif %}
+  {% endif %}
+
+  {% endfor %}
+}
+
+{% endfor %}
