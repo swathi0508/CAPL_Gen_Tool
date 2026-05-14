@@ -6,8 +6,8 @@ from preprocessor_core.common_processor import CommonProcessor
 class MapperOrchestrator:
     """Coordinates the 7-step mapping sequence into in-memory DataFrames."""
 
-    def __init__(self, can_db_data: dict, eth_db_data: dict):
-        self.processor = CommonProcessor(can_db_data, eth_db_data)
+    def __init__(self, can_db_data: dict, eth_db_data: dict, someip_ff_db_data: dict, aacp_db_data: dict):
+        self.processor = CommonProcessor(can_db_data, eth_db_data, someip_ff_db_data, aacp_db_data)
 
     def process_to_dataframes(self, input_excel: str) -> dict:
         """
@@ -43,6 +43,7 @@ class MapperOrchestrator:
             # STEP 5: Signal Resolution (Map raw/phys from DB)
             df = self.processor.resolve_can_signals_from_db(df, current_test_type)
             df = self.processor.resolve_someip_signals_from_db(df, current_test_type)
+            df = self.processor.resolve_someip_ff_signals_from_db(df, current_test_type)
             
             # STEP 6: ENUM Resolution (Orchestrates single vs dual signal logic)
             df = self.processor.resolve_enum_mappings(df, current_test_type)

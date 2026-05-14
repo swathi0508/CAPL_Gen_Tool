@@ -4,17 +4,19 @@ from logger import log
 from preprocessor_core.db_mappers.base_mapper import BaseMapper
 from preprocessor_core.db_mappers.can_mapper import CANMapper
 from preprocessor_core.db_mappers.someip_mapper import SomeIPMapper
+from preprocessor_core.db_mappers.someip_ff_sysvar_mapper import SomeIPFFSysVarMapper
 from preprocessor_core.preprocessor_utils.basic_function_resolver import BasicFunctionResolver
 from preprocessor_core.preprocessor_utils.enum_resolver import EnumResolver
 
 class CommonProcessor:
-    def __init__(self, can_db_data: dict, eth_db_data: dict):
+    def __init__(self, can_db_data: dict, eth_db_data: dict, someip_ff_db_data: dict, aacp_db_data: dict):
         """
         Initializes the processor with specialized mappers and resolvers.
         The mappers are responsible for flagging IS_ENUM during database resolution.
         """
         self.can_mapper = CANMapper(can_db_data)
         self.eth_mapper = SomeIPMapper(eth_db_data)
+        self.someip_ff_mapper = SomeIPFFSysVarMapper(someip_ff_db_data)
         self.basic_function_mapper = BasicFunctionResolver()
         self.enum_mapper = EnumResolver()
 
@@ -39,9 +41,9 @@ class CommonProcessor:
             is_eth = "ETH" in sheet_name.upper()
             
             if is_eth:
-                core_order = ["E2E_ETH_REQ_ID", "SWC", "SOMEIP_PORT", "ATTRIBUTE_VALUE", "CAN_PORT", "PATH_SYNTHESIS", "SOMEIP_TOPIC", "SOMEIP_TOPIC_ATTRIBUTE", "TEST_TYPE"]
+                core_order = ["E2E_ETH_REQ_ID", "SWC", "SOMEIP_PORT", "ATTRIBUTE_VALUE", "CAN_PORT", "PATH_SYNTHESIS", "SOMEIP_TOPIC", "SOMEIP_TOPIC_ATTRIBUTE", "RUNTIME_ENV_RECEIVER", "TEST_TYPE"]
             else:
-                core_order = ["E2E_CAN_REQ_ID", "SWC", "CAN_PORT", "PATH_SYNTHESIS", "SOMEIP_PORT", "ATTRIBUTE_VALUE", "SOMEIP_TOPIC", "SOMEIP_TOPIC_ATTRIBUTE", "TEST_TYPE"]
+                core_order = ["E2E_CAN_REQ_ID", "SWC", "CAN_PORT", "PATH_SYNTHESIS", "SOMEIP_PORT", "ATTRIBUTE_VALUE", "SOMEIP_TOPIC", "SOMEIP_TOPIC_ATTRIBUTE", "RUNTIME_ENV_RECEIVER", "TEST_TYPE"]
 
             mapping = {
                 "E2E_ETH_REQ_ID": ["E2E_ETH_REQ_ID", "REQ ID", "REQ_ID", "REQUIREMENT ID"],
@@ -51,7 +53,8 @@ class CommonProcessor:
                 "CAN_PORT": ["CAN_PORT", "CAN_PORT_MAPPING", "PORT NAME"],
                 "PATH_SYNTHESIS": ["PATH_SYNTHESIS", "CAN_PATH_SYNTHESIS_MAPPING", "PATH SYNTHESIS"],
                 "SOMEIP_TOPIC": ["SOMEIP_TOPIC", "TOPIC", "TOPIC NAME"],
-                "SOMEIP_TOPIC_ATTRIBUTE": ["SOMEIP_TOPIC_ATTRIBUTE", "ATTRIBUTE", "TOPIC ATTRIBUTE"]
+                "SOMEIP_TOPIC_ATTRIBUTE": ["SOMEIP_TOPIC_ATTRIBUTE", "ATTRIBUTE", "TOPIC ATTRIBUTE"],
+                "RUNTIME_ENV_RECEIVER": ["RUNTIME_ENV_RECEIVER", "RUNTIME ENV RECEIVER"]
             }
 
             df_out = pd.DataFrame()
@@ -69,13 +72,17 @@ class CommonProcessor:
     def define_additional_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         log.info("Step 2: Initializing intermediate template columns and IS_ENUM flags")
         additional_cols = [
-            "CAN_CLUSTER", "BASIC_FUNCTION_NAME", "IS_ENUM", "ENUM_LEXICAL_MATCH", 
-            "CAN_DB_SIGNAL_NAME", "CAN_PERIODICITY", "CAN_ENUM", "CAN_MIN_RAW", 
-            "CAN_MAX_RAW", "CAN_OFFSET", "CAN_RESOLUTION", "SOMEIP_DB_SIGNAL_NAME", 
-            "SOMEIP_ENUM", "SOMEIP_MIN_PHY", "SOMEIP_MAX_PHY", "SOMEIP_OFFSET", 
-            "SOMEIP_RESOLUTION", "SOMEIP_DB_SIGNAL_VALUESTATE", "COMPUTED_CAN_VALUE_MIN",
-            "COMPUTED_CAN_VALUE_MID", "COMPUTED_CAN_VALUE_MAX", "COMPUTED_SOMEIP_VALUE_MIN",
-            "COMPUTED_SOMEIP_VALUE_MID", "COMPUTED_SOMEIP_VALUE_MAX"
+            "CAN_CLUSTER", "BASIC_FUNCTION_NAME", "IS_ENUM", "ENUM_LEXICAL_MATCH",
+            "CAN_DB_SIGNAL_NAME", "CAN_PERIODICITY", "CAN_ENUM", "CAN_MIN_RAW", "CAN_MAX_RAW", "CAN_OFFSET", "CAN_RESOLUTION",
+            "SOMEIP_DB_SIGNAL_NAME", "SOMEIP_ENUM", "SOMEIP_MIN_PHY", "SOMEIP_MAX_PHY", "SOMEIP_OFFSET", "SOMEIP_RESOLUTION", "SOMEIP_DB_SIGNAL_VALUESTATE",
+            "SOMEIP_FF_DB_SIGNAL_NAME", "SOMEIP_FF_DB_SIGNAL_VALUESTATE", "SOMEIP_FF_DB_SIGNAL_CONTROL", "SOMEIP_FF_ENUM", "SOMEIP_FF_DATATYPE",
+            "SOMEIP_FF_SIGNAME_NAMESPACE", "SOMEIP_FF_SIGNAME_VARIABLE", "SOMEIP_FF_SIGVALUESTATE_NAMESPACE", "SOMEIP_FF_SIGVALUESTATE_VARIABLE", "SOMEIP_FF_CONTROL_NAMESPACE", "SOMEIP_FF_CONTROL_VARIABLE",
+            "AACP_DB_SIGNAL_NAME", "AACP_DB_SIGNAL_VALUESTATE", "AACP_ENUM", "AACP_DATATYPE",
+            "AACP_SIGNAME_NAMESPACE", "AACP_SIGNAME_VARIABLE", "AACP_SIGVALUESTATE_NAMESPACE", "AACP_SIGVALUESTATE_VARIABLE", "AACP_SIGNAME_DAQ",
+            "COMPUTED_CAN_VALUE_MIN", "COMPUTED_CAN_VALUE_MID", "COMPUTED_CAN_VALUE_MAX",
+            "COMPUTED_SOMEIP_VALUE_MIN", "COMPUTED_SOMEIP_VALUE_MID", "COMPUTED_SOMEIP_VALUE_MAX",
+            "COMPUTED_SOMEIP_FF_VALUE_MIN", "COMPUTED_SOMEIP_FF_VALUE_MID", "COMPUTED_SOMEIP_FF_VALUE_MAX",
+            "COMPUTED_AACP_VALUE_MIN", "COMPUTED_AACP_VALUE_MID", "COMPUTED_AACP_VALUE_MAX"
         ]
         
         master_order = list(df.columns) + additional_cols
@@ -107,105 +114,144 @@ class CommonProcessor:
 
     # --- STEP 5_a: CAN Signal Resolution ---
     def resolve_can_signals_from_db(self, df: pd.DataFrame, test_type: str) -> pd.DataFrame:
+        if "CAN" not in test_type:
+            return df
+
         log.info(f"Step 5_a: Mapping CAN signals for Test Type: {test_type}")
-        # Use the passed test_type for the mask
-        mask = (df["CAN_PORT"] != "") & (pd.Series(test_type).str.contains("CAN").iloc[0])
+
+        # Strict Row Filter: CAN_PORT must be present AND row TEST_TYPE must contain 'CAN'
+        mask = (df["CAN_PORT"].notna()) & \
+               (df["CAN_PORT"] != "") & \
+               (df["TEST_TYPE"].str.contains("CAN", na=False))
+
         if mask.any():
             df.loc[mask] = self.can_mapper.resolve(df.loc[mask])
         return df
 
-    # --- STEP 5_b: SOME/IP Signal Resolution ---
+    # --- STEP 5_b: SOMEIP Signal Resolution ---
     def resolve_someip_signals_from_db(self, df: pd.DataFrame, test_type: str) -> pd.DataFrame:
-        log.info(f"Step 5_b: Mapping SOME/IP signals for Test Type: {test_type}")
-        # Use the passed test_type for the mask
-        mask = (df["SOMEIP_PORT"] != "") & (any(x in test_type for x in ["SOMEIP", "CAROS", "AACP"]))
+        # Pattern to capture relevant SomeIP-related test types
+        valid_keys = ["SOMEIP", "SOMEIP_FF", "CAROS", "AACP"]
+        pattern = "|".join(valid_keys)
+    
+        # Filter for rows with valid SOMEIP_PORT and matching TEST_TYPE
+        mask = (df["SOMEIP_PORT"].fillna("") != "") & \
+               (df["TEST_TYPE"].str.contains(pattern, case=False, na=False))
+    
         if mask.any():
-            df.loc[mask] = self.eth_mapper.resolve(df.loc[mask])
+            log.info(f"Step 5_b: Mapping SOME/IP signals for {mask.sum()} matching rows.")
+            
+            # Map subset and update the main dataframe
+            resolved_subset = self.eth_mapper.resolve(df.loc[mask].copy())
+            df.update(resolved_subset)
+            
+        return df
+
+    # --- STEP 5_c: SOMEIP_FF SysVar Resolution ---
+    def resolve_someip_ff_signals_from_db(self, df: pd.DataFrame, test_type: str) -> pd.DataFrame:
+        # Filter specifically for SOMEIP_FF or CAROS test types
+        pattern = "SOMEIP_FF|CAROS"
+
+        mask = (df["SOMEIP_PORT"].fillna("") != "") & \
+               (df["TEST_TYPE"].str.contains(pattern, case=False, na=False))
+
+        if mask.any():
+            # Map subset and update the main dataframe
+            resolved_subset = self.someip_ff_mapper.resolve(df.loc[mask].copy())
+            df.update(resolved_subset)
+
         return df
 
     # --- STEP 6: ENUM mapping (Processes rows where IS_ENUM is True) ---
     def resolve_enum_mappings(self, df: pd.DataFrame, test_type: str) -> pd.DataFrame:
-        """
-        Orchestrates enum resolution based on test_type.
-        Only executes if IS_ENUM contains True values.
-        """
-        # Step 6: Safety Check - Exit early if no enum rows exist
         if "IS_ENUM" not in df.columns or not df["IS_ENUM"].any():
             log.info("Step 6: No Enum signals flagged. Skipping.")
             return df
 
-        log.info(f"Step 6: Executing Enum mapping for Test Type: {test_type}")
-        t = test_type.upper()
+        log.info("Step 6: Executing optimized vectorized Enum mapping.")
+        
+        # Create a mask for rows that need processing
+        enum_mask = df["IS_ENUM"] == True
+        
+        # Group by TEST_TYPE to process batches of similar rows at once
+        # This is significantly faster than row-by-row iteration
+        for row_tt_raw, group_df in df[enum_mask].groupby("TEST_TYPE"):
+            row_tt = str(row_tt_raw).upper()
+            temp_df = group_df.copy()
 
-        # --- BRANCH 1: SWC tests (Single Signal Boundary) ---
-        if "SWC" in t:
-            if "CAN" in t:
-                df = self.enum_mapper.resolve_single_enum(df, "CAN_ENUM")
-            # elif "AACP" in t: 
-            #     df = self.enum_mapper.resolve_single_enum(df, "AACP_ENUM")
-            # elif "SOMEIP_FF" in t:
-            #     df = self.enum_mapper.resolve_single_enum(df, "SOMEIP_FF_ENUM")
-            elif "SOMEIP" in t or "CAROS" in t:
-                df = self.enum_mapper.resolve_single_enum(df, "SOMEIP_ENUM")
+            # --- BRANCH 1: SWC tests ---
+            if "SWC" in row_tt:
+                if "CAN" in row_tt:
+                    temp_df = self.enum_mapper.resolve_single_enum(temp_df, "CAN_ENUM")
+                
+                if "SOMEIP_FF" in row_tt:
+                    temp_df = self.enum_mapper.resolve_single_enum(temp_df, "SOMEIP_FF_ENUM")
+                elif "SOMEIP" in row_tt or "CAROS" in row_tt:
+                    temp_df = self.enum_mapper.resolve_single_enum(temp_df, "SOMEIP_ENUM")
+                
+                if "AACP" in row_tt:
+                    temp_df = self.enum_mapper.resolve_single_enum(temp_df, "AACP_ENUM")
 
-        # --- BRANCH 2: Mapping tests (Dual Signal Comparison) ---
-        else:
-            if "CAN" in t:
-                # if "AACP" in t:
-                #     df = self.enum_mapper.resolve_enum_mapping(df, "CAN_ENUM", "AACP_ENUM")
-                # elif "SOMEIP_FF" in t:
-                #     df = self.enum_mapper.resolve_enum_mapping(df, "CAN_ENUM", "SOMEIP_FF_ENUM")
-                if "SOMEIP" in t:
-                    df = self.enum_mapper.resolve_enum_mapping(df, "CAN_ENUM", "SOMEIP_ENUM")
+            # --- BRANCH 2: Mapping tests ---
+            elif "CAN" in row_tt:
+                if "SOMEIP_FF" in row_tt:
+                    temp_df = self.enum_mapper.resolve_enum_mapping(temp_df, "CAN_ENUM", "SOMEIP_FF_ENUM")
+                elif "SOMEIP" in row_tt:
+                    temp_df = self.enum_mapper.resolve_enum_mapping(temp_df, "CAN_ENUM", "SOMEIP_ENUM")
+                elif "AACP" in row_tt:
+                    temp_df = self.enum_mapper.resolve_enum_mapping(temp_df, "CAN_ENUM", "AACP_ENUM")
+                elif "CAROS" in row_tt:
+                    temp_df = self.enum_mapper.resolve_enum_mapping(temp_df, "CAN_ENUM", "SOMEIP_ENUM")
+
+            # Update the main dataframe with the batch-resolved results
+            df.update(temp_df)
 
         return df
 
-    # --- STEP 7: NON-ENUM mapping (Generalize deriving physical values for min, mid and max) ---
+    # --- STEP 7: NON-ENUM mapping ---
     def resolve_phys_ranges(self, df: pd.DataFrame, test_type: str) -> pd.DataFrame:
-        log.info(f"Step 7: Computing physical range boundaries for test type: {test_type}")
         phys_mask = df["IS_ENUM"] == False
         if not phys_mask.any():
-            log.info("Step 7: All signals are Enums. Skipping physical range calculation.")
             return df
 
-        log.info(f"Step 7: Processing {phys_mask.sum()} continuous/linear signals.")
-
-        tt_u = str(test_type).upper()
-        # Mirroring Logic: Apply CAN bounds to Ethernet if Ethernet DB info is missing
-        auto_mirror = "CAN" in tt_u and any(x in tt_u for x in ["SOMEIP", "AACP", "SOMEIP_FF"])
-        if auto_mirror:
-            log.info("Step 7: Hybrid test detected. Cross-protocol mirroring enabled (CAN -> ETH).")
-
         def process_row(row):
-            # Resolve CAN Bounds
-            try:
-                c_mi = (float(row.get('CAN_MIN_RAW', 0)) * float(row.get('CAN_RESOLUTION', 1))) + float(row.get('CAN_OFFSET', 0))
-                c_ma = (float(row.get('CAN_MAX_RAW', 0)) * float(row.get('CAN_RESOLUTION', 1))) + float(row.get('CAN_OFFSET', 0))
-                can_bounds = self._compute_bounds(c_mi, c_ma)
-            except (ValueError, TypeError):
-                can_bounds = {k: "N/A" for k in ['MIN', 'MID', 'MAX']}
+            row_tt = str(row.get("TEST_TYPE", "")).upper()
 
-            # Resolve SOMEIP Bounds
-            sip_bounds = self._compute_bounds(row.get('SOMEIP_MIN_PHY'), row.get('SOMEIP_MAX_PHY'))
+            # 1. Compute CAN Bounds
+            can_min_raw = row.get('CAN_MIN_RAW')
+            if pd.notna(can_min_raw) and str(can_min_raw).upper() != 'N/A':
+                try:
+                    res, off = float(row.get('CAN_RESOLUTION', 1)), float(row.get('CAN_OFFSET', 0))
+                    c_min = (float(can_min_raw) * res) + off
+                    c_max = (float(row.get('CAN_MAX_RAW', 0)) * res) + off
+                    can_b = self._compute_bounds(c_min, c_max)
+                except (ValueError, TypeError):
+                    can_b = {k: "N/A" for k in ['MIN', 'MID', 'MAX']}
+            else:
+                can_b = {k: "N/A" for k in ['MIN', 'MID', 'MAX']}
 
-            res = {}
-            for suffix in ['MIN', 'MID', 'MAX']:
-                c_val = can_bounds[suffix]
-                s_val = sip_bounds[suffix]
+            # 2. Compute SOMEIP Bounds from DB
+            sip_b = self._compute_bounds(row.get('SOMEIP_MIN_PHY'), row.get('SOMEIP_MAX_PHY'))
 
-                final_eth_val = s_val
-                if final_eth_val == "N/A" and auto_mirror:
-                    final_eth_val = c_val
+            # 3. Protocol Priority Logic
+            is_gateway = "CAN" in row_tt and "SOMEIP" in row_tt
+            eth_source = can_b if is_gateway else sip_b
 
-                res[f'COMPUTED_CAN_VALUE_{suffix}'] = c_val
-                res[f'COMPUTED_SOMEIP_VALUE_{suffix}'] = final_eth_val
-                
-                # placeholders for other protocols
-                # res[f'COMPUTED_AACP_VALUE_{suffix}'] = final_eth_val
-                # res[f'COMPUTED_SOMEIP_FF_VALUE_{suffix}'] = final_eth_val
-                
-            return res
+            # 4. Fill Output Dictionary selectively
+            out = {}
+            for sfx in ['MIN', 'MID', 'MAX']:
+                out[f'COMPUTED_CAN_VALUE_{sfx}'] = can_b[sfx]
+                out[f'COMPUTED_SOMEIP_VALUE_{sfx}'] = eth_source[sfx]
 
-        computed_df = df.loc[phys_mask].apply(process_row, axis=1, result_type='expand')
-        df.update(computed_df)
+                if "SOMEIP_FF" in row_tt:
+                    out[f'COMPUTED_SOMEIP_FF_VALUE_{sfx}'] = eth_source[sfx]
+
+                if "AACP" in row_tt:
+                    out[f'COMPUTED_AACP_VALUE_{sfx}'] = eth_source[sfx]
+
+            return pd.Series(out)
+
+        resolved_subset = df.loc[phys_mask].apply(process_row, axis=1)
+        df.update(resolved_subset)
+
         return df
