@@ -31,7 +31,7 @@ class CaplGenerationPipeline:
         # State Tracking
         self.can_db_data = {}
         self.eth_db_data = {}
-        self.ff_db_data = {}
+        self.someip_ff_db_data = {}
         self.aacp_db_data = {}
         self.in_memory_dfs = {}
 
@@ -114,14 +114,14 @@ class CaplGenerationPipeline:
                     eth_built = True
 
             # --- SOME/IP FF (SYSVAR) DATABASE ---
-            if not self.ff_db_data:
+            if not self.someip_ff_db_data:
                 ff_parser = SomeipFFParser(someip_sysvar_xml)
                 if self._is_cache_valid(self.ff_db, someip_sysvar_xml) and ff_parser.load_from_json(self.ff_db):
                     log.info(f"✅ Loaded SOME/IP FF from fast cache: {self.ff_db}")
-                    self.ff_db_data = ff_parser.to_json_dict()
+                    self.someip_ff_db_data = ff_parser.to_json_dict()
                 elif os.path.exists(someip_sysvar_xml):
                     log.info(f"⚙️ Parsing SOME/IP FF from XML...")
-                    self.ff_db_data = ff_parser.parse()
+                    self.someip_ff_db_data = ff_parser.parse()
                     ff_parser.to_json_file(self.ff_db, write_allowed=self.write_to_disk)
                     ff_built = True
 
@@ -149,7 +149,7 @@ class CaplGenerationPipeline:
         log.info("=== STARTING IN-MEMORY PRE-PROCESSING ===")
 
         # Safety Check: Ensure databases were built/loaded first
-        if not self.can_db_data or not self.eth_db_data:
+        if not self.can_db_data or not self.eth_db_data or not self.someip_ff_db_data:
             raise RuntimeError("Databases not loaded. Run build_databases() first.")
 
         out_path = Path(output_dir)
@@ -158,7 +158,7 @@ class CaplGenerationPipeline:
         try:
             # --- THE ORCHESTRATION ---
             # We pass the raw dicts; Orchestrator handles the CommonProcessor internally.
-            orchestrator = MapperOrchestrator(self.can_db_data, self.eth_db_data)
+            orchestrator = MapperOrchestrator(self.can_db_data, self.eth_db_data, self.someip_ff_db_data, self.aacp_db_data)
             
             log.info(f"-> Processing {os.path.basename(input_excel)}...")
             self.in_memory_dfs = orchestrator.process_to_dataframes(input_excel)

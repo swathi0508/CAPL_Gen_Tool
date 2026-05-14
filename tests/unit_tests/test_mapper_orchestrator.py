@@ -26,7 +26,7 @@ def load_json_cache(path: str) -> dict:
         return data["SOMEIP_SIGNAL"]
     return data
 
-def test_mapper_orchestration(input_excel: str, output_dir: str, can_cache: str, eth_cache: str):
+def test_mapper_orchestration(input_excel: str, output_dir: str, can_cache: str, eth_cache: str, someip_ff_cache: str, aacp_cache: str):
     """
     Executes the full 7-step Mapping & Processing sequence in RAM.
     This replaces the old Phase 1 (Mapping) + Phase 2 (Validation) sequence.
@@ -48,9 +48,15 @@ def test_mapper_orchestration(input_excel: str, output_dir: str, can_cache: str,
         log.info(f"Loading ETH cache: {eth_cache}")
         eth_db = load_json_cache(eth_cache)
 
+        log.info(f"Loading SOMEIP_FF cache: {someip_ff_cache}")
+        someip_ff_db = load_json_cache(someip_ff_cache)
+
+        log.info(f"Loading AACP cache: {aacp_cache}")
+        aacp_db = load_json_cache(aacp_cache)
+
         # 2. Initialize Orchestrator
         # This internalizes the CommonProcessor which now handles Enum & Phys logic
-        orchestrator = MapperOrchestrator(can_db_data=can_db, eth_db_data=eth_db)
+        orchestrator = MapperOrchestrator(can_db_data=can_db, eth_db_data=eth_db, someip_ff_db_data=someip_ff_db, aacp_db_data=aacp_db)
 
         # 3. Execute the 7-Step Sequence
         # Steps: Copy -> Define -> Cluster/BFN -> Map Raw -> Namespace -> Enum Map -> Phys Derive
@@ -84,6 +90,8 @@ if __name__ == "__main__":
     OUTPUT_DIRECTORY = r"./output"
     CAN_JSON_CACHE = r"can_db_cache.json"
     ETH_JSON_CACHE = r"someip_db_cache.json"
+    SOMEIP_FF_JSON_CACHE = r"someip_ff_cache.json"
+    AACP_JSON_CACHE = r"aacp_sysvar_cache.json"
 
     # Ensure the input files exist before starting
     if os.path.exists(INPUT_REQ_FILE):
@@ -91,7 +99,9 @@ if __name__ == "__main__":
             INPUT_REQ_FILE, 
             OUTPUT_DIRECTORY, 
             CAN_JSON_CACHE, 
-            ETH_JSON_CACHE
+            ETH_JSON_CACHE,
+            SOMEIP_FF_JSON_CACHE,
+            AACP_JSON_CACHE
         )
     else:
         log.error(f"Input Excel not found at {INPUT_REQ_FILE}. Please check the path.")

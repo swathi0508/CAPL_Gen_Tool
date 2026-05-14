@@ -34,34 +34,33 @@ class CANMapper(BaseMapper):
         if not db_signal_name and paths:
             db_signal_name = paths[0].get("signal_name")
 
+        raw_enums = attr.get("Enums", {})
+
         return {
             "CAN_DB_SIGNAL_NAME": db_signal_name or "CAN_CLUSTER_NOT_FOUND",
-            "CAN_ENUM": self.format_enum_to_string(attr.get("Enums", {})),
+            "CAN_ENUM": self.format_enum_to_string(raw_enums),
             "CAN_MIN_RAW": attr.get("Raw_Limits", {}).get("Min"),
             "CAN_MAX_RAW": attr.get("Raw_Limits", {}).get("Max"),
             "CAN_PERIODICITY": attr.get("periodicity_ms"),
             "CAN_OFFSET": attr.get("Offset"),
-            "CAN_RESOLUTION": attr.get("Resolution")
+            "CAN_RESOLUTION": attr.get("Resolution"),
+            "_HAS_ENUM": bool(raw_enums)
         }
 
     def resolve(self, df_subset: pd.DataFrame) -> pd.DataFrame:
-        """Mapper only handles data lookup and column formatting."""
+        """Mapper handles data lookup and column formatting."""
         cols = ["CAN_DB_SIGNAL_NAME", "CAN_ENUM", "CAN_MIN_RAW", "CAN_MAX_RAW",
                 "CAN_PERIODICITY", "CAN_OFFSET", "CAN_RESOLUTION", "IS_ENUM"]
 
         def process_row(r):
             data = self.get_signal_data(r.get("CAN_PORT"), r.get("CAN_CLUSTER"))
             
-            # Check for Enum presence
-            enum_val = str(data.get("CAN_ENUM", "")).strip().upper()
-            is_enum = enum_val not in ["", "NONE", "NAN", "N/A"]
+            db_has_enum = data.pop("_HAS_ENUM", False)
+            existing_is_enum = str(r.get("IS_ENUM", "FALSE")).upper() == "TRUE"
             
-            # Safe update for IS_ENUM (Don't overwrite True if already set)
-            existing_is_enum = str(r.get("IS_ENUM")).upper() == "TRUE"
-            data["IS_ENUM"] = True if (is_enum or existing_is_enum) else False
-            return data
+            data["IS_ENUM"] = True if (db_has_enum or existing_is_enum) else False
+            return pd.Series(data)
 
-        # Apply logic to the subset passed by the processor
-        res = df_subset.apply(process_row, axis=1, result_type='expand')
+        res = df_subset.apply(process_row, axis=1)
         df_subset.loc[:, cols] = res[cols].values
         return df_subset
