@@ -21,12 +21,12 @@ class CaplGenerationPipeline:
     def __init__(self, can_db_cache: str = "can_db_cache.json", 
                  eth_db_cache: str = "someip_db_cache.json", 
                  someip_ff_db_cache: str = "someip_ff_cache.json",
-                 aacp_sysvar_vsysvar_db_cache: str = "aacp_sysvar_cache.json",
+                 aacp_sysvar_db_cache: str = "aacp_sysvar_cache.json",
                  enable_log: bool = False):
         self.can_db = can_db_cache
         self.eth_db = eth_db_cache
         self.ff_db = someip_ff_db_cache
-        self.aacp_db = aacp_sysvar_vsysvar_db_cache
+        self.aacp_db = aacp_sysvar_db_cache
         
         # State Tracking
         self.can_db_data = {}

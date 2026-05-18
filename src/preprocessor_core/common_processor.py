@@ -5,6 +5,7 @@ from preprocessor_core.db_mappers.base_mapper import BaseMapper
 from preprocessor_core.db_mappers.can_mapper import CANMapper
 from preprocessor_core.db_mappers.someip_mapper import SomeIPMapper
 from preprocessor_core.db_mappers.someip_ff_sysvar_mapper import SomeIPFFSysVarMapper
+from preprocessor_core.db_mappers.aacp_sysvar_mapper import AacpSysVarMapper
 from preprocessor_core.preprocessor_utils.basic_function_resolver import BasicFunctionResolver
 from preprocessor_core.preprocessor_utils.enum_resolver import EnumResolver
 
@@ -17,6 +18,7 @@ class CommonProcessor:
         self.can_mapper = CANMapper(can_db_data)
         self.eth_mapper = SomeIPMapper(eth_db_data)
         self.someip_ff_mapper = SomeIPFFSysVarMapper(someip_ff_db_data)
+        self.aacp_mapper = AacpSysVarMapper(aacp_db_data)
         self.basic_function_mapper = BasicFunctionResolver()
         self.enum_mapper = EnumResolver()
 
@@ -114,34 +116,29 @@ class CommonProcessor:
 
     # --- STEP 5_a: CAN Signal Resolution ---
     def resolve_can_signals_from_db(self, df: pd.DataFrame, test_type: str) -> pd.DataFrame:
-        if "CAN" not in test_type:
-            return df
-
-        log.info(f"Step 5_a: Mapping CAN signals for Test Type: {test_type}")
-
-        # Strict Row Filter: CAN_PORT must be present AND row TEST_TYPE must contain 'CAN'
+        # Match any test type containing "CAN" (e.g., "CAN", "CAN->SOMEIP_AACP")
+        pattern = "CAN"
+        
         mask = (df["CAN_PORT"].notna()) & \
                (df["CAN_PORT"] != "") & \
-               (df["TEST_TYPE"].str.contains("CAN", na=False))
+               (df["TEST_TYPE"].str.contains(pattern, case=False, na=False))
 
         if mask.any():
+            log.info(f"Step 5_a: Mapping CAN signals for {mask.sum()} matching rows.")
             df.loc[mask] = self.can_mapper.resolve(df.loc[mask])
+            
         return df
 
     # --- STEP 5_b: SOMEIP Signal Resolution ---
     def resolve_someip_signals_from_db(self, df: pd.DataFrame, test_type: str) -> pd.DataFrame:
-        # Pattern to capture relevant SomeIP-related test types
-        valid_keys = ["SOMEIP", "SOMEIP_FF", "CAROS", "AACP"]
-        pattern = "|".join(valid_keys)
+        # Matches if the row contains ANY of these keywords anywhere in its test type string
+        pattern = "SOMEIP|SOMEIP_FF|CAROS|AACP"
     
-        # Filter for rows with valid SOMEIP_PORT and matching TEST_TYPE
         mask = (df["SOMEIP_PORT"].fillna("") != "") & \
                (df["TEST_TYPE"].str.contains(pattern, case=False, na=False))
     
         if mask.any():
             log.info(f"Step 5_b: Mapping SOME/IP signals for {mask.sum()} matching rows.")
-            
-            # Map subset and update the main dataframe
             resolved_subset = self.eth_mapper.resolve(df.loc[mask].copy())
             df.update(resolved_subset)
             
@@ -149,19 +146,39 @@ class CommonProcessor:
 
     # --- STEP 5_c: SOMEIP_FF SysVar Resolution ---
     def resolve_someip_ff_signals_from_db(self, df: pd.DataFrame, test_type: str) -> pd.DataFrame:
-        # Filter specifically for SOMEIP_FF or CAROS test types
+        # Reverted back to your original working regex logic
         pattern = "SOMEIP_FF|CAROS"
 
         mask = (df["SOMEIP_PORT"].fillna("") != "") & \
                (df["TEST_TYPE"].str.contains(pattern, case=False, na=False))
 
         if mask.any():
-            # Map subset and update the main dataframe
+            log.info(f"Step 5_c: Mapping SOMEIP_FF SysVar signals for {mask.sum()} matching rows.")
             resolved_subset = self.someip_ff_mapper.resolve(df.loc[mask].copy())
             df.update(resolved_subset)
 
         return df
+    
+    # --- STEP 5_d: AACP SysVar Resolution ---
+    def resolve_aacp_signals_from_db(self, df: pd.DataFrame, test_type: str) -> pd.DataFrame:
+        pattern = "AACP"
 
+        mask = (df["SOMEIP_TOPIC"].fillna("") != "") & \
+               (df["SOMEIP_TOPIC_ATTRIBUTE"].fillna("") != "") & \
+               (df["TEST_TYPE"].str.contains(pattern, case=False, na=False))
+
+        if mask.any():
+            log.info(f"Step 5_d: Mapping AACP SysVar signals for {mask.sum()} matching rows.")
+            
+            # 1. Pass the subset without .copy() or fragmentation to preserve index alignment
+            resolved_subset = self.aacp_mapper.resolve(df.loc[mask])
+            
+            # 2. FIX: Explicitly map every column back using the mask context
+            for col in resolved_subset.columns:
+                df.loc[mask, col] = resolved_subset[col]
+
+        return df
+    
     # --- STEP 6: ENUM mapping (Processes rows where IS_ENUM is True) ---
     def resolve_enum_mappings(self, df: pd.DataFrame, test_type: str) -> pd.DataFrame:
         if "IS_ENUM" not in df.columns or not df["IS_ENUM"].any():
@@ -196,11 +213,11 @@ class CommonProcessor:
             elif "CAN" in row_tt:
                 if "SOMEIP_FF" in row_tt:
                     temp_df = self.enum_mapper.resolve_enum_mapping(temp_df, "CAN_ENUM", "SOMEIP_FF_ENUM")
-                elif "SOMEIP" in row_tt:
-                    temp_df = self.enum_mapper.resolve_enum_mapping(temp_df, "CAN_ENUM", "SOMEIP_ENUM")
                 elif "AACP" in row_tt:
                     temp_df = self.enum_mapper.resolve_enum_mapping(temp_df, "CAN_ENUM", "AACP_ENUM")
                 elif "CAROS" in row_tt:
+                    temp_df = self.enum_mapper.resolve_enum_mapping(temp_df, "CAN_ENUM", "SOMEIP_ENUM")
+                elif "SOMEIP" in row_tt:
                     temp_df = self.enum_mapper.resolve_enum_mapping(temp_df, "CAN_ENUM", "SOMEIP_ENUM")
 
             # Update the main dataframe with the batch-resolved results

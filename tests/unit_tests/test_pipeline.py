@@ -17,7 +17,7 @@ def test_full_pipeline(input_excel: str, output_dir: str, category: str, test_ty
         can_db_cache="can_db_cache.json",
         eth_db_cache="someip_db_cache.json",
         someip_ff_db_cache="someip_ff_cache.json",
-        aacp_sysvar_vsysvar_db_cache="aacp_sysvar_cache.json",
+        aacp_sysvar_db_cache="aacp_sysvar_cache.json",
         enable_log=False
     )
 
