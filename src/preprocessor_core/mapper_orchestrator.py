@@ -44,6 +44,7 @@ class MapperOrchestrator:
             df = self.processor.resolve_can_signals_from_db(df, current_test_type)
             df = self.processor.resolve_someip_signals_from_db(df, current_test_type)
             df = self.processor.resolve_someip_ff_signals_from_db(df, current_test_type)
+            df = self.processor.resolve_aacp_signals_from_db(df, current_test_type)
             
             # STEP 6: ENUM Resolution (Orchestrates single vs dual signal logic)
             df = self.processor.resolve_enum_mappings(df, current_test_type)
