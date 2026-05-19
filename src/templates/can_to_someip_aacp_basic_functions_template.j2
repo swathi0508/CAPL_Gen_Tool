@@ -1,0 +1,46 @@
+/* ============================================================================
+   AUTO-GENERATED CAPL TEST SCRIPTS : CAN -> SOME/IP AACP
+   ============================================================================ */
+
+{% set processed_funcs = [] %}
+{% for func in functions %}
+{% if func.BASIC_FUNCTION_NAME not in processed_funcs %}
+{% set _ = processed_funcs.append(func.BASIC_FUNCTION_NAME) %}
+void {{ func.BASIC_FUNCTION_NAME | default('MISSING_DATA') }}()
+{
+  AACP_LOAD_SYSVAR_FOR_DAQ("{{ func.AACP_SIGNAME_DAQ | default('MISSING_DATA') }}");
+  
+{% for label in ['Mid', 'Min', 'Max'] %}
+  {% set act_step = loop.index0 * 2 + 2 %}
+  {% set chk_step = act_step + 1 %}
+  testStep("#{{ act_step }} Action", "Set {{ func.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ func.CAN_PORT | default('MISSING_DATA') }}_{{ label }}");
+  {% if func.IS_ENUM | string | upper == 'TRUE' %}
+  SETCHECK_CAN_SIGNAL("{{ func.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ func.CAN_PORT | default('MISSING_DATA') }}_{{ label }}, CAN_TIMEOUT, 0, 1);
+  {% else %}
+  SETCHECK_CAN_SIGNAL("{{ func.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ func.CAN_PORT | default('MISSING_DATA') }}_{{ label }}, CAN_TIMEOUT, I{{ func.CAN_PORT | default('MISSING_DATA') }}_Offset, I{{ func.CAN_PORT | default('MISSING_DATA') }}_Resolution);
+  {% endif %}
+
+  {% if func.IS_ENUM | string | upper == 'TRUE' %}
+  testStep("#{{ chk_step }} Check", "Check sysvarMember::{{ func.AACP_DB_SIGNAL_NAME | default('MISSING_DATA') }} = {{ func.SOMEIP_PORT }}_{{ func.ATTRIBUTE_VALUE }}_{{ label }}");
+  WAIT_FOR_SYSVAR_INT("{{ func.AACP_SIGNAME_NAMESPACE | default('MISSING_DATA') }}", "{{ func.AACP_SIGNAME_VARIABLE | default('MISSING_DATA') }}", {{ func.SOMEIP_PORT }}_{{ func.ATTRIBUTE_VALUE }}_{{ label }}, 4000);
+  {% else %}
+  {% if label == 'Min' %}{% set val = func.COMPUTED_SOMEIP_VALUE_MIN %}{% elif label == 'Mid' %}{% set val = func.COMPUTED_SOMEIP_VALUE_MID %}{% else %}{% set val = func.COMPUTED_SOMEIP_VALUE_MAX %}{% endif %}
+  testStep("#{{ chk_step }} Check", "Check sysvarMember::{{ func.AACP_DB_SIGNAL_NAME | default('MISSING_DATA') }} = {{ val }}");
+    {% if func.AACP_DATATYPE | lower in ['float', 'double', 'real'] %}
+  WAIT_FOR_SYSVAR_FLOAT("{{ func.AACP_SIGNAME_NAMESPACE | default('MISSING_DATA') }}", "{{ func.AACP_SIGNAME_VARIABLE | default('MISSING_DATA') }}", {{ val }}, 4000);
+    {% else %}
+  WAIT_FOR_SYSVAR_INT("{{ func.AACP_SIGNAME_NAMESPACE | default('MISSING_DATA') }}", "{{ func.AACP_SIGNAME_VARIABLE | default('MISSING_DATA') }}", {{ val }}, 4000);
+    {% endif %}
+  {% endif %}
+  
+  {% if not loop.last %}
+
+  {% endif %}
+{% endfor %}
+
+  testStep("#8 Check", "Check sysvarMember::{{ func.AACP_DB_SIGNAL_VALUESTATE | default('MISSING_DATA') }} = VALUE_STATE_VALID");
+  WAIT_FOR_SYSVAR_LONG("{{ func.AACP_SIGVALUESTATE_NAMESPACE | default('MISSING_DATA') }}", "{{ func.AACP_SIGVALUESTATE_VARIABLE | default('MISSING_DATA') }}", VALUE_STATE_VALID, 9000);
+}
+
+{% endif %}
+{% endfor %}
