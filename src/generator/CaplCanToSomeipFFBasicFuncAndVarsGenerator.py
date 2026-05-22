@@ -47,7 +47,7 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
         eth_enums_dict = {}
 
         for index, row in df.iterrows():
-            # --- NEW: Process rows matching the parameterized test_type ---
+            # --- Process rows matching the parameterized test_type ---
             row_test_type = str(row.get('TEST_TYPE', '')).strip()
             if row_test_type != test_type:
                 continue
@@ -67,10 +67,10 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
             can_mid = row.get('COMPUTED_CAN_VALUE_MID', 0.0)
             can_max = row.get('COMPUTED_CAN_VALUE_MAX', 0.0)
             
-            # Safely extract SOMEIP limits (Checking various header formats)
-            eth_min = row.get('COMPUTED_SOMEIP_VALUE_MIN', row.get('COMPUTED_SOMEIP_FF_MIN_PHY', row.get('COMPUTED_SOMEIP_FF_MIN', 0.0)))
-            eth_mid = row.get('COMPUTED_SOMEIP_VALUE_MID', row.get('COMPUTED_SOMEIP_FF_MID_PHY', row.get('COMPUTED_SOMEIP_FF_MID', 0.0)))
-            eth_max = row.get('COMPUTED_SOMEIP_VALUE_MAX', row.get('COMPUTED_SOMEIP_FF_MAX_PHY', row.get('COMPUTED_SOMEIP_FF_MAX', 0.0)))
+            # Safely extract SOMEIP FF explicit limits from the updated columns
+            eth_min = row.get('COMPUTED_SOMEIP_FF_VALUE_MIN', row.get('COMPUTED_SOMEIP_VALUE_MIN', 0.0))
+            eth_mid = row.get('COMPUTED_SOMEIP_FF_VALUE_MID', row.get('COMPUTED_SOMEIP_VALUE_MID', 0.0))
+            eth_max = row.get('COMPUTED_SOMEIP_FF_VALUE_MAX', row.get('COMPUTED_SOMEIP_VALUE_MAX', 0.0))
 
             can_offset = row.get('CAN_OFFSET', 0)
             can_res = row.get('CAN_RESOLUTION', 1)
@@ -100,13 +100,22 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
             # Extracting specific Signal Name and Namespace details robustly
             full_sysvar = str(row.get('SOMEIP_DB_SIGNAL_NAME', 'Namespace::SignalName'))
             sysvar_parts = full_sysvar.split('::')
-            
             ns = "::".join(sysvar_parts[:-1]) if len(sysvar_parts) > 1 else "EthernetCluster"
             name = sysvar_parts[-1]
             
-            # Defaulting datatype to float if resolution has decimals, otherwise int
-            resolution = str(row.get('SOMEIP_RESOLUTION', '1'))
-            datatype = "float" if "." in resolution else "int"
+            # Extracting the FF explicit DB signal name
+            someip_ff_signal_name = str(row.get('SOMEIP_FF_DB_SIGNAL_NAME', '')).strip()
+            if not someip_ff_signal_name or someip_ff_signal_name == 'nan':
+                someip_ff_signal_name = full_sysvar # Safe fallback if empty
+                
+            # Extracting the ValueState parameters
+            someip_ff_valuestate = str(row.get('SOMEIP_FF_DB_SIGNAL_VALUESTATE', '')).strip()
+            
+            # Datatype from SOMEIP_FF_DATATYPE column
+            datatype = str(row.get('SOMEIP_FF_DATATYPE', '')).strip().lower()
+            if not datatype or datatype == 'nan' or datatype == 'missing_data':
+                resolution = str(row.get('SOMEIP_RESOLUTION', '1'))
+                datatype = "float" if "." in resolution else "int"
 
             # Preparing requirement object for the basic function template
             requirements.append({
@@ -117,15 +126,29 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
                 'CAN_DB_SIGNAL_NAME': str(row.get('CAN_DB_SIGNAL_NAME', 'Unknown_CAN_Signal')),
                 'IS_ENUM': is_enum_str,
                 'SOMEIP_DB_SIGNAL_NAME': full_sysvar,
+                'SOMEIP_FF_DB_SIGNAL_NAME': someip_ff_signal_name, 
                 'SOMEIP_NS': ns,
                 'SOMEIP_NAME': name,
-                'DATATYPE': datatype,
-                'labels': ['Mid', 'Min', 'Max'] # Mid -> Min -> Max iteration order
+                'DATATYPE': datatype, 
+                'COMPUTED_SOMEIP_FF_VALUE_MIN': eth_min, 
+                'COMPUTED_SOMEIP_FF_VALUE_MID': eth_mid, 
+                'COMPUTED_SOMEIP_FF_VALUE_MAX': eth_max, 
+                'SOMEIP_FF_DB_SIGNAL_VALUESTATE': someip_ff_valuestate,
+                'labels': ['Mid', 'Min', 'Max']
             })
 
         if not requirements:
             log.warning(f"No applicable rows found for test type {test_type}.")
             return
+
+        # --- NEW: Filter out duplicate Basic Functions before passing to Jinja ---
+        unique_requirements = []
+        seen_funcs = set()
+        for req in requirements:
+            if req['Basic_Function'] not in seen_funcs:
+                unique_requirements.append(req)
+                seen_funcs.add(req['Basic_Function'])
+        # --------------------------------------------------------------------------
 
         log.info("Data extracted successfully. Rendering Jinja2 templates...")
 
@@ -147,10 +170,10 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
                 eth_enums=list(eth_enums_dict.values())
             )
 
-            # 2. Render Test Functions
+            # 2. Render Test Functions (Using the filtered unique list)
             func_template = self.env.get_template(self.func_template)
             rendered_funcs = func_template.render(
-                requirements=requirements
+                requirements=unique_requirements
             )
 
             # 3. Save to separate files (Variables in one, Functions in the other)
