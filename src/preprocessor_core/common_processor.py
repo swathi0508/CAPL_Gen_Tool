@@ -23,15 +23,35 @@ class CommonProcessor:
         self.enum_mapper = EnumResolver()
 
     @staticmethod
-    def _compute_bounds(mi, ma):
+    def _compute_bounds(min_in, max_in):
         """Modular Math Engine: Logic for physical boundary calculation."""
         try:
-            mi_f, ma_f = float(mi), float(ma)
+            # 1. Cast inputs directly to 64-bit doubles (Python floats)
+            min_val = float(min_in)
+            max_val = float(max_in)
+            mid_val = (min_val + max_val) / 2.0
+
+            # 2. Change to 'or': Apply rounding logic if EITHER mid or max is >= 1.0
+            if mid_val >= 1.0 or max_val >= 1.0:
+                min_rounded = float(math.ceil(min_val))
+                max_rounded = float(math.floor(max_val))
+                mid_rounded = float(math.ceil(mid_val))
+
+                # Clamp rounded values strictly inside the original [min_val, max_val] window
+                final_min = max(min_val, min(min_rounded, max_val))
+                final_max = max(min_val, min(max_rounded, max_val))
+                final_mid = max(final_min, min(mid_rounded, final_max))
+            else:
+                # Sub-1 or completely negative scale: use exact doubles natively
+                final_min, final_mid, final_max = min_val, mid_val, max_val
+
+            # 3. Explicitly return values as 64-bit doubles
             return {
-                'MIN': int(math.ceil(mi_f)),
-                'MID': int(math.ceil((mi_f + ma_f) / 2.0)),
-                'MAX': int(math.floor(ma_f))
+                'MIN': float(final_min), 
+                'MID': float(final_mid), 
+                'MAX': float(final_max)
             }
+
         except (ValueError, TypeError):
             return {k: "N/A" for k in ['MIN', 'MID', 'MAX']}
 
