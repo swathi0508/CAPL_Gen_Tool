@@ -319,7 +319,7 @@ void AACP_BUTTON_PRESS(char sysvar_namespace[], char sysvar_variable[])
 
 testcase AACP_CLIENT_CONNECT()
 {
-  startLoggingTestCase("AACP_CLIENT_CONNECT");
+  START_LOGGING_TEST_CASE("AACP_CLIENT_CONNECT");
   TestCaseTitle("AACP_CLIENT_CONNECT", "Connect to AACP Server");
   
   teststep("#1 Pre condition","Set Client IP to 192.168.11.81");
@@ -347,7 +347,7 @@ testcase AACP_CLIENT_CONNECT()
     testStepFail("","AACP Client: Connection Unsuccessful");
   }
   
-  stopLoggingTestCase();
+  STOP_LOGGING_TEST_CASE();
 }
 
 void AACP_LOAD_SYSVAR_FOR_DAQ(char sysvar_list[])
@@ -359,7 +359,7 @@ void AACP_LOAD_SYSVAR_FOR_DAQ(char sysvar_list[])
 
 testcase AACP_CLIENT_DISCONNECT()
 {
-  startLoggingTestCase("AACP_CLIENT_DISCONNECT");
+  START_LOGGING_TEST_CASE("AACP_CLIENT_DISCONNECT");
   TestCaseTitle("AACP_CLIENT_DISCONNECT", "Disconnect from AACP Server");
   
 // To check on how to stop entire DAQ
@@ -382,7 +382,7 @@ testcase AACP_CLIENT_DISCONNECT()
     testStepFail("","AACP Client: Could not Disconnect");
   }
   
-  stopLoggingTestCase();
+  STOP_LOGGING_TEST_CASE();
 }
 
 // ============================================================================
