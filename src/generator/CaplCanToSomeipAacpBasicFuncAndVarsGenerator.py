@@ -174,7 +174,7 @@ class CaplCanToSomeipAacpBasicFuncAndVarsGenerator:
             os.makedirs(v_dir, exist_ok=True)
 
             # Updated output filenames requested for AACP
-            with open(f_dir / "can_to_someip_aacp_basic_functions.can", "w") as f:
+            with open(f_dir / "can_to_someip_aacp_basic_functions.cin", "w") as f:
                 f.write(self.env.get_template(self.func_template).render(functions=func_records))
 
             with open(v_dir / "can_to_someip_aacp_variables.cin", "w") as f:

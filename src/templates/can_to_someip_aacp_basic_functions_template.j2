@@ -15,9 +15,9 @@ void {{ func.BASIC_FUNCTION_NAME | default('MISSING_DATA') }}()
   {% set chk_step = act_step + 1 %}
   testStep("#{{ act_step }} Action", "Set {{ func.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ func.CAN_PORT | default('MISSING_DATA') }}_{{ label }}");
   {% if func.IS_ENUM | string | upper == 'TRUE' %}
-  SETCHECK_CAN_SIGNAL("{{ func.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ func.CAN_PORT | default('MISSING_DATA') }}_{{ label }}, CAN_TIMEOUT, 0, 1);
+  SETCHECK_CAN_SIGNAL("{{ func.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ func.CAN_PORT | default('MISSING_DATA') }}_{{ label }}, 0, 1 , CAN_TIMEOUT);
   {% else %}
-  SETCHECK_CAN_SIGNAL("{{ func.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ func.CAN_PORT | default('MISSING_DATA') }}_{{ label }}, CAN_TIMEOUT, I{{ func.CAN_PORT | default('MISSING_DATA') }}_Offset, I{{ func.CAN_PORT | default('MISSING_DATA') }}_Resolution);
+  SETCHECK_CAN_SIGNAL("{{ func.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ func.CAN_PORT | default('MISSING_DATA') }}_{{ label }}, I{{ func.CAN_PORT | default('MISSING_DATA') }}_Offset, I{{ func.CAN_PORT | default('MISSING_DATA') }}_Resolution, CAN_TIMEOUT);
   {% endif %}
 
   {% if func.IS_ENUM | string | upper == 'TRUE' %}
