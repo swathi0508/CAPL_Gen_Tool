@@ -16,10 +16,6 @@ variables
   double I{{ row.CAN_PORT | default('MISSING_DATA') }}_Max = {{ row.COMPUTED_CAN_VALUE_MAX | default('MISSING_DATA') }};
   double I{{ row.CAN_PORT | default('MISSING_DATA') }}_Offset = {{ row.CAN_OFFSET | default('MISSING_DATA') }};
   double I{{ row.CAN_PORT | default('MISSING_DATA') }}_Resolution = {{ row.CAN_RESOLUTION | default('MISSING_DATA') }};
-
-  double {{ row.SOMEIP_PORT | default('MISSING_DATA') }}_{{ row.ATTRIBUTE_VALUE | default('MISSING_DATA') }}_Min = {{ row.COMPUTED_SOMEIP_VALUE_MIN | default('MISSING_DATA') }};
-  double {{ row.SOMEIP_PORT | default('MISSING_DATA') }}_{{ row.ATTRIBUTE_VALUE | default('MISSING_DATA') }}_Mid = {{ row.COMPUTED_SOMEIP_VALUE_MID | default('MISSING_DATA') }};
-  double {{ row.SOMEIP_PORT | default('MISSING_DATA') }}_{{ row.ATTRIBUTE_VALUE | default('MISSING_DATA') }}_Max = {{ row.COMPUTED_SOMEIP_VALUE_MAX | default('MISSING_DATA') }};
 {% endfor %}
 
 // --- UNIQUE CAN ENUMS ---
