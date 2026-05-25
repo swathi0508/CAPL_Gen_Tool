@@ -1,7 +1,14 @@
 /*
- *  Library Name: SignalValidation_Lib.cin
- *  Description: Unified Physical Validation Framework for CANoe.
+ * Library Name: SignalValidation_Lib.cin
+ * Description: Unified Physical Validation Framework for CANoe.
  */
+
+{% if 'AACP' in t_type | upper %}
+includes
+{ 
+  #include "..\\COMMON_FILES\\pwt_s2s_functions_val.cin"
+}
+{% endif %}
 
 variables
 {
@@ -296,6 +303,87 @@ void SOMEIP_FF_SENDONCE(char ns[], char name[])
   testStepPass("FF_Success", "PDU Trigger %s::%s executed", ns, name);
 }
 
+// ============================================================================
+// AACP HELPER FUNCTIONS
+// ============================================================================
+
+void AACP_BUTTON_PRESS(char sysvar_namespace[], char sysvar_variable[])
+{
+  sysSetVariableLong(sysvar_namespace, sysvar_variable, 0);
+  testWaitForTimeoutSilent(100);
+  sysSetVariableLong(sysvar_namespace, sysvar_variable, 1);
+  testWaitForTimeoutSilent(100);
+  sysSetVariableLong(sysvar_namespace, sysvar_variable, 0);
+  testWaitForTimeoutSilent(100);
+}
+
+testcase AACP_CLIENT_CONNECT()
+{
+  startLoggingTestCase("AACP_CLIENT_CONNECT");
+  TestCaseTitle("AACP_CLIENT_CONNECT", "Connect to AACP Server");
+  
+  teststep("#1 Pre condition","Set Client IP to 192.168.11.81");
+  sysSetVariableString("Client", "IP", "192.168.11.81");
+  
+  teststep("#2 Pre condition","Set Port to 43723");
+  sysSetVariableString("Client", "Port", "43723");
+  
+  teststep("#3 Pre condition","Set Device path");
+  sysSetVariableString("Client", "DevicePath", "./AACP_CANoe_AddOn_2.31_HMI/Panel/client.vsysvar");
+  
+  teststep("#4 Action","Connect to AACP Server");
+  sysSetVariableLong("Client", "Connect", 1);
+  testWaitForTimeoutSilent(2000);
+  
+  teststep("#5 Check","Check if Connection was Successful");
+  if((sysGetVariableLong("Client", "ConnectionStatus") == 1) && (sysGetVariableLong("Client", "ChecksumStatus") == 1))
+  {
+    write("AACP Client: Connection Successful");
+    testStepPass("","AACP Client: Connection Successful");
+  }
+  else
+  {
+    write("AACP Client: Check Connection Status");
+    testStepFail("","AACP Client: Connection Unsuccessful");
+  }
+  
+  stopLoggingTestCase();
+}
+
+void AACP_LOAD_SYSVAR_FOR_DAQ(char sysvar_list[])
+{
+  teststep(" #1_2_AACP Action","Set sysvar for DAQ: %s", sysvar_list);
+  sysSetVariableString("Client", "SelectDaqVariables", sysvar_list);
+  
+}
+
+testcase AACP_CLIENT_DISCONNECT()
+{
+  startLoggingTestCase("AACP_CLIENT_DISCONNECT");
+  TestCaseTitle("AACP_CLIENT_DISCONNECT", "Disconnect from AACP Server");
+  
+// To check on how to stop entire DAQ
+  testWaitForTimeoutSilent(2000);
+  
+  teststep("#1 Action","Disconnect from AACP Server");
+  sysSetVariableLong("Client", "Disconnect", 1);
+  
+  testWaitForTimeoutSilent(4000);
+  
+  teststep("#2 Check","Check if Disonnection was Successful");
+  if(sysGetVariableLong("Client", "ConnectionStatus") == 2)
+  {
+    write("AACP Client: Disconnected Successfully");
+    testStepPass("","AACP Client: Disconnected Successfully");
+  }
+  else
+  {
+    write("AACP Client: Check Connection Status");
+    testStepFail("","AACP Client: Could not Disconnect");
+  }
+  
+  stopLoggingTestCase();
+}
 
 // ============================================================================
 // 7. Define Pre-condition to set the gadeStatus to GADESTATUS_MISSION_MODE_ON
