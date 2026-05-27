@@ -12,7 +12,8 @@ from signal_parsers.base_parser import BaseParser
 class SomeIPEventParser(BaseParser):
     """
     Parses SOME/IP ARXML files to extract signals, Data Types, and Scaling boundaries.
-    Constructs exact CAPL routing strings directly from Data Type Mapping Sets.
+    Constructs exact CAPL routing strings directly from Data Type Mapping Sets
+    and Sender-Receiver Interfaces.
     """
 
     def __init__(self, file_path: str):
@@ -39,6 +40,7 @@ class SomeIPEventParser(BaseParser):
         impl_to_basetype = self._extract_impl_to_basetype(root)
         app_to_basetype = self._extract_app_to_basetype(root, impl_to_basetype)
         records_dict = self._extract_records(root)
+        app_to_interface = self._extract_app_to_interface(root)
 
         def get_compu_data(app_type_name: str) -> Dict[str, Any]:
             compu_name = app_to_compu.get(app_type_name, app_type_name)
@@ -79,11 +81,20 @@ class SomeIPEventParser(BaseParser):
                     # ONLY PROCESS APPLICATION RECORDS (Struct Unrolling)
                     # -----------------------------------------------------
                     if app_name in records_dict:
-                        # REMOVE TRAILING NUMBERS FOR CANONICAL NAMING (e.g., VehicleSpeed2 -> VehicleSpeed)
-                        canonical_event_name = re.sub(r'\d+$', '', app_name)
+                        
+                        # NEW APPROACH: Look up the exact name from the Interface mapping
+                        interface_name = app_to_interface.get(app_name)
 
-                        # The Application Record name becomes the Port/Event Name
-                        someip_port = f"SomeIp{canonical_event_name}"
+                        if interface_name:
+                            # ARXML Interface names usually end in "Interface". 
+                            # We strip it to get the CAPL routing port name (e.g., SomeIpEcoMode...)
+                            someip_port = re.sub(r'Interface$', '', interface_name)
+                            # Extract the event part for your JSON by dropping the "SomeIp" prefix
+                            canonical_event_name = re.sub(r'^SomeIp', '', someip_port)
+                        else:
+                            # FALLBACK: Just in case the ARXML mapping is broken for a specific signal
+                            canonical_event_name = re.sub(r'\d+$', '', app_name)
+                            someip_port = f"SomeIp{canonical_event_name}"
 
                         for element in records_dict[app_name]:
                             elem_name = element["name"]
@@ -99,7 +110,7 @@ class SomeIPEventParser(BaseParser):
                             # Check if enums exist, otherwise default to an empty dictionary
                             enums_dict = c_data["enums"] if c_data["has_enums"] else {}
 
-                            # EXACT RECONSTRUCTION using the clean canonical name
+                            # EXACT RECONSTRUCTION using the ARXML-provided name
                             sig_str = f"EthernetCluster::sif_{sif}::{someip_port}::{elem_name}"
 
                             self._parsed_data[sig_str] = {
@@ -235,3 +246,22 @@ class SomeIPEventParser(BaseParser):
                     })
             records_dict[rec_name] = elements
         return records_dict
+
+    def _extract_app_to_interface(self, root) -> Dict[str, str]:
+        """Maps Application Data Types to their exact Sender-Receiver Interface names."""
+        app_to_interface = {}
+        for sr_if in root.xpath("//*[local-name()='SENDER-RECEIVER-INTERFACE']"):
+            if_name_elem = sr_if.xpath("*[local-name()='SHORT-NAME']")
+            if not if_name_elem:
+                continue
+            
+            if_name = if_name_elem[0].text.strip()
+            
+            # Find the Data Elements pointing to an App Data Type
+            for data_elem in sr_if.xpath(".//*[local-name()='VARIABLE-DATA-PROTOTYPE']"):
+                tref = data_elem.xpath("*[local-name()='TYPE-TREF']")
+                if tref and tref[0].text:
+                    app_name = tref[0].text.split("/")[-1].strip()
+                    app_to_interface[app_name] = if_name
+                    
+        return app_to_interface
