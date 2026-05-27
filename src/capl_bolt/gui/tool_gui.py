@@ -192,13 +192,30 @@ class CaplGenGUI(QMainWindow):
         self.cat_combo = QComboBox(); self.cat_combo.addItems(["E2E_CAN", "E2E_ETH"]); self.cat_combo.setFixedSize(325, 32); c_layout.addWidget(self.cat_combo)
         
         lbl_typ = QLabel("Test Type:"); lbl_typ.setFixedSize(75, 32); lbl_typ.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter); c_layout.addWidget(lbl_typ)
-        self.typ_combo = QComboBox(); self.typ_combo.addItems(["CAN->SOMEIP", "CAN->SOMEIP_FF", "CAN->SWC", "SWC->CAN", "SOMEIP->CAN"]); self.typ_combo.setFixedSize(325, 32); c_layout.addWidget(self.typ_combo)
+        self.typ_combo = QComboBox(); self.typ_combo.setFixedSize(325, 32); c_layout.addWidget(self.typ_combo)
+
+        self.cat_combo.currentTextChanged.connect(self._update_test_types)
+        self._update_test_types(self.cat_combo.currentText())
 
         layout.addWidget(config_left); layout.addSpacing(self.ACTION_GAP)
         self.btn_gen = QPushButton("GENERATE SCRIPTS"); self.btn_gen.setEnabled(False); self.btn_gen.setFixedSize(self.ACTION_W, 38)
         self.btn_gen.setFont(QFont("Helvetica", 9, QFont.Weight.Bold)); self.btn_gen.setStyleSheet("background-color: #3b3e40; color: #94a3b8; border-radius: 4px; border: none;")
         self.btn_gen.clicked.connect(self.run_generation); layout.addWidget(self.btn_gen, alignment=Qt.AlignmentFlag.AlignVCenter)
         self.main_layout.addWidget(container)
+
+    def _update_test_types(self, category):
+        self.typ_combo.clear()
+        if category == "E2E_CAN":
+            self.typ_combo.addItems([
+                "CAN->CAN", "CAN->SOMEIP", "CAN->SOMEIP_AACP", "CAN->SOMEIP_FF", 
+                "CAN->SWC", "CAN->SWC_HVB", "SOMEIP->CAN", "SOMEIP_FF->CAN", "SWC->CAN"
+            ])
+        elif category == "E2E_ETH":
+            self.typ_combo.addItems([
+                "CAN->SOMEIP", "CAN->SOMEIP_AACP", "CAN->SOMEIP_FF", "SOMEIP->CAN", 
+                "SOMEIP->SWC", "SOMEIP_FF->CAN", "SOMEIP_FF->SWC", "SWC->SOMEIP", 
+                "SWC->SOMEIP_AACP", "SWC->SOMEIP_FF", "CAROS->SWC"
+            ])
 
     def run_preprocess(self):
         if self.pre_process_done:
