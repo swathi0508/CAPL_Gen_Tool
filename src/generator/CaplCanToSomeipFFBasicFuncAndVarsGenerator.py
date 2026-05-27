@@ -9,7 +9,6 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
         """
         Initializes the generator and sets up the Jinja2 environment.
         """
-        # trim_blocks and lstrip_blocks keeps the layout perfectly matching your template layout
         self.env = Environment(
             loader=FileSystemLoader(template_dir), 
             trim_blocks=True, 
@@ -75,6 +74,12 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
             can_offset = row.get('CAN_OFFSET', 0)
             can_res = row.get('CAN_RESOLUTION', 1)
 
+            # --- FIX: Ensure SOMEIP FF values map to generic SOMEIP columns for variables_template.j2 ---
+            mapped_eth_min = eth_min if not pd.isna(eth_min) else row.get('COMPUTED_SOMEIP_VALUE_MIN', 0.0)
+            mapped_eth_mid = eth_mid if not pd.isna(eth_mid) else row.get('COMPUTED_SOMEIP_VALUE_MID', 0.0)
+            mapped_eth_max = eth_max if not pd.isna(eth_max) else row.get('COMPUTED_SOMEIP_VALUE_MAX', 0.0)
+            # ---------------------------------------------------------------------------------------------
+
             # Store unique variables required for the 'variables' block template
             if not is_enum:
                 if can_port not in standard_vars_dict:
@@ -82,7 +87,7 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
                         'CAN_PORT': can_port,
                         'COMPUTED_CAN_VALUE_MIN': can_min, 'COMPUTED_CAN_VALUE_MID': can_mid, 'COMPUTED_CAN_VALUE_MAX': can_max,
                         'CAN_OFFSET': can_offset, 'CAN_RESOLUTION': can_res,
-                        'COMPUTED_SOMEIP_VALUE_MIN': eth_min, 'COMPUTED_SOMEIP_VALUE_MID': eth_mid, 'COMPUTED_SOMEIP_VALUE_MAX': eth_max,
+                        'COMPUTED_SOMEIP_VALUE_MIN': mapped_eth_min, 'COMPUTED_SOMEIP_VALUE_MID': mapped_eth_mid, 'COMPUTED_SOMEIP_VALUE_MAX': mapped_eth_max,
                     }
             else:
                 if can_port not in can_enums_dict:
@@ -94,7 +99,7 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
                 if eth_key not in eth_enums_dict:
                     eth_enums_dict[eth_key] = {
                         'SOMEIP_PORT': someip_port, 'ATTRIBUTE_VALUE': attr_val,
-                        'COMPUTED_SOMEIP_VALUE_MIN': eth_min, 'COMPUTED_SOMEIP_VALUE_MID': eth_mid, 'COMPUTED_SOMEIP_VALUE_MAX': eth_max
+                        'COMPUTED_SOMEIP_VALUE_MIN': mapped_eth_min, 'COMPUTED_SOMEIP_VALUE_MID': mapped_eth_mid, 'COMPUTED_SOMEIP_VALUE_MAX': mapped_eth_max
                     }
 
             # Extracting specific Signal Name and Namespace details robustly
@@ -111,6 +116,12 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
             # Extracting the ValueState parameters
             someip_ff_valuestate = str(row.get('SOMEIP_FF_DB_SIGNAL_VALUESTATE', '')).strip()
             
+            # --- NEW: Extracting the specific Namespace and Variable parameters ---
+            someip_ff_signame_namespace = str(row.get('SOMEIP_FF_SIGNAME_NAMESPACE', '')).strip()
+            someip_ff_signame_variable = str(row.get('SOMEIP_FF_SIGNAME_VARIABLE', '')).strip()
+            someip_ff_sigvaluestate_namespace = str(row.get('SOMEIP_FF_SIGVALUESTATE_NAMESPACE', '')).strip()
+            someip_ff_sigvaluestate_variable = str(row.get('SOMEIP_FF_SIGVALUESTATE_VARIABLE', '')).strip()
+
             # Datatype from SOMEIP_FF_DATATYPE column
             datatype = str(row.get('SOMEIP_FF_DATATYPE', '')).strip().lower()
             if not datatype or datatype == 'nan' or datatype == 'missing_data':
@@ -134,6 +145,10 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
                 'COMPUTED_SOMEIP_FF_VALUE_MID': eth_mid, 
                 'COMPUTED_SOMEIP_FF_VALUE_MAX': eth_max, 
                 'SOMEIP_FF_DB_SIGNAL_VALUESTATE': someip_ff_valuestate,
+                'SOMEIP_FF_SIGNAME_NAMESPACE': someip_ff_signame_namespace,
+                'SOMEIP_FF_SIGNAME_VARIABLE': someip_ff_signame_variable,
+                'SOMEIP_FF_SIGVALUESTATE_NAMESPACE': someip_ff_sigvaluestate_namespace,
+                'SOMEIP_FF_SIGVALUESTATE_VARIABLE': someip_ff_sigvaluestate_variable,
                 'labels': ['Mid', 'Min', 'Max']
             })
 
@@ -141,7 +156,7 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
             log.warning(f"No applicable rows found for test type {test_type}.")
             return
 
-        # --- NEW: Filter out duplicate Basic Functions before passing to Jinja ---
+        # --- Filter out duplicate Basic Functions before passing to Jinja ---
         unique_requirements = []
         seen_funcs = set()
         for req in requirements:
@@ -158,8 +173,8 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
         os.makedirs(f_dir, exist_ok=True)
         os.makedirs(v_dir, exist_ok=True)
 
-        output_path = str(f_dir / "can_to_someipff_basic_functions.can")
-        var_output_file = str(v_dir / "can_to_someipff_Variables.cin")
+        output_path = str(f_dir / "can_to_someip_ff_basic_functions.cin")
+        var_output_file = str(v_dir / "can_to_someip_ff_Variables.cin")
 
         try:
             # 1. Render Variables
