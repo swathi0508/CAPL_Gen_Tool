@@ -52,11 +52,10 @@ class CaplSignalValidationLibGenerator:
         log.error(f"Lib Gen: Could not resolve signal for Event={event}, Attr={attribute}")
         return {"path": "MISSING_DATA", "enum_name": "MISSING_DATA", "enum_value": "MISSING_DATA"}
 
-    def render(self, output_path, target_type=""):
+    def render(self, output_path):
         """Renders the Library using the securely loaded in-memory data."""
         try:
             context = {
-                "t_type": target_type,  # <--- NEW: Passed to template for the AACP conditional check
                 "signals": {
                     "gadeStatusValueState": self._resolve(self.eth_data, "gadeEvent", "gadeStatusValueState", "VALUE_STATE_VALID"),
                     "gadeStatus": self._resolve(self.eth_data, "gadeEvent", "gadeStatus", "GADESTATUS_MISSION_MODE_ON")
@@ -69,3 +68,4 @@ class CaplSignalValidationLibGenerator:
             log.info("Signal Validation Library generated.")
         except Exception as e:
             log.error(f"Lib Gen failed: {e}")
+            
