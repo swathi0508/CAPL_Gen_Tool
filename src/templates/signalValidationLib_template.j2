@@ -345,9 +345,8 @@ testcase AACP_CLIENT_CONNECT()
 
 void AACP_LOAD_SYSVAR_FOR_DAQ(char sysvar_list[])
 {
-  teststep(" #1_2_AACP Action","Set sysvar for DAQ: %s", sysvar_list);
+  teststep(" #1 AACP Action","Set sysvar for DAQ: %s", sysvar_list);
   sysSetVariableString("Client", "SelectDaqVariables", sysvar_list);
-  
 }
 
 testcase AACP_CLIENT_DISCONNECT()
@@ -355,7 +354,6 @@ testcase AACP_CLIENT_DISCONNECT()
   START_LOGGING_TEST_CASE("AACP_CLIENT_DISCONNECT");
   TestCaseTitle("AACP_CLIENT_DISCONNECT", "Disconnect from AACP Server");
   
-// To check on how to stop entire DAQ
   testWaitForTimeoutSilent(2000);
   
   teststep("#1 Action","Disconnect from AACP Server");
