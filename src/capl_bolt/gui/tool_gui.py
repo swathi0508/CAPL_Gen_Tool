@@ -207,14 +207,13 @@ class CaplGenGUI(QMainWindow):
         self.typ_combo.clear()
         if category == "E2E_CAN":
             self.typ_combo.addItems([
-                "CAN->CAN", "CAN->SOMEIP", "CAN->SOMEIP_AACP", "CAN->SOMEIP_FF", 
-                "CAN->SWC", "CAN->SWC_HVB", "SOMEIP->CAN", "SOMEIP_FF->CAN", "SWC->CAN"
+                "CAN->CAN", "CAN->SOMEIP", "CAN->SOMEIP_AACP", "CAN->SOMEIP_FF", "SOMEIP->CAN", "SOMEIP_FF->CAN",
+                "CAN->SWC", "CAN->SWC_HVB", "SWC->CAN"
             ])
         elif category == "E2E_ETH":
             self.typ_combo.addItems([
-                "CAN->SOMEIP", "CAN->SOMEIP_AACP", "CAN->SOMEIP_FF", "SOMEIP->CAN", 
-                "SOMEIP->SWC", "SOMEIP_FF->CAN", "SOMEIP_FF->SWC", "SWC->SOMEIP", 
-                "SWC->SOMEIP_AACP", "SWC->SOMEIP_FF", "CAROS->SWC"
+                "CAN->SOMEIP", "CAN->SOMEIP_AACP", "CAN->SOMEIP_FF", "SOMEIP->CAN", "SOMEIP_FF->CAN",
+                "SOMEIP->SWC", "SOMEIP_FF->SWC", "SWC->SOMEIP", "SWC->SOMEIP_AACP", "SWC->SOMEIP_FF", "CAROS->SWC"
             ])
 
     def run_preprocess(self):
