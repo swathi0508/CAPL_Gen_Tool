@@ -11,14 +11,14 @@ void {{ func.BASIC_FUNCTION_NAME | default('MISSING_DATA') }}()
 {%- for label in ['Mid', 'Min', 'Max'] %}
   {%- set act_step = loop.index0 * 2 + 2 %}{% set chk_step = act_step + 1 %}
 
-  testStep("#{{ act_step }} Action", "Set {{ func.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ func.CAN_PORT | default('MISSING_DATA') }}_{{ label }}");
+  testStep("#{{ act_step }} SET_CAN", "Set {{ func.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ func.CAN_PORT | default('MISSING_DATA') }}_{{ label }}");
 {%- if func.IS_ENUM | string | upper == 'TRUE' %}
   SETCHECK_CAN_SIGNAL("{{ func.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ func.CAN_PORT | default('MISSING_DATA') }}_{{ label }}, 0, 1, CAN_TIMEOUT);
 {%- else %}
   SETCHECK_CAN_SIGNAL("{{ func.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ func.CAN_PORT | default('MISSING_DATA') }}_{{ label }}, I{{ func.CAN_PORT | default('MISSING_DATA') }}_Offset, I{{ func.CAN_PORT | default('MISSING_DATA') }}_Resolution, CAN_TIMEOUT);
 {%- endif %}
 
-  testStep("#{{ chk_step }} Check", "Check sysvarMember::{{ func.AACP_DB_SIGNAL_NAME | default('MISSING_DATA') }} = 
+  testStep("#{{ chk_step }} CEHCK_AACP", "Check sysvarMember::{{ func.AACP_DB_SIGNAL_NAME | default('MISSING_DATA') }} = 
 {%- if func.IS_ENUM | string | upper == 'TRUE' -%}
 {{ func.SOMEIP_PORT }}_{{ func.ATTRIBUTE_VALUE }}_{{ label }}
 {%- else -%}
@@ -35,7 +35,7 @@ I{{ func.CAN_PORT | default('MISSING_DATA') }}_{{ label }}
 {%- endif %}
 {%- endfor %}
 
-  testStep("#8 Check", "Check sysvarMember::{{ func.AACP_DB_SIGNAL_VALUESTATE | default('MISSING_DATA') }} = VALUE_STATE_VALID");
+  testStep("#8 CHECK_AACP_VALUESTATE", "Check sysvarMember::{{ func.AACP_DB_SIGNAL_VALUESTATE | default('MISSING_DATA') }} = VALUE_STATE_VALID");
   WAIT_FOR_SYSVAR_LONG("{{ func.AACP_SIGVALUESTATE_NAMESPACE | default('MISSING_DATA') }}", "{{ func.AACP_SIGVALUESTATE_VARIABLE | default('MISSING_DATA') }}", VALUE_STATE_VALID, SOMEIP_TIMEOUT);
 }
 

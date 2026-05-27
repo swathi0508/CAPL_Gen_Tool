@@ -9,14 +9,14 @@ void {{ row.Basic_Function | default('MISSING_DATA') }}()
 {
 {%- for label in row.labels %}
   {%- set act_step = loop.index0 * 2 + 1 %}{% set chk_step = act_step + 1 %}
-  testStep("#{{ act_step }} Action", "Set {{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ row.CAN_PORT | default('MISSING_DATA') }}_{{ label }}");
+  testStep("#{{ act_step }} SET_CAN", "Set {{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ row.CAN_PORT | default('MISSING_DATA') }}_{{ label }}");
 {%- if row.IS_ENUM | string | upper == 'TRUE' %}
   SETCHECK_CAN_SIGNAL("{{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_PORT | default('MISSING_DATA') }}_{{ label }}, 0, 1, CAN_TIMEOUT);
 {%- else %}
   SETCHECK_CAN_SIGNAL("{{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_PORT | default('MISSING_DATA') }}_{{ label }}, I{{ row.CAN_PORT | default('MISSING_DATA') }}_Offset, I{{ row.CAN_PORT | default('MISSING_DATA') }}_Resolution, CAN_TIMEOUT);
 {%- endif %}
 
-  testStep("#{{ chk_step }} Verify", "Check SOME/IP FF SysVar '{{ row.SOMEIP_FF_DB_SIGNAL_NAME | default('MISSING_DATA') }}' = 
+  testStep("#{{ chk_step }} CHECK_SOMEIP_FF", "Check SOME/IP FF SysVar '{{ row.SOMEIP_FF_DB_SIGNAL_NAME | default('MISSING_DATA') }}' = 
 {%- if row.IS_ENUM | string | upper == 'TRUE' -%}
 {{ row.SOMEIP_PORT }}_{{ row.ATTRIBUTE_VALUE }}_{{ label }}
 {%- else -%}
@@ -33,7 +33,7 @@ I{{ row.CAN_PORT | default('MISSING_DATA') }}_{{ label }}
 {%- endif %}
 {{ "" }}
 {%- endfor %}
-  testStep("#7 Check", "Check sysvarMember::{{ row.SOMEIP_FF_DB_SIGNAL_VALUESTATE | default('MISSING_DATA') }} = VALUE_STATE_VALID");
+  testStep("#7 CHECK_SOMEIP_FF_VALUESTATE", "Check sysvarMember::{{ row.SOMEIP_FF_DB_SIGNAL_VALUESTATE | default('MISSING_DATA') }} = VALUE_STATE_VALID");
   WAIT_FOR_SYSVAR_LONG("{{ row.SOMEIP_FF_SIGVALUESTATE_NAMESPACE | default('MISSING_DATA') }}", "{{ row.SOMEIP_FF_SIGVALUESTATE_VARIABLE | default('MISSING_DATA') }}", VALUE_STATE_VALID, SOMEIP_TIMEOUT);
 }
 
