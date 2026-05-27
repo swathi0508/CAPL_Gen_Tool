@@ -20,7 +20,6 @@ class BasicFunctionResolver:
         }
 
     def _generate_naming_string(self, row_data: dict) -> str:
-        """The core naming engine with internal prefixing and mapping."""
         test_type = str(row_data.get('test_type', '')).upper()
         someip_port = str(row_data.get('someip_port', '')).strip()
         attribute = str(row_data.get('attribute_value', '')).strip()
@@ -31,7 +30,6 @@ class BasicFunctionResolver:
         raw_cluster = str(row_data.get('can_cluster_raw', ''))
         can_cluster = self.cluster_map.get(raw_cluster, "UnknownCluster")
 
-        # Define all new variables for CAN->CAN in the same place as other variables
         can_to_can_port = str(row_data.get('can_to_can_port', '')).strip()
         can2_port = f"I{can_to_can_port}" if can_to_can_port not in ["N/A", "", "None"] else "IUnknownPort"
         raw_can2_cluster = str(row_data.get('can2_cluster_raw', ''))
@@ -63,22 +61,8 @@ class BasicFunctionResolver:
         return "basic_fn_UNKNOWN"
 
     def resolve_all_basic_functions(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Finalized BFN Resolver: strictly updates only whitelisted columns.
-        """
-        # 1. Define the 'Safe Zone' - This class only has permission to write here
         target_cols = ["BASIC_FUNCTION_NAME"]
-        
-        # Mapping definition adjusted solely to properly fetch cluster via CAN_PORT cross-reference
-        port_to_cluster_lookup = (
-            df[['CAN_PORT', 'CAN_CLUSTER']]
-            .dropna(subset=['CAN_PORT'])
-            .assign(CAN_PORT_STR=lambda d: d['CAN_PORT'].astype(str).str.strip())
-            .set_index('CAN_PORT_STR')['CAN_CLUSTER']
-            .to_dict()
-        )
 
-        # 2. Define the processing logic for Pass 1
         def execute_step1_prepare(row):
             test_type = str(row.get('TEST_TYPE', '')).upper()
             if any(x in test_type for x in ["NONEED", "ENABLER", "NO_NEED"]): 
@@ -88,9 +72,8 @@ class BasicFunctionResolver:
             topic_attr = str(row.get('SOMEIP_TOPIC_ATTRIBUTE', '')).lower()
             port = str(row.get('SOMEIP_PORT', '')).strip()
             
-            # Define new CAN->CAN extraction variables in the same block
             can_to_can_port = str(row.get('CAN_TO_CAN_MAPPING', '')).strip()
-            can2_cluster_raw = port_to_cluster_lookup.get(can_to_can_port, "UnknownCluster")
+            can2_cluster_raw = str(row.get('CAN2_CLUSTER', '')).strip()
 
             is_state = "value_state" in topic_attr or "valuestate" in topic_attr or \
                        bool(re.search(r'ValueState|value_state', attr, re.IGNORECASE))
@@ -106,16 +89,12 @@ class BasicFunctionResolver:
                 'can_r_p': row.get('CAN_R_P')
             })
 
-        # --- APPLY STEP 1 ---
         mask = df['TEST_TYPE'].notna()
         if not mask.any():
             return df
 
-        # USE TARGET_COLS HERE: Explicitly limit the write operation
         df.loc[mask, target_cols] = df.loc[mask].apply(execute_step1_prepare, axis=1).values.reshape(-1, 1)
 
-        # --- Internal Lookup Building ---
-        # (Filtering only based on the work we just did in the safe zone)
         standard_signals = df[
             (~df['BASIC_FUNCTION_NAME'].str.contains('PENDING_RESOLVE', na=False)) & 
             (df['BASIC_FUNCTION_NAME'] != "FUNCTION_NOT_REQUIRED")
@@ -127,7 +106,6 @@ class BasicFunctionResolver:
         ))
         lookup_by_port = dict(zip(standard_signals['SOMEIP_PORT'].astype(str).str.strip(), standard_signals['BASIC_FUNCTION_NAME']))
 
-        # --- APPLY STEP 2 (Final Resolution) ---
         def execute_step2_finalize(row):
             val = str(row.get('BASIC_FUNCTION_NAME', ''))
             if not val.startswith("PENDING_RESOLVE"): 
@@ -136,9 +114,8 @@ class BasicFunctionResolver:
             parts = val.split('|')
             port, base_attr, tt = parts[1], parts[2], parts[3]
 
-            # Define new CAN->CAN extraction variables in the same block
             can_to_can_port = str(row.get('CAN_TO_CAN_MAPPING', '')).strip()
-            can2_cluster_raw = port_to_cluster_lookup.get(can_to_can_port, "UnknownCluster")
+            can2_cluster_raw = str(row.get('CAN2_CLUSTER', '')).strip()
 
             resolved = lookup_by_pair.get((port, base_attr))
             if not resolved or base_attr == "":
@@ -154,7 +131,6 @@ class BasicFunctionResolver:
                 'can_r_p': row.get('CAN_R_P')
             })
 
-        # USE TARGET_COLS HERE: Again, strictly limit the update to the whitelist
         df.loc[mask, target_cols] = df.loc[mask].apply(execute_step2_finalize, axis=1).values.reshape(-1, 1)
 
         return df
