@@ -136,12 +136,15 @@ class CaplSomeipToCanBasicFuncAndVarsGenerator:
             os.makedirs(f_dir, exist_ok=True)
             os.makedirs(v_dir, exist_ok=True)
 
+            func_filename = "someip_to_can_basic_functions.cin"
+            var_filename = "someip_to_can_variables.cin"
+
             # Render Functions File
-            with open(f_dir / "someip_to_can_basic_functions.cin", "w") as f:
+            with open(f_dir / func_filename, "w") as f:
                 f.write(self.env.get_template(self.func_template).render(functions=func_records))
 
             # Render Variables File
-            with open(v_dir / "someip_to_can_variables.cin", "w") as f:
+            with open(v_dir / var_filename, "w") as f:
                 f.write(self.env.get_template(self.var_template).render(
                     standard_vars=std_vars,
                     can_enums=can_enums,
@@ -149,7 +152,7 @@ class CaplSomeipToCanBasicFuncAndVarsGenerator:
                     ethernet_signals=unique_signals
                 ))
 
-            log.info(f"Generated {len(func_records)} functions. ValueState metadata excluded.")
+            log.info(f"Generated {len(func_records)} functions into {func_filename} and variables into {var_filename}.")
 
         except Exception as e:
             log.exception(f"Logic Gen failed: {e}")

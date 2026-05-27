@@ -169,8 +169,11 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
         os.makedirs(f_dir, exist_ok=True)
         os.makedirs(v_dir, exist_ok=True)
 
-        output_path = str(f_dir / "can_to_someip_ff_basic_functions.cin")
-        var_output_file = str(v_dir / "can_to_someip_ff_Variables.cin")
+        func_filename = "can_to_someip_ff_basic_functions.cin"
+        var_filename = "can_to_someip_ff_Variables.cin"
+
+        output_path = str(f_dir / func_filename)
+        var_output_file = str(v_dir / var_filename)
 
         try:
             # 1. Render Variables
@@ -194,8 +197,7 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
             with open(output_path, 'w') as f_funcs:
                 f_funcs.write(rendered_funcs)
 
-            log.info(f"Variables successfully generated at: {os.path.abspath(var_output_file)}")
-            log.info(f"CAPL Basic Functions successfully generated at: {os.path.abspath(output_path)}")
+            log.info(f"Generated {len(unique_requirements)} functions into {func_filename} and variables into {var_filename}.")
             
         except Exception as e:
             log.exception(f"Logic Gen failed during template generation: {e}")
