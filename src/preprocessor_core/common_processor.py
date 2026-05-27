@@ -65,7 +65,7 @@ class CommonProcessor:
             if is_eth:
                 core_order = ["E2E_ETH_REQ_ID", "SWC", "SOMEIP_PORT", "ATTRIBUTE_VALUE", "CAN_PORT", "PATH_SYNTHESIS", "SOMEIP_TOPIC", "SOMEIP_TOPIC_ATTRIBUTE", "RUNTIME_ENV_RECEIVER", "TEST_TYPE"]
             else:
-                core_order = ["E2E_CAN_REQ_ID", "SWC", "CAN_PORT", "PATH_SYNTHESIS", "SOMEIP_PORT", "ATTRIBUTE_VALUE", "SOMEIP_TOPIC", "SOMEIP_TOPIC_ATTRIBUTE", "RUNTIME_ENV_RECEIVER", "TEST_TYPE"]
+                core_order = ["E2E_CAN_REQ_ID", "SWC", "CAN_PORT", "PATH_SYNTHESIS", "SOMEIP_PORT", "ATTRIBUTE_VALUE", "SOMEIP_TOPIC", "SOMEIP_TOPIC_ATTRIBUTE", "RUNTIME_ENV_RECEIVER", "CAN_TO_CAN_MAPPING", "CAN_R_P", "TEST_TYPE"]
 
             mapping = {
                 "E2E_ETH_REQ_ID": ["E2E_ETH_REQ_ID", "REQ ID", "REQ_ID", "REQUIREMENT ID"],
@@ -76,7 +76,9 @@ class CommonProcessor:
                 "PATH_SYNTHESIS": ["PATH_SYNTHESIS", "CAN_PATH_SYNTHESIS_MAPPING", "PATH SYNTHESIS"],
                 "SOMEIP_TOPIC": ["SOMEIP_TOPIC", "TOPIC", "TOPIC NAME"],
                 "SOMEIP_TOPIC_ATTRIBUTE": ["SOMEIP_TOPIC_ATTRIBUTE", "ATTRIBUTE", "TOPIC ATTRIBUTE"],
-                "RUNTIME_ENV_RECEIVER": ["RUNTIME_ENV_RECEIVER", "RUNTIME ENV RECEIVER"]
+                "RUNTIME_ENV_RECEIVER": ["RUNTIME_ENV_RECEIVER", "RUNTIME ENV RECEIVER"],
+                "CAN_TO_CAN_MAPPING" : ["CAN_TO_CAN_MAPPING"],
+                "CAN_R_P": ["R/P"]
             }
 
             df_out = pd.DataFrame()

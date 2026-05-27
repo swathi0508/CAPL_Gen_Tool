@@ -9,8 +9,13 @@ class BasicFunctionResolver:
 
     def __init__(self):
         self.cluster_map = {
-            "CAN_FD_PT": "PT", "CAN_FD_CHASSIS": "CH", "CAN_ITS3_FD": "ITS3", 
-            "CAN_ITS5_FD": "ITS5", "PCU4_CAN": "PCU4", "CAN_EXT": "EXT", "CAN_FD_ACCESS2": "ACC2",
+            "CAN_FD_PT": "PT",
+            "CAN_FD_CHASSIS": "CH",
+            "CAN_ITS3_FD": "ITS3",
+            "CAN_ITS5_FD": "ITS5",
+            "PCU4_CAN": "PCU4",
+            "CAN_EXT": "EXT",
+            "CAN_FD_ACCESS2": "ACC2",
             "EthernetCluster": "ETH"
         }
 
@@ -25,6 +30,13 @@ class BasicFunctionResolver:
         
         raw_cluster = str(row_data.get('can_cluster_raw', ''))
         can_cluster = self.cluster_map.get(raw_cluster, "UnknownCluster")
+
+        # Define all new variables for CAN->CAN in the same place as other variables
+        can_to_can_port = str(row_data.get('can_to_can_port', '')).strip()
+        can2_port = f"I{can_to_can_port}" if can_to_can_port not in ["N/A", "", "None"] else "IUnknownPort"
+        raw_can2_cluster = str(row_data.get('can2_cluster_raw', ''))
+        can2_cluster = self.cluster_map.get(raw_can2_cluster, "UnknownCluster")
+        can_r_p = str(row_data.get('can_r_p', '')).strip().upper()
 
         event_name = someip_port.split('_')[1] if '_' in someip_port and len(someip_port.split('_')) > 1 else someip_port
 
@@ -43,7 +55,10 @@ class BasicFunctionResolver:
         if "CAROS->SWC" in test_type: 
             return f"basic_fn_CAROS_{event_name}_{attribute}_SWC"
         if "CAN->CAN" in test_type: 
-            return f"basic_fn_{can_port}_{can_cluster}_{can_port}_{can_cluster}"
+            if can_r_p == "R":
+                return f"basic_fn_{can_port}_{can_cluster}_{can2_port}_{can2_cluster}"
+            elif can_r_p == "P":
+                return f"basic_fn_{can2_port}_{can2_cluster}_{can_port}_{can_cluster}"
             
         return "basic_fn_UNKNOWN"
 
@@ -54,6 +69,15 @@ class BasicFunctionResolver:
         # 1. Define the 'Safe Zone' - This class only has permission to write here
         target_cols = ["BASIC_FUNCTION_NAME"]
         
+        # Mapping definition adjusted solely to properly fetch cluster via CAN_PORT cross-reference
+        port_to_cluster_lookup = (
+            df[['CAN_PORT', 'CAN_CLUSTER']]
+            .dropna(subset=['CAN_PORT'])
+            .assign(CAN_PORT_STR=lambda d: d['CAN_PORT'].astype(str).str.strip())
+            .set_index('CAN_PORT_STR')['CAN_CLUSTER']
+            .to_dict()
+        )
+
         # 2. Define the processing logic for Pass 1
         def execute_step1_prepare(row):
             test_type = str(row.get('TEST_TYPE', '')).upper()
@@ -63,6 +87,10 @@ class BasicFunctionResolver:
             attr = str(row.get('ATTRIBUTE_VALUE', '')).strip()
             topic_attr = str(row.get('SOMEIP_TOPIC_ATTRIBUTE', '')).lower()
             port = str(row.get('SOMEIP_PORT', '')).strip()
+            
+            # Define new CAN->CAN extraction variables in the same block
+            can_to_can_port = str(row.get('CAN_TO_CAN_MAPPING', '')).strip()
+            can2_cluster_raw = port_to_cluster_lookup.get(can_to_can_port, "UnknownCluster")
 
             is_state = "value_state" in topic_attr or "valuestate" in topic_attr or \
                        bool(re.search(r'ValueState|value_state', attr, re.IGNORECASE))
@@ -73,7 +101,9 @@ class BasicFunctionResolver:
             
             return self._generate_naming_string({
                 'test_type': test_type, 'someip_port': port, 'attribute_value': attr,
-                'can_port_raw': row.get('CAN_PORT'), 'can_cluster_raw': row.get('CAN_CLUSTER')
+                'can_port_raw': row.get('CAN_PORT'), 'can_cluster_raw': row.get('CAN_CLUSTER'),
+                'can_to_can_port': can_to_can_port, 'can2_cluster_raw': can2_cluster_raw,
+                'can_r_p': row.get('CAN_R_P')
             })
 
         # --- APPLY STEP 1 ---
@@ -106,6 +136,10 @@ class BasicFunctionResolver:
             parts = val.split('|')
             port, base_attr, tt = parts[1], parts[2], parts[3]
 
+            # Define new CAN->CAN extraction variables in the same block
+            can_to_can_port = str(row.get('CAN_TO_CAN_MAPPING', '')).strip()
+            can2_cluster_raw = port_to_cluster_lookup.get(can_to_can_port, "UnknownCluster")
+
             resolved = lookup_by_pair.get((port, base_attr))
             if not resolved or base_attr == "":
                 resolved = lookup_by_port.get(port)
@@ -115,7 +149,9 @@ class BasicFunctionResolver:
 
             return self._generate_naming_string({
                 'test_type': tt, 'someip_port': port, 'attribute_value': "ValueState",
-                'can_port_raw': row.get('CAN_PORT'), 'can_cluster_raw': row.get('CAN_CLUSTER')
+                'can_port_raw': row.get('CAN_PORT'), 'can_cluster_raw': row.get('CAN_CLUSTER'),
+                'can_to_can_port': can_to_can_port, 'can2_cluster_raw': can2_cluster_raw,
+                'can_r_p': row.get('CAN_R_P')
             })
 
         # USE TARGET_COLS HERE: Again, strictly limit the update to the whitelist
