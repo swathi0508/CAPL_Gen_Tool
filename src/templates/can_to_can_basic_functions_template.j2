@@ -1,0 +1,44 @@
+/*@!Encoding:1252*/
+
+{% for row in functions %}
+void {{ row.BASIC_FUNCTION_NAME | default('MISSING_DATA') }}()
+{
+{%- if row.IS_ENUM | string | upper == 'TRUE' %}
+  testStep("#1 SET_CAN", "Set {{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ row.CAN_PORT | default('MISSING_DATA') }}_Mid");
+  SETCHECK_CAN_SIGNAL("{{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_PORT | default('MISSING_DATA') }}_Mid, 0, 1, CAN_TIMEOUT);
+  
+  testStep("#2 CHECK_CAN", "Check {{ row.CAN2_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ row.CAN_TO_CAN_MAPPING | default('MISSING_DATA') }}_Mid");
+  CHECK_CAN_SIGNAL("{{ row.CAN2_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_TO_CAN_MAPPING | default('MISSING_DATA') }}_Mid, 0, 1, CAN_TIMEOUT);
+  
+  testStep("#3 SET_CAN", "Set {{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ row.CAN_PORT | default('MISSING_DATA') }}_Min");
+  SETCHECK_CAN_SIGNAL("{{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_PORT | default('MISSING_DATA') }}_Min, 0, 1, CAN_TIMEOUT);
+  
+  testStep("#4 CHECK_CAN", "Check {{ row.CAN2_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ row.CAN_TO_CAN_MAPPING | default('MISSING_DATA') }}_Min");
+  CHECK_CAN_SIGNAL("{{ row.CAN2_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_TO_CAN_MAPPING | default('MISSING_DATA') }}_Min, 0, 1, CAN_TIMEOUT);
+
+  testStep("#5 SET_CAN", "Set {{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ row.CAN_PORT | default('MISSING_DATA') }}_Max");
+  SETCHECK_CAN_SIGNAL("{{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_PORT | default('MISSING_DATA') }}_Max, 0, 1, CAN_TIMEOUT);
+  
+  testStep("#6 CHECK_CAN", "Check {{ row.CAN2_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ row.CAN_TO_CAN_MAPPING | default('MISSING_DATA') }}_Max");
+  CHECK_CAN_SIGNAL("{{ row.CAN2_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_TO_CAN_MAPPING | default('MISSING_DATA') }}_Max, 0, 1, CAN_TIMEOUT);
+{%- else %}
+  testStep("#1 SET_CAN", "Set {{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ row.CAN_PORT | default('MISSING_DATA') }}_Mid");
+  SETCHECK_CAN_SIGNAL("{{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_PORT | default('MISSING_DATA') }}_Mid, I{{ row.CAN_PORT | default('MISSING_DATA') }}_Offset, I{{ row.CAN_PORT | default('MISSING_DATA') }}_Resolution, CAN_TIMEOUT);
+  
+  testStep("#2 CHECK_CAN", "Check {{ row.CAN2_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ row.CAN_TO_CAN_MAPPING | default('MISSING_DATA') }}_Mid");
+  CHECK_CAN_SIGNAL("{{ row.CAN2_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_TO_CAN_MAPPING | default('MISSING_DATA') }}_Mid, I{{ row.CAN_TO_CAN_MAPPING | default('MISSING_DATA') }}_Offset, I{{ row.CAN_TO_CAN_MAPPING | default('MISSING_DATA') }}_Resolution, CAN_TIMEOUT);
+  
+  testStep("#3 SET_CAN", "Set {{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ row.CAN_PORT | default('MISSING_DATA') }}_Min");
+  SETCHECK_CAN_SIGNAL("{{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_PORT | default('MISSING_DATA') }}_Min, I{{ row.CAN_PORT | default('MISSING_DATA') }}_Offset, I{{ row.CAN_PORT | default('MISSING_DATA') }}_Resolution, CAN_TIMEOUT);
+  
+  testStep("#4 CHECK_CAN", "Check {{ row.CAN2_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ row.CAN_TO_CAN_MAPPING | default('MISSING_DATA') }}_Min");
+  CHECK_CAN_SIGNAL("{{ row.CAN2_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_TO_CAN_MAPPING | default('MISSING_DATA') }}_Min, I{{ row.CAN_TO_CAN_MAPPING | default('MISSING_DATA') }}_Offset, I{{ row.CAN_TO_CAN_MAPPING | default('MISSING_DATA') }}_Resolution, CAN_TIMEOUT);
+  
+  testStep("#5 SET_CAN", "Set {{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ row.CAN_PORT | default('MISSING_DATA') }}_Max");
+  SETCHECK_CAN_SIGNAL("{{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_PORT | default('MISSING_DATA') }}_Max, I{{ row.CAN_PORT | default('MISSING_DATA') }}_Offset, I{{ row.CAN_PORT | default('MISSING_DATA') }}_Resolution, CAN_TIMEOUT);
+  
+  testStep("#6 CHECK_CAN", "Check {{ row.CAN2_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ row.CAN_TO_CAN_MAPPING | default('MISSING_DATA') }}_Max");
+  CHECK_CAN_SIGNAL("{{ row.CAN2_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_TO_CAN_MAPPING | default('MISSING_DATA') }}_Max, I{{ row.CAN_TO_CAN_MAPPING | default('MISSING_DATA') }}_Offset, I{{ row.CAN_TO_CAN_MAPPING | default('MISSING_DATA') }}_Resolution, CAN_TIMEOUT);
+{%- endif %}
+}
+{% endfor %}

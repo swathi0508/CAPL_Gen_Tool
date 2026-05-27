@@ -16,6 +16,7 @@ from generator.CaplSomeipToCanBasicFuncAndVarsGenerator import CaplSomeipToCanBa
 from generator.CaplCanToSomeipAacpBasicFuncAndVarsGenerator import CaplCanToSomeipAacpBasicFuncAndVarsGenerator
 from generator.CaplCanToSomeipFFBasicFuncAndVarsGenerator import CaplCanToSomeipFFBasicFuncAndVarsGenerator
 from generator.CaplSignalValidationLibGenerator import CaplSignalValidationLibGenerator
+from generator.CaplCanToCanBasicFuncAndVarsGenerator import CaplCanToCanBasicFuncAndVarsGenerator
 
 
 class JinjaEngine:
@@ -24,6 +25,7 @@ class JinjaEngine:
         "CAN->SOMEIP_AACP": CaplCanToSomeipAacpBasicFuncAndVarsGenerator,
         "CAN->SOMEIP_FF": CaplCanToSomeipFFBasicFuncAndVarsGenerator,
         "SOMEIP->CAN": CaplSomeipToCanBasicFuncAndVarsGenerator,
+        "CAN->CAN": CaplCanToCanBasicFuncAndVarsGenerator
     }
 
     def __init__(self, output_root="Output_CAPL_Scripts"):
