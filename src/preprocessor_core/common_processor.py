@@ -87,7 +87,8 @@ class CommonProcessor:
                 found_col = BaseMapper.resolve_column_name(df_in.columns, search_names)
                 df_out[col] = df_in[found_col].fillna("").astype(str) if found_col else ""
 
-            return df_out
+            # Seamless sequential hook into the step 2 column initialization layout
+            return self.define_additional_columns(df_out)
         except Exception as e:
             log.error(f"Step 1 critical failure: {str(e)}")
             raise
@@ -95,9 +96,11 @@ class CommonProcessor:
     # --- STEP 2: Append Additional Columns ---
     def define_additional_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         log.info("Step 2: Initializing intermediate template columns and IS_ENUM flags")
+        
         additional_cols = [
-            "CAN_CLUSTER", "BASIC_FUNCTION_NAME", "IS_ENUM", "ENUM_LEXICAL_MATCH",
+            "CAN_CLUSTER", "CAN2_CLUSTER", "BASIC_FUNCTION_NAME", "IS_ENUM", "ENUM_LEXICAL_MATCH",
             "CAN_DB_SIGNAL_NAME", "CAN_PERIODICITY", "CAN_ENUM", "CAN_MIN_RAW", "CAN_MAX_RAW", "CAN_OFFSET", "CAN_RESOLUTION",
+            "CAN2_DB_SIGNAL_NAME", "CAN2_PERIODICITY", "CAN2_ENUM", "CAN2_MIN_RAW", "CAN2_MAX_RAW", "CAN2_OFFSET", "CAN2_RESOLUTION",
             "SOMEIP_DB_SIGNAL_NAME", "SOMEIP_DB_SIGNAL_VALUESTATE", "SOMEIP_ENUM", "SOMEIP_MIN_PHY", "SOMEIP_MAX_PHY", "SOMEIP_OFFSET", "SOMEIP_RESOLUTION",
             "SOMEIP_FF_DB_SIGNAL_NAME", "SOMEIP_FF_DB_SIGNAL_VALUESTATE", "SOMEIP_FF_DB_SIGNAL_CONTROL", "SOMEIP_FF_ENUM", "SOMEIP_FF_DATATYPE",
             "SOMEIP_FF_SIGNAME_NAMESPACE", "SOMEIP_FF_SIGNAME_VARIABLE", "SOMEIP_FF_SIGVALUESTATE_NAMESPACE", "SOMEIP_FF_SIGVALUESTATE_VARIABLE", "SOMEIP_FF_CONTROL_NAMESPACE", "SOMEIP_FF_CONTROL_VARIABLE",
@@ -106,16 +109,27 @@ class CommonProcessor:
             "COMPUTED_CAN_VALUE_MIN", "COMPUTED_CAN_VALUE_MID", "COMPUTED_CAN_VALUE_MAX",
             "COMPUTED_SOMEIP_VALUE_MIN", "COMPUTED_SOMEIP_VALUE_MID", "COMPUTED_SOMEIP_VALUE_MAX",
             "COMPUTED_SOMEIP_FF_VALUE_MIN", "COMPUTED_SOMEIP_FF_VALUE_MID", "COMPUTED_SOMEIP_FF_VALUE_MAX",
-            "COMPUTED_AACP_VALUE_MIN", "COMPUTED_AACP_VALUE_MID", "COMPUTED_AACP_VALUE_MAX"
+            "COMPUTED_AACP_VALUE_MIN", "COMPUTED_AACP_VALUE_MID", "COMPUTED_AACP_VALUE_MAX",
+            "COMPUTED_CAN2_VALUE_MIN", "COMPUTED_CAN2_VALUE_MID", "COMPUTED_CAN2_VALUE_MAX"
         ]
+        
+        # Isolate and clean the target list if dealing with an active Ethernet signature
+        if "E2E_ETH_REQ_ID" in df.columns:
+            prohibited_can2_cols = {
+                "CAN2_CLUSTER", "CAN2_DB_SIGNAL_NAME", "CAN2_PERIODICITY", "CAN2_ENUM", "CAN2_MIN_RAW", 
+                "CAN2_MAX_RAW", "CAN2_OFFSET", "CAN2_RESOLUTION", "COMPUTED_CAN2_VALUE_MIN", 
+                "COMPUTED_CAN2_VALUE_MID", "COMPUTED_CAN2_VALUE_MAX"
+            }
+            additional_cols = [col for col in additional_cols if col not in prohibited_can2_cols]
         
         master_order = list(df.columns) + additional_cols
         seen = set()
         final_cols = [x for x in master_order if not (x in seen or seen.add(x))]
 
+        # Initializing new headers safely avoiding slice assignment warnings
         for col in final_cols:
             if col not in df.columns:
-                df[col] = False if col == "IS_ENUM" else ""
+                df.loc[:, col] = False if col == "IS_ENUM" else ""
 
         df = df.reindex(columns=final_cols)
         df["IS_ENUM"] = df["IS_ENUM"].astype(bool)
@@ -124,11 +138,28 @@ class CommonProcessor:
     # --- STEP 3: Derive CAN Cluster ---
     def derive_can_cluster(self, df: pd.DataFrame) -> pd.DataFrame:
         log.info("Step 3: Extracting CAN Cluster information from Path Synthesis")
+        
         if {"PATH_SYNTHESIS", "TEST_TYPE"}.issubset(df.columns):
             df["CAN_CLUSTER"] = df.apply(
                 lambda r: self.can_mapper.extract_cluster(str(r["PATH_SYNTHESIS"])) 
                 if "CAN" in str(r["TEST_TYPE"]).upper() else "", axis=1
             )
+            
+        if {"CAN_PORT", "CAN_CLUSTER", "CAN_TO_CAN_MAPPING", "TEST_TYPE"}.issubset(df.columns):
+            df["CAN2_CLUSTER"] = ""
+            
+            lookup_df = df[['CAN_PORT', 'CAN_CLUSTER']].dropna()
+            port_to_cluster = dict(zip(
+                lookup_df['CAN_PORT'].astype(str).str.strip().str.replace('\u200b', ''),
+                lookup_df['CAN_CLUSTER'].astype(str).str.strip().str.replace('\u200b', '')
+            ))
+            
+            is_can_to_can = df["TEST_TYPE"].astype(str).str.strip().str.upper() == "CAN->CAN"
+            
+            if is_can_to_can.any():
+                clean_mappings = df.loc[is_can_to_can, "CAN_TO_CAN_MAPPING"].astype(str).str.strip().str.replace('\u200b', '')
+                df.loc[is_can_to_can, "CAN2_CLUSTER"] = clean_mappings.map(port_to_cluster).fillna("")
+            
         return df
 
     # --- STEP 4: Compute Basic Function Name ---
@@ -138,7 +169,7 @@ class CommonProcessor:
 
     # --- STEP 5_a: CAN Signal Resolution ---
     def resolve_can_signals_from_db(self, df: pd.DataFrame, test_type: str) -> pd.DataFrame:
-        # Match any test type containing "CAN" (e.g., "CAN", "CAN->SOMEIP_AACP")
+        # Match any test type containing "CAN"
         pattern = "CAN"
         
         mask = (df["CAN_PORT"].notna()) & \
@@ -233,7 +264,9 @@ class CommonProcessor:
 
             # --- BRANCH 2: Mapping tests ---
             elif "CAN" in row_tt:
-                if "SOMEIP_FF" in row_tt:
+                if "CAN->CAN" in row_tt or "CAN-CAN" in row_tt:
+                    temp_df = self.enum_mapper.resolve_enum_mapping(temp_df, "CAN_ENUM", "CAN2_ENUM")
+                elif "SOMEIP_FF" in row_tt:
                     temp_df = self.enum_mapper.resolve_enum_mapping(temp_df, "CAN_ENUM", "SOMEIP_FF_ENUM")
                 elif "AACP" in row_tt:
                     temp_df = self.enum_mapper.resolve_enum_mapping(temp_df, "CAN_ENUM", "AACP_ENUM")
@@ -252,22 +285,30 @@ class CommonProcessor:
         phys_mask = df["IS_ENUM"] == False
         if not phys_mask.any():
             return df
+        
+        log.info("Step 7: Computing physical ranges for non-enum signals.")
 
         def process_row(row):
             row_tt = str(row.get("TEST_TYPE", "")).upper()
+            is_can_can = "CAN->CAN" in row_tt or "CAN-CAN" in row_tt
 
-            # 1. Compute CAN Bounds
-            can_min_raw = row.get('CAN_MIN_RAW')
-            if pd.notna(can_min_raw) and str(can_min_raw).upper() != 'N/A':
-                try:
-                    res, off = float(row.get('CAN_RESOLUTION', 1)), float(row.get('CAN_OFFSET', 0))
-                    c_min = (float(can_min_raw) * res) + off
-                    c_max = (float(row.get('CAN_MAX_RAW', 0)) * res) + off
-                    can_b = self._compute_bounds(c_min, c_max)
-                except (ValueError, TypeError):
-                    can_b = {k: "N/A" for k in ['MIN', 'MID', 'MAX']}
-            else:
-                can_b = {k: "N/A" for k in ['MIN', 'MID', 'MAX']}
+            # Clean local helper function to eliminate repetitive CAN/CAN2 math blocks
+            def calculate_can_bounds(prefix: str) -> dict:
+                min_raw = row.get(f'{prefix}_MIN_RAW')
+                if pd.notna(min_raw) and str(min_raw).upper() != 'N/A':
+                    try:
+                        res = float(row.get(f'{prefix}_RESOLUTION', 1))
+                        off = float(row.get(f'{prefix}_OFFSET', 0))
+                        c_min = (float(min_raw) * res) + off
+                        c_max = (float(row.get(f'{prefix}_MAX_RAW', 0)) * res) + off
+                        return self._compute_bounds(c_min, c_max)
+                    except (ValueError, TypeError):
+                        pass
+                return {k: "N/A" for k in ['MIN', 'MID', 'MAX']}
+
+            # 1. Dynamically call our helper for both variants
+            can_b = calculate_can_bounds("CAN")
+            can2_b = calculate_can_bounds("CAN2")
 
             # 2. Compute SOMEIP Bounds from DB
             sip_b = self._compute_bounds(row.get('SOMEIP_MIN_PHY'), row.get('SOMEIP_MAX_PHY'))
@@ -280,7 +321,13 @@ class CommonProcessor:
             out = {}
             for sfx in ['MIN', 'MID', 'MAX']:
                 out[f'COMPUTED_CAN_VALUE_{sfx}'] = can_b[sfx]
-                out[f'COMPUTED_SOMEIP_VALUE_{sfx}'] = eth_source[sfx]
+                
+                # Exclusion: Only fill SOMEIP computed metrics if it is NOT a CAN->CAN test pattern
+                if not is_can_can:
+                    out[f'COMPUTED_SOMEIP_VALUE_{sfx}'] = eth_source[sfx]
+
+                if is_can_can:
+                    out[f'COMPUTED_CAN2_VALUE_{sfx}'] = can2_b[sfx]
 
                 if "SOMEIP_FF" in row_tt:
                     out[f'COMPUTED_SOMEIP_FF_VALUE_{sfx}'] = eth_source[sfx]
