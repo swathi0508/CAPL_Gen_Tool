@@ -10,12 +10,7 @@ pd.set_option('future.no_silent_downcasting', True)
 
 class CaplCanToSomeipAacpBasicFuncAndVarsGenerator:
     def __init__(self, template_dir):
-        self.env = Environment(
-            loader=FileSystemLoader(template_dir),
-            trim_blocks=True, 
-            lstrip_blocks=True
-        )
-        # Updated template name for AACP
+        self.env = Environment(loader=FileSystemLoader(template_dir))
         self.func_template = "can_to_someip_aacp_basic_functions_template.j2"
         self.var_template = "variables_template.j2"
 

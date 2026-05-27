@@ -1,6 +1,5 @@
 /*@!Encoding:1252*/
-/* 
- * Target: {{ prefix | default('MISSING_DATA') }} | Type: {{ t_type | default('MISSING_DATA') }}
+/* * Target: {{ prefix | default('MISSING_DATA') }} | Type: {{ t_type | default('MISSING_DATA') }}
  */
 
 includes
@@ -13,19 +12,16 @@ includes
 void MainTest()
 {
   PRECONDITION__SET_GADESTATUS_TO_GADESTATUS_MISSION_MODE_ON();
-
-  {% if 'AACP' in t_type | upper %}
+{% if 'AACP' in t_type | upper %}
   AACP_CLIENT_CONNECT();
-  {% endif %}
-
-  {% for row in rows -%}
-  {% set req_id = row[prefix ~ '_REQ_ID'] | default('MISSING_DATA') -%}
+{% endif %}
+{%- for row in rows %}
+  {%- set req_id = row[prefix ~ '_REQ_ID'] | default('MISSING_DATA') %}
   {{ req_id }}();
-  {% endfor %}
-
-  {% if 'AACP' in t_type | upper %}
+{%- endfor %}
+{% if 'AACP' in t_type | upper %}
   AACP_CLIENT_DISCONNECT();
-  {% endif %}
+{% endif -%}
 }
 
 /* Testcase Definitions */
@@ -34,10 +30,10 @@ void MainTest()
 testcase {{ req_id }}()
 {
   START_LOGGING_TEST_CASE("{{ req_id }}");
-  {% if row.SOMEIP_PORT and row.SOMEIP_PORT != "MISSING_DATA" -%}
-  TestCaseTitle("{{ req_id }}", "{{ row.SWC | default('MISSING_DATA') }}__{{ row.SOMEIP_PORT }}__{{ row.ATTRIBUTE_VALUE | default('MISSING_DATA') }}");
-  {%- else -%}
-  TestCaseTitle("{{ req_id }}", "{{ row.SWC | default('MISSING_DATA') }}__{{ row.CAN_PORT_NAME | default('MISSING_DATA') }}");
+  {%- if 'ETH' in prefix | upper or 'ETH' in t_type | upper %}
+  TestCaseTitle("{{ req_id }}", "{{ row.SWC | default('MISSING_DATA') }}__{{ row.SOMEIP_PORT | default('MISSING_DATA') }}__{{ row.ATTRIBUTE_VALUE | default('MISSING_DATA') }}");
+  {%- else %}
+  TestCaseTitle("{{ req_id }}", "{{ row.SWC | default('MISSING_DATA') }}__{{ row.CAN_PORT | default('MISSING_DATA') }}");
   {%- endif %}
   {{ row.BASIC_FUNCTION_NAME | default('MISSING_DATA') }}();
   STOP_LOGGING_TEST_CASE();

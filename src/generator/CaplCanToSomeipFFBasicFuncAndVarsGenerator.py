@@ -2,18 +2,14 @@ import os
 from pathlib import Path
 import pandas as pd
 from jinja2 import Environment, FileSystemLoader
-from core.logger import log
+from logger import log
 
 class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
     def __init__(self, template_dir: str = "."):
         """
         Initializes the generator and sets up the Jinja2 environment.
         """
-        self.env = Environment(
-            loader=FileSystemLoader(template_dir), 
-            trim_blocks=True, 
-            lstrip_blocks=True
-        )
+        self.env = Environment(loader=FileSystemLoader(template_dir))
         self.var_template = "variables_template.j2"
         self.func_template = "can_to_someipff_basic_functions_template.j2"
 
