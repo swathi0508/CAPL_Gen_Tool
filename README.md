@@ -1,48 +1,30 @@
-Welcome to the **CAPL Generation Tool** repository. This tool is designed to automate the generation of CAPL scripts for CAN and SOME/IP testing by parsing Excel requirement sheets and utilizing Jinja2 templates.
+# ⚡ CAPLBolt ⚡
 
-It features both a **Command-Line Interface (CLI)** for CI/CD pipeline integration and a modern **Tkinter Graphical User Interface (GUI)**.
+Welcome to the CAPLBolt repository. This tool is designed to automate the generation of CAPL scripts for CAN and SOME/IP testing by parsing Excel requirement sheets and ARXML databases, mapping the data, and compiling it through Jinja2 templates.
+
+It features both a robust Command-Line Interface (CLI) for seamless CI/CD pipeline integration and a blazing-fast, modern PyQt6 Graphical User Interface (GUI) for desktop users.
 
 ## 🚀 Getting Started (Environment Setup)
 
-We use uv, an extremely fast Python package and project manager written in Rust. It replaces standard pip and handles our pyproject.toml seamlessly.
+This project relies on uv for lightning-fast dependency management. Ensure uv is installed on your system (e.g., pip install uv or via your package manager).
 
-### 1. Install uv
+### 1. Environment Setup
 
-If you do not have uv installed globally:
-
-    macOS / Linux: curl -LsSf https://astral.sh/uv/install.sh | sh
-
-    Windows (PowerShell): powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-
-    Alternative (via pip): pip install uv
-
-### 2. Create and Activate the Virtual Environment
-
-Create an isolated environment using uv:
+Create and activate an isolated virtual environment:
 
   ```
   uv venv
+  # Linux/macOS: source .venv/bin/activate
+  # Windows: .venv\Scripts\activate
   ```
 
-Activate the environment:
+### 2. Install Dependencies
 
-Windows: 
-  ```
-  .venv\Scripts\activate
-  ```
-
-Linux / macOS: 
-  ```
-  source .venv/bin/activate
-  ```
-
-### 3. Install Dependencies
-
-We have two distinct installation modes depending on what you are trying to do.
+Choose the installation mode that fits your workflow:
 
 👉 Development Setup (For Contributors)
 
-Installs the core application plus development tools like Ruff, Pytest, and PyInstaller. This command reads pyproject.toml and syncs your .venv perfectly with the uv.lock file.
+ Syncs the .venv with our lockfile and installs core + dev tools (Ruff, Pytest, PyInstaller).
   ```
   uv sync --extra dev
   ```
@@ -51,33 +33,22 @@ Installs the core application plus development tools like Ruff, Pytest, and PyIn
 
 👉 Production / Standard Setup
 
-If you only want to run the tool via Python without the development overhead (e.g., in a lightweight CI/CD runner):
+ Installs only the core application without the dev overhead.
 
   ```
   uv pip install .
   ```
 
-## 🛠 Development Tools
+## 🛠 Development Workflow
 
 As a contributor, you are expected to use the following tools to maintain code quality.
 Code Linting & Formatting (Ruff)
 
 We use Ruff to replace Flake8, Black, and isort. Its configuration is located at the bottom of the pyproject.toml.
 
-  Check for issues (Lint): 
-  ```
-  ruff check .
-  ```
-    
-  Auto-fix fixable issues: 
-  ```
-  ruff check . --fix
-  ```
+  Lint & Auto-fix:   ```  ruff check . --fix ```
 
-  Format the code (Auto-formatting):
-  ```
-  ruff format .
-  ```
+  Format the code (Auto-formatting):  ```  ruff format .  ```
 
 ## Running Tests (Pytest)
 
@@ -94,9 +65,9 @@ All tests are located in the tests/ directory. Ensure your code passes all tests
   ```
 
 
-## 📦 Building the Executable (.exe)
+## 📦 Building the Executable
 
-To ship the tool to clients or users without Python installed, we package the application using PyInstaller. The configuration is managed in build_config.spec, which ensures UI assets (gui/images/) and templates (templates/) are bundled correctly.
+To package the application into a standalone .exe for end-users, ensure your dev environment is active and run:
 
   Ensure your virtual environment is active and dev dependencies are installed.
 
@@ -105,7 +76,7 @@ To ship the tool to clients or users without Python installed, we package the ap
   pyinstaller build_config.spec --clean
   ```
 
-  The standalone executable will be generated inside the dist/ folder as CAPL_BOLT.exe.
+  The compiled executable (CAPLBolt.exe), bundled with all necessary UI assets and Jinja templates, will be output to the dist/ directory.
 
 ## 🤝 Contributing Guidelines
 
@@ -113,7 +84,7 @@ We follow a standard Git Feature Branch Workflow.
 
 1. Branch Naming Convention
 
-Create a branch off main for your work. Use descriptive prefixes:
+Create a branch off master for your work. Use descriptive prefixes:
 
   - Features: feature/short-description (e.g., feature/add-someip-parser)
 
@@ -140,9 +111,9 @@ Create a branch off main for your work. Use descriptive prefixes:
     git push origin feature/your-feature-name
     ```
 
-    Open a Pull Request against the main branch.
+    Open a Pull Request against the master branch.
 
-    Provide a clear description of the changes, the problem solved, and any testing steps.
+    Provide a clear description of the changes, the problem solved, and any required testing steps.
 
 4. Merging
 
@@ -150,8 +121,8 @@ Create a branch off main for your work. Use descriptive prefixes:
 
     CI/CD checks (Ruff and Pytest) must pass.
 
-    We prefer Rebase and Merge to keep the main history clean and readable.
+    We prefer Rebase and Merge to keep the master history linear, clean and readable.
    
 
-### Thank you for contributing to the CAPL Generation Tool! If you encounter any environmental issues, please reach out to one of the maintainers.
+### Thank you for contributing to the CAPL Bolt! If you encounter any environmental issues, please reach out to swathi or one of the core maintainers.
 
