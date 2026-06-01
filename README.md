@@ -38,6 +38,19 @@ Choose the installation mode that fits your workflow:
   ```
   uv pip install .
   ```
+## 💻 Running Locally
+
+Once installed, the capl-bolt command is bound to your virtual environment.
+
+1. Launch the GUI:
+    ```
+    capl-bolt 
+    # or: python -m capl_bolt
+    ```
+2. Run the CLI:
+    ```
+    capl-bolt --help
+    ```
 
 ## 🛠 Development Workflow
 
@@ -46,9 +59,9 @@ Code Linting & Formatting (Ruff)
 
 We use Ruff to replace Flake8, Black, and isort. Its configuration is located at the bottom of the pyproject.toml.
 
-  Lint & Auto-fix:   ```  ruff check . --fix ```
+  - Lint & Auto-fix:   ```  ruff check . --fix ```
 
-  Format the code (Auto-formatting):  ```  ruff format .  ```
+  - Format the code (Auto-formatting):  ```  ruff format .  ```
 
 ## Running Tests (Pytest)
 
@@ -82,46 +95,13 @@ To package the application into a standalone .exe for end-users, ensure your dev
 
 We follow a standard Git Feature Branch Workflow.
 
-1. Branch Naming Convention
+1. Branch: Create a branch from main (feature/..., bugfix/..., chore/...).
 
-Create a branch off master for your work. Use descriptive prefixes:
+2. Commit: Write clean code, run Ruff, and update tests.
 
-  - Features: feature/short-description (e.g., feature/add-someip-parser)
+3. PR: Open a Pull Request with a clear description of your changes.
 
-  - Bug Fixes: bugfix/issue-description (e.g., bugfix/gui-scaling-fix)
-
-  - Docs/Chores: docs/update-readme or chore/update-deps
-
-    ```
-    git checkout -b feature/your-feature-name
-    ```
-
-2. Making Changes
-
-    Write clean, documented code.
-
-    Run ruff check . and ruff format . before committing.
-
-    Add or update pytest cases in the tests/ directory for any new logic.
-
-3. Creating a Pull Request (PR)
-
-    Push your branch to the remote repository:
-    ```
-    git push origin feature/your-feature-name
-    ```
-
-    Open a Pull Request against the master branch.
-
-    Provide a clear description of the changes, the problem solved, and any required testing steps.
-
-4. Merging
-
-    All PRs require at least one approval from a core maintainer.
-
-    CI/CD checks (Ruff and Pytest) must pass.
-
-    We prefer Rebase and Merge to keep the master history linear, clean and readable.
+4. Merge: PRs require at least one maintainer approval and passing CI checks. We prefer Rebase and Merge to maintain a linear history.
    
 
 ### Thank you for contributing to the CAPL Bolt! If you encounter any environmental issues, please reach out to swathi or one of the core maintainers.
