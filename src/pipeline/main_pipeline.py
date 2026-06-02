@@ -19,14 +19,16 @@ class CaplGenerationPipeline:
     """The central brain orchestrating Parsers, Mappers, and Generators strictly in RAM."""
 
     def __init__(self, can_db_cache: str = "can_db_cache.json", 
-                 eth_db_cache: str = "someip_db_cache.json", 
+                 someip_db_cache: str = "someip_db_cache.json", 
                  someip_ff_db_cache: str = "someip_ff_cache.json",
                  aacp_sysvar_db_cache: str = "aacp_sysvar_cache.json",
-                 enable_log: bool = False):
+                 enable_log: bool = False,
+                 no_cache: bool = False):
         self.can_db = can_db_cache
-        self.eth_db = eth_db_cache
+        self.eth_db = someip_db_cache
         self.ff_db = someip_ff_db_cache
         self.aacp_db = aacp_sysvar_db_cache
+        self.no_cache = no_cache
         
         # State Tracking
         self.can_db_data = {}
@@ -56,9 +58,20 @@ class CaplGenerationPipeline:
             log.setLevel(logging.INFO)
 
     def _is_cache_valid(self, cache_path: str, source_file: str) -> bool:
-        """Determines if the JSON cache is stale, belongs to a different source file, or size mismatched."""
-        if not os.path.exists(cache_path) or not os.path.exists(source_file):
+        """Determines if the JSON cache is valid, stale, or bypassed."""
+        
+        if self.no_cache:
+            log.info(f"🧹 --no-cache flag detected. Forcing fresh parse.")
             return False
+
+        if not os.path.exists(cache_path):
+            return False
+            
+        # The User Risk Warning (Cache-Only Mode)
+        if not source_file or not os.path.exists(source_file):
+            log.warning(f"⚠️ DANGER: Source file missing or omitted. Blind-loading cache '{os.path.basename(cache_path)}'.")
+            log.warning("⚠️ Generated scripts may be out of sync with actual ARXML/XML definitions if cache is stale!")
+            return True
             
         if os.path.getmtime(source_file) > os.path.getmtime(cache_path):
             log.info(f"🔄 Source file timestamp modified. Cache '{os.path.basename(cache_path)}' is stale.")
@@ -81,7 +94,14 @@ class CaplGenerationPipeline:
         except Exception as e:
             log.debug(f"Cache validation check failed, defaulting to re-parse: {e}")
             return False
+            
         return True
+    
+    def _ensure_cache_dir(self, cache_path: str):
+        """Safely creates the hidden .capl_cache/ directory if it doesn't exist."""
+        parent_dir = os.path.dirname(cache_path)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
 
     def build_databases(self, raw_arxml_path: str, someip_sysvar_xml: str, aacp_sysvar_vsysvar: str) -> tuple[bool, bool, bool, bool]:
         """Loads databases from JSON cache if valid, otherwise parses from source files."""
@@ -98,7 +118,8 @@ class CaplGenerationPipeline:
                 elif os.path.exists(raw_arxml_path):
                     log.info(f"⚙️ Parsing CAN Network from ARXML...")
                     self.can_db_data = can_parser.parse() 
-                    can_parser.to_json_file(self.can_db, write_allowed=self.write_to_disk)
+                    self._ensure_cache_dir(self.can_db)
+                    can_parser.to_json_file(self.can_db, write_allowed=True)
                     can_built = True
 
             # --- SOME/IP EVENT DATABASE ---
@@ -110,7 +131,8 @@ class CaplGenerationPipeline:
                 elif os.path.exists(raw_arxml_path):
                     log.info(f"⚙️ Parsing SOME/IP Network from ARXML...")
                     self.eth_db_data = eth_parser.parse()
-                    eth_parser.to_json_file(self.eth_db, write_allowed=self.write_to_disk)
+                    self._ensure_cache_dir(self.eth_db)
+                    eth_parser.to_json_file(self.eth_db, write_allowed=True)
                     eth_built = True
 
             # --- SOME/IP FF (SYSVAR) DATABASE ---
@@ -122,7 +144,8 @@ class CaplGenerationPipeline:
                 elif os.path.exists(someip_sysvar_xml):
                     log.info(f"⚙️ Parsing SOME/IP FF from XML...")
                     self.someip_ff_db_data = ff_parser.parse()
-                    ff_parser.to_json_file(self.ff_db, write_allowed=self.write_to_disk)
+                    self._ensure_cache_dir(self.ff_db)
+                    ff_parser.to_json_file(self.ff_db, write_allowed=True)
                     ff_built = True
 
             # --- AACP SYSVAR DATABASE ---
@@ -134,7 +157,8 @@ class CaplGenerationPipeline:
                 elif os.path.exists(aacp_sysvar_vsysvar):
                     log.info(f"⚙️ Parsing AACP SysVar from VSYSVAR...")
                     self.aacp_db_data = aacp_parser.parse()
-                    aacp_parser.to_json_file(self.aacp_db, write_allowed=self.write_to_disk)
+                    self._ensure_cache_dir(self.aacp_db)
+                    aacp_parser.to_json_file(self.aacp_db, write_allowed=True)
                     aacp_built = True
                 
         except Exception as e:
