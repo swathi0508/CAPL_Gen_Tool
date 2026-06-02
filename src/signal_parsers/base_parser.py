@@ -34,54 +34,64 @@ class BaseParser(ABC):
             return
 
         data = self.to_json_dict()
-        total = len(data)
-        resolved = sum(1 for v in data.values() if isinstance(v, dict) and len(v.get('signal_paths', [])) > 0)
-        no_path = total - resolved
 
-        # Safely grab the exact file size of the ARXML
-        try:
-            file_size_bytes = os.path.getsize(self.file_path)
-        except OSError:
-            file_size_bytes = 0
+        # SMART WRAPPER: If the parser (like SomeipFF) already built a complete 
+        # document with a Summary, we dump it directly to avoid double-wrapping.
+        if "Summary" in data and ("INTERFACES" in data or "GENERAL_SIGNALS" in data):
+            output_data = data
+        else:
+            # Standard generic wrapping for flat dictionaries (CAN/SOMEIP)
+            total = len(data)
+            resolved = sum(1 for v in data.values() if isinstance(v, dict) and len(v.get('signal_paths', [])) > 0)
+            no_path = total - resolved
 
-        # We now stamp the cache with both the NAME and SIZE of the source ARXML
-        output_data = {
-            "Summary": {
-                "Source_File_Name": os.path.basename(self.file_path),
-                "Source_File_Size_Bytes": file_size_bytes,
-                "Total_Signals_Found": total,
-                "Resolved_With_Paths": resolved,
-                "No_Path_Found": no_path,
-                "Processing_Time_HH_MM_SS": self._get_processing_time()
-            },
-            "SIGNAL_LIST": data
-        }
+            try:
+                file_size_bytes = os.path.getsize(self.file_path)
+            except OSError:
+                file_size_bytes = 0
+
+            output_data = {
+                "Summary": {
+                    "Source_File_Name": os.path.basename(self.file_path),
+                    "Source_File_Size_Bytes": file_size_bytes,
+                    "Total_Signals_Found": total,
+                    "Resolved_With_Paths": resolved,
+                    "No_Path_Found": no_path,
+                    "Processing_Time_HH_MM_SS": self._get_processing_time()
+                },
+                "SIGNAL_LIST": data
+            }
 
         try:
             with open(output_path, 'w', encoding='utf-8') as f:
                 json.dump(output_data, f, indent=indent, ensure_ascii=False)
-            log.info(f"✅ DEV MODE: Database cached with summary to: {output_path}")
+            log.info(f"✅ DEV MODE: Database cached successfully to: {output_path}")
         except Exception as e:
             log.error(f"❌ Failed to write JSON: {e}")
 
     def load_from_json(self, input_path: str) -> bool:
-        """Hydrates the parser while stripping the Summary/Wrapper layers."""
+        """Hydrates the parser while safely navigating nested wrappers."""
         if not os.path.exists(input_path):
             return False
         try:
             with open(input_path, 'r', encoding='utf-8') as f:
                 raw_cache = json.load(f)
 
-            # Legacy Stripping: Look for the signal dictionary inside the wrapper
+            # Route the data extraction based on the cache structure
             if "SIGNAL_LIST" in raw_cache:
                 self._parsed_data = raw_cache["SIGNAL_LIST"]
             elif "SOMEIP_SIGNAL" in raw_cache:
                 self._parsed_data = raw_cache["SOMEIP_SIGNAL"]
+            elif "INTERFACES" in raw_cache:
+                # Hierarchical SomeipFF payload - keep the whole dictionary intact
+                self._parsed_data = raw_cache
             else:
-                # Fallback: just remove Summary
+                # Fallback: remove Summary for basic flat lists
                 self._parsed_data = {k: v for k, v in raw_cache.items() if k != "Summary"}
 
-            log.info(f"🚀 Loaded {len(self._parsed_data)} signals from cache.")
+            # Log safely depending on whether it's a flat list or hierarchical dict
+            count = len(self._parsed_data.get("INTERFACES", [])) if "INTERFACES" in self._parsed_data else len(self._parsed_data)
+            log.info(f"🚀 Loaded {count} signals/interfaces from cache.")
             return True
         except Exception as e:
             log.error(f"❌ Cache load failed: {e}")

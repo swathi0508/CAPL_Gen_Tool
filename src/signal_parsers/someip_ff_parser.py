@@ -66,8 +66,13 @@ class SomeipFFParser(BaseParser):
             }
             # ---------------------------
 
-            # Map the result to self._parsed_data for BaseParser compatibility
-            self._parsed_data = self.to_json_dict()
+            # CRITICAL FIX: Explicitly assign the built dictionary to self._parsed_data
+            # This ensures BaseParser's to_json_dict() works perfectly during fresh parses.
+            self._parsed_data = {
+                "Summary": self.summary_stats,
+                "INTERFACES": self.interfaces,
+                "GENERAL_SIGNALS": self.general_signals
+            }
             
             log.info(f"✅ Successfully extracted {total} signals across {len(self.interfaces)} interfaces.")
             return self._parsed_data
@@ -167,16 +172,3 @@ class SomeipFFParser(BaseParser):
                     enums[val] = desc
         return enums
 
-    def to_json_dict(self) -> Dict[str, Any]:
-        return {
-            "Summary": self.summary_stats,
-            "INTERFACES": self.interfaces,
-            "GENERAL_SIGNALS": self.general_signals
-        }
-
-    def to_json_file(self, output_path: str, write_allowed: bool = False):
-        import json
-        if not write_allowed: return
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(self.to_json_dict(), f, indent=4)
-        log.info(f"💾 Hierarchical JSON saved to: {output_path}")
