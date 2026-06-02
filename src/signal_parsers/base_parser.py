@@ -35,16 +35,15 @@ class BaseParser(ABC):
 
         data = self.to_json_dict()
 
-        # SMART WRAPPER: If the parser (like SomeipFF) already built a complete 
-        # document with a Summary, we dump it directly to avoid double-wrapping.
-        if "Summary" in data and ("INTERFACES" in data or "GENERAL_SIGNALS" in data):
+        # SMART WRAPPER: If a custom parser (AACP/SomeipFF) already built a Summary, 
+        # dump it directly to avoid double-wrapping it!
+        if "Summary" in data:
             output_data = data
         else:
             # Standard generic wrapping for flat dictionaries (CAN/SOMEIP)
             total = len(data)
             resolved = sum(1 for v in data.values() if isinstance(v, dict) and len(v.get('signal_paths', [])) > 0)
-            no_path = total - resolved
-
+            
             try:
                 file_size_bytes = os.path.getsize(self.file_path)
             except OSError:
@@ -56,7 +55,7 @@ class BaseParser(ABC):
                     "Source_File_Size_Bytes": file_size_bytes,
                     "Total_Signals_Found": total,
                     "Resolved_With_Paths": resolved,
-                    "No_Path_Found": no_path,
+                    "No_Path_Found": total - resolved,
                     "Processing_Time_HH_MM_SS": self._get_processing_time()
                 },
                 "SIGNAL_LIST": data
@@ -77,21 +76,18 @@ class BaseParser(ABC):
             with open(input_path, 'r', encoding='utf-8') as f:
                 raw_cache = json.load(f)
 
-            # Route the data extraction based on the cache structure
-            if "SIGNAL_LIST" in raw_cache:
+            # Route data extraction based on structure
+            if "Summary" in raw_cache and any(k in raw_cache for k in ["INTERFACES", "AACP_TREE"]):
+                # Complex nested parsers: Keep the entire structure (including Summary) intact
+                self._parsed_data = raw_cache
+            elif "SIGNAL_LIST" in raw_cache:
                 self._parsed_data = raw_cache["SIGNAL_LIST"]
             elif "SOMEIP_SIGNAL" in raw_cache:
                 self._parsed_data = raw_cache["SOMEIP_SIGNAL"]
-            elif "INTERFACES" in raw_cache:
-                # Hierarchical SomeipFF payload - keep the whole dictionary intact
-                self._parsed_data = raw_cache
             else:
-                # Fallback: remove Summary for basic flat lists
                 self._parsed_data = {k: v for k, v in raw_cache.items() if k != "Summary"}
 
-            # Log safely depending on whether it's a flat list or hierarchical dict
-            count = len(self._parsed_data.get("INTERFACES", [])) if "INTERFACES" in self._parsed_data else len(self._parsed_data)
-            log.info(f"🚀 Loaded {count} signals/interfaces from cache.")
+            log.info(f"🚀 Loaded signals/interfaces from cache successfully.")
             return True
         except Exception as e:
             log.error(f"❌ Cache load failed: {e}")
