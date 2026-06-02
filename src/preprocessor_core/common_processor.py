@@ -193,7 +193,18 @@ class CommonProcessor:
         if mask.any():
             log.info(f"Step 5_b: Mapping SOME/IP signals for {mask.sum()} matching rows.")
             resolved_subset = self.eth_mapper.resolve(df.loc[mask].copy())
-            df.update(resolved_subset)
+            
+            # --- PANDAS 2.x WARNING FIX: Bypass df.update() ---
+            # Directly overwrite the specific rows and columns using .loc 
+            for col in resolved_subset.columns:
+                if col not in df.columns:
+                    df[col] = pd.NA  # Initialize if the column is entirely new
+                
+                # Coerce target column to object so it safely accepts bools, strings, or floats
+                df[col] = df[col].astype(object)
+                
+                # Inject the resolved data strictly into the matching rows
+                df.loc[mask, col] = resolved_subset[col]
             
         return df
 
