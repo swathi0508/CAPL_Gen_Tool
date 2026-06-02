@@ -10,18 +10,6 @@ from logger import log
 class AacpSysVarParser(BaseParser):
     """
     Parses aacp.vsysvar into a deeply nested hierarchical structure.
-    Output format:
-    {
-        "Summary": {...},
-        "SIGNAL_LIST": {
-            "Namespace::Variable": { 
-                "primitive_member": {...},
-                "nested_struct": {
-                    "sub_member": {...}
-                }
-            }
-        }
-    }
     """
 
     def __init__(self, file_path: str):
@@ -62,6 +50,7 @@ class AacpSysVarParser(BaseParser):
             total = total_signals[0]
             resolved = total if self.parsed_signals else 0
             
+            # CRITICAL FIX: Explicitly assign to self._parsed_data using a unique key
             self._parsed_data = {
                 "Summary": {
                     "Source_File_Name": os.path.basename(self.file_path),
@@ -71,7 +60,7 @@ class AacpSysVarParser(BaseParser):
                     "No_Path_Found": total - resolved,
                     "Processing_Time_HH_MM_SS": elapsed
                 },
-                "SIGNAL_LIST": self.parsed_signals
+                "AACP_TREE": self.parsed_signals
             }
             
             log.info(f"✅ Successfully extracted {total} signals into nested keys.")
@@ -164,7 +153,7 @@ class AacpSysVarParser(BaseParser):
         is_signed = (raw_encoding == "65000")
         bit_count = node.get('bitcount')
 
-        signal_metadata = {
+        target_dict[field_name] = {
             "Signal_DB_Name": complete_db_path,
             "DataType": node.get('type', 'int'),
             "BitCount": int(bit_count) if bit_count and bit_count.isdigit() else 0,
@@ -173,8 +162,6 @@ class AacpSysVarParser(BaseParser):
             "ByteOrder": node.get('byteOrder', '0'),
             "Enums": self._extract_enums(node)
         }
-
-        target_dict[field_name] = signal_metadata
 
     def _extract_enums(self, node: etree.Element) -> Dict[str, str]:
         enums = {}
@@ -192,16 +179,3 @@ class AacpSysVarParser(BaseParser):
                 if val is not None:
                     enums[val] = name
         return enums
-
-    def to_json_dict(self) -> Dict[str, Any]:
-        return self._parsed_data
-
-    def to_json_file(self, output_path: str, write_allowed: bool = False):
-        import json
-        if not write_allowed:
-            return
-        try:
-            with open(output_path, 'w', encoding='utf-8') as f:
-                json.dump(self._parsed_data, f, indent=4)
-        except Exception as e:
-            log.error(f"❌ Failed to write AACP cache: {e}")
