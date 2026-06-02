@@ -10,7 +10,7 @@ def run_headless_generation(
     can_db: str, 
     eth_db: str, 
     someip_ff_cache: str,   
-    aacp_cache: str,      
+    aacp_cache: str,        
     category: str, 
     test_type: str, 
     raw_arxml: str, 
@@ -20,12 +20,12 @@ def run_headless_generation(
 ):
     """Executes the complete generation pipeline without a GUI (for CI/CD)."""
 
-    # Pass ALL cache paths down to the pipeline so it can validate/load them safely
+    # FIXED: The keyword arguments now perfectly match main_pipeline.py's __init__
     pipeline = CaplGenerationPipeline(
         can_db_cache=can_db, 
         eth_db_cache=eth_db, 
-        someip_ff_cache=someip_ff_cache,  
-        aacp_cache=aacp_cache,            
+        someip_ff_db_cache=someip_ff_cache,   
+        aacp_sysvar_db_cache=aacp_cache,      
         enable_log=enable_log
     )
 
