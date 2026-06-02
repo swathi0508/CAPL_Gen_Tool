@@ -14,11 +14,11 @@ def test_full_pipeline(input_excel: str, output_dir: str, category: str, test_ty
 
     # Initialize the Pipeline in DEV MODE (enable_log=True) so it dumps caches to disk
     pipeline = CaplGenerationPipeline(
-        can_db_cache="can_db_cache.json",
-        eth_db_cache="someip_db_cache.json",
-        someip_ff_db_cache="someip_ff_cache.json",
-        aacp_sysvar_db_cache="aacp_sysvar_cache.json",
-        enable_log=False
+        can_db_cache=".capl_cache/can_db_cache.json",
+        someip_db_cache=".capl_cache/someip_db_cache.json",
+        someip_ff_db_cache=".capl_cache/someip_ff_cache.json",
+        aacp_sysvar_db_cache=".capl_cache/aacp_sysvar_cache.json",
+        enable_log=True
     )
 
     try:
@@ -47,6 +47,6 @@ if __name__ == "__main__":
     OUTPUT_DIR = r"./output"
     
     CATEGORY = "E2E_CAN"            
-    TEST_TYPE = "CAN->SOMEIP"
+    TEST_TYPE = "CAN->SOMEIP_AACP"
 
     test_full_pipeline(REQUIREMENTS_EXCEL, OUTPUT_DIR, CATEGORY, TEST_TYPE, RAW_ARXML, SOMEIP_SYSVAR_XML, AACP_SYSVAR_VSYSVAR)

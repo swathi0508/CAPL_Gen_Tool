@@ -16,7 +16,12 @@ class AacpSysVarMapper(BaseMapper):
         ]
 
         # self.db is already the SIGNAL_LIST dict (not wrapped in another dict)
-        signal_list = self.db
+        if "AACP_TREE" in self.db:
+            signal_list = self.db["AACP_TREE"]
+        elif "SIGNAL_LIST" in self.db:
+            signal_list = self.db["SIGNAL_LIST"]
+        else:
+            signal_list = self.db
         
         # Build case-insensitive lookup map (lowercase key -> (original_key, container_dict))
         lowercase_signal_list = {}
