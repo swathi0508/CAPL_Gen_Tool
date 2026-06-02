@@ -47,8 +47,13 @@ def main():
     parser.add_argument("--aacp-sysvar", type=str, required=True, help="Path to the AACP sysvar (aacp.vsysvar) File")
     parser.add_argument("--someip-sysvar", type=str, required=True, help="Path to the SOMEIP_FF sysvar (SysVarDef.xml) File")
     parser.add_argument("--out", type=Path, default=Path("./Output_CAPL_Scripts"), help="Output directory for generated CAPL Scripts")
-    parser.add_argument("--can-cache", default="can_db_cache.json")
-    parser.add_argument("--eth-cache", default="someip_db_cache.json")
+    
+    # --- Cache Arguments ---
+    parser.add_argument("--can-cache", default="can_db_cache.json", help="Path to CAN cache file")
+    parser.add_argument("--eth-cache", default="someip_db_cache.json", help="Path to SOMEIP cache file")
+    parser.add_argument("--someip-ff-cache", default="someip_ff_cache.json", help="Path to SOMEIP FF cache file")
+    parser.add_argument("--aacp-cache", default="aacp_sysvar_cache.json", help="Path to AACP cache file")
+    
     parser.add_argument("--category", default="E2E_CAN", required=True, help="Target Category - E2E_CAN | E2E_ETH")
     parser.add_argument("--type", default="CAN->SOMEIP", required=True, help="Target Test Type")
 
@@ -59,6 +64,8 @@ def main():
         output_dir=args.out,
         can_db=args.can_cache,
         eth_db=args.eth_cache,
+        someip_ff_cache=args.someip_ff_cache,  
+        aacp_cache=args.aacp_cache,           
         category=args.category,
         test_type=args.type,
         raw_arxml=args.arxml,
