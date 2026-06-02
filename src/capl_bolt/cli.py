@@ -4,10 +4,30 @@ from pathlib import Path
 from logger import log
 from pipeline.main_pipeline import CaplGenerationPipeline
 
-def run_headless_generation(excel_path: Path, output_dir: Path, can_db: str, eth_db: str, category: str, test_type: str, raw_arxml: str, someip_sysvar_xml: str, aacp_sysvar_vsysvar: str, enable_log: bool):
+def run_headless_generation(
+    excel_path: Path, 
+    output_dir: Path, 
+    can_db: str, 
+    eth_db: str, 
+    someip_ff_cache: str,   
+    aacp_cache: str,      
+    category: str, 
+    test_type: str, 
+    raw_arxml: str, 
+    someip_sysvar_xml: str, 
+    aacp_sysvar_vsysvar: str, 
+    enable_log: bool
+):
     """Executes the complete generation pipeline without a GUI (for CI/CD)."""
 
-    pipeline = CaplGenerationPipeline(can_db_cache=can_db, eth_db_cache=eth_db, enable_log=enable_log)
+    # Pass ALL cache paths down to the pipeline so it can validate/load them safely
+    pipeline = CaplGenerationPipeline(
+        can_db_cache=can_db, 
+        eth_db_cache=eth_db, 
+        someip_ff_cache=someip_ff_cache,  
+        aacp_cache=aacp_cache,            
+        enable_log=enable_log
+    )
 
     try:
         pipeline.run_full_headless_flow(
