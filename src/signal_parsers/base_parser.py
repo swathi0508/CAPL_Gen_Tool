@@ -42,8 +42,16 @@ class BaseParser(ABC):
         else:
             # Standard generic wrapping for flat dictionaries (CAN/SOMEIP)
             total = len(data)
-            resolved = sum(1 for v in data.values() if isinstance(v, dict) and len(v.get('signal_paths', [])) > 0)
             
+            # --- FIX 1: Smart Resolved Counter ---
+            resolved = 0
+            for v in data.values():
+                if isinstance(v, dict):
+                    if 'signal_paths' in v:
+                        if len(v['signal_paths']) > 0: resolved += 1
+                    else:
+                        resolved += 1 # Flat SOME/IP signals are automatically "resolved" if present
+
             try:
                 file_size_bytes = os.path.getsize(self.file_path)
             except OSError:
@@ -97,6 +105,11 @@ class BaseParser(ABC):
         """Universal conversion with nested CAN path flattening."""
         data = self.to_json_dict()
         if not data:
+            return pd.DataFrame()
+
+        # --- FIX 2: Safeguard Hierarchical Parsers ---
+        if "Summary" in data and any(k in data for k in ["INTERFACES", "AACP_TREE"]):
+            log.warning("⚠️ to_dataframe() bypassed: Hierarchical parsers (AACP/SOMEIP_FF) do not support flat dataframe conversion.")
             return pd.DataFrame()
 
         df_rows = []
