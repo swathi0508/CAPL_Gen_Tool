@@ -210,7 +210,6 @@ class CommonProcessor:
 
     # --- STEP 5_c: SOMEIP_FF SysVar Resolution ---
     def resolve_someip_ff_signals_from_db(self, df: pd.DataFrame, test_type: str) -> pd.DataFrame:
-        # Reverted back to your original working regex logic
         pattern = "SOMEIP_FF|CAROS"
 
         mask = (df["SOMEIP_PORT"].fillna("") != "") & \
@@ -219,7 +218,13 @@ class CommonProcessor:
         if mask.any():
             log.info(f"Step 5_c: Mapping SOMEIP_FF SysVar signals for {mask.sum()} matching rows.")
             resolved_subset = self.someip_ff_mapper.resolve(df.loc[mask].copy())
-            df.update(resolved_subset)
+            
+            # SAFE INJECTION (Bypassing df.update warning)
+            for col in resolved_subset.columns:
+                if col not in df.columns:
+                    df[col] = pd.NA
+                df[col] = df[col].astype(object)
+                df.loc[mask, col] = resolved_subset[col]
 
         return df
     
