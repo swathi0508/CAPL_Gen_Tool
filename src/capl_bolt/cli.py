@@ -8,7 +8,7 @@ def run_headless_generation(
     excel_path: Path, 
     output_dir: Path, 
     can_db: str, 
-    eth_db: str, 
+    someip_cache: str,
     someip_ff_cache: str,   
     aacp_cache: str,        
     category: str, 
@@ -16,17 +16,18 @@ def run_headless_generation(
     raw_arxml: str, 
     someip_sysvar_xml: str, 
     aacp_sysvar_vsysvar: str, 
-    enable_log: bool
+    enable_log: bool,
+    no_cache: bool
 ):
     """Executes the complete generation pipeline without a GUI (for CI/CD)."""
 
-    # FIXED: The keyword arguments now perfectly match main_pipeline.py's __init__
     pipeline = CaplGenerationPipeline(
         can_db_cache=can_db, 
-        eth_db_cache=eth_db, 
-        someip_ff_db_cache=someip_ff_cache,   
-        aacp_sysvar_db_cache=aacp_cache,      
-        enable_log=enable_log
+        someip_db_cache=someip_cache,
+        someip_ff_db_cache=someip_ff_cache,  
+        aacp_sysvar_db_cache=aacp_cache,    
+        enable_log=enable_log,
+        no_cache=no_cache                  
     )
 
     try:
