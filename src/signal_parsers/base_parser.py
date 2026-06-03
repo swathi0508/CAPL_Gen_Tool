@@ -103,8 +103,7 @@ class BaseParser(ABC):
                 self._parsed_data = raw_cache["SOMEIP_SIGNAL"]
             else:
                 self._parsed_data = {k: v for k, v in raw_cache.items() if k != "Summary"}
-
-            log.info(f"🚀 Loaded signals from secure cache successfully.")
+            
             return True
         except Exception as e:
             log.debug(f"Secure cache load failed (File missing or corrupted): {e}")
