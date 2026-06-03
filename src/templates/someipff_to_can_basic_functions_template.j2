@@ -1,0 +1,40 @@
+/*@!Encoding:1252*/
+
+{% set processed_funcs = [] %}
+{% for row in requirements %}
+{% if row.Basic_Function not in processed_funcs %}
+{% set _ = processed_funcs.append(row.Basic_Function) %}
+void {{ row.Basic_Function | default('MISSING_DATA') }}()
+{
+  testStep("#1 SET_SOMEIP_FF_VALUESTATE", "Set sysvarMember::{{ row.SOMEIP_FF_DB_SIGNAL_VALUESTATE | default('MISSING_DATA') }} = VALUE_STATE_VALID");
+  SETCHECK_SYSVAR_LONG("{{ row.SOMEIP_FF_SIGVALUESTATE_NAMESPACE | default('MISSING_DATA') }}", "{{ row.SOMEIP_FF_SIGVALUESTATE_VARIABLE | default('MISSING_DATA') }}", VALUE_STATE_VALID, 9000);
+{% for label in ['Mid', 'Min', 'Max'] %}
+  {% set act_step = loop.index0 * 2 + 2 + loop.index0 %}
+  {% set ctrl_step = act_step + 1 %}
+  {% set chk_step = act_step + 2 %}
+
+  testStep("#{{ act_step }} Action", "Set SOME/IP FF SysVar '{{ row.SOMEIP_FF_DB_SIGNAL_NAME | default('MISSING_DATA') }}' for expected {{ label }} value");
+  {% if row.IS_ENUM | string | upper == 'TRUE' %}
+  SETCHECK_SYSVAR_LONG("{{ row.SOMEIP_FF_SIGNAME_NAMESPACE | default('MISSING_DATA') }}", "{{ row.SOMEIP_FF_SIGNAME_VARIABLE | default('MISSING_DATA') }}", {{ row.SOMEIP_PORT | default('MISSING_DATA') }}_{{ row.ATTRIBUTE_VALUE | default('MISSING_DATA') }}_{{ label }}, SOMEIP_TIMEOUT);
+  {% else %}
+    {% if row.SOMEIP_FF_DATATYPE | lower in ['float', 'double', 'real'] %}
+  SETCHECK_SYSVAR_FLOAT("{{ row.SOMEIP_FF_SIGNAME_NAMESPACE | default('MISSING_DATA') }}", "{{ row.SOMEIP_FF_SIGNAME_VARIABLE | default('MISSING_DATA') }}", I{{ row.CAN_PORT | default('MISSING_DATA') }}_{{ label }}, SOMEIP_TIMEOUT);
+    {% else %}
+  SETCHECK_SYSVAR_LONG("{{ row.SOMEIP_FF_SIGNAME_NAMESPACE | default('MISSING_DATA') }}", "{{ row.SOMEIP_FF_SIGNAME_VARIABLE | default('MISSING_DATA') }}", I{{ row.CAN_PORT | default('MISSING_DATA') }}_{{ label }}, SOMEIP_TIMEOUT);
+    {% endif %}
+  {% endif %}
+  
+  testStep("#{{ ctrl_step }} Action", "Set SendOnce '{{ row.SOMEIP_FF_DB_SIGNAL_CONTROL | default('MISSING_DATA') }}' ");
+  SOMEIP_FF_SENDONCE("{{ row.SOMEIP_FF_CONTROL_NAMESPACE | default('MISSING_DATA') }}","{{ row.SOMEIP_FF_CONTROL_VARIABLE | default('MISSING_DATA') }}");
+  
+  testStep("#{{ chk_step }} Verify", "Check {{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }} = I{{ row.CAN_PORT | default('MISSING_DATA') }}_{{ label }}");
+  {% if row.IS_ENUM | string | upper == 'TRUE' %}
+  CHECK_CAN_SIGNAL("{{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_PORT | default('MISSING_DATA') }}_{{ label }}, 0, 1, CAN_TIMEOUT);
+  {% else %}
+  CHECK_CAN_SIGNAL("{{ row.CAN_DB_SIGNAL_NAME | default('MISSING_DATA') }}", I{{ row.CAN_PORT | default('MISSING_DATA') }}_{{ label }}, I{{ row.CAN_PORT | default('MISSING_DATA') }}_Offset, I{{ row.CAN_PORT | default('MISSING_DATA') }}_Resolution, CAN_TIMEOUT);
+  {% endif %}
+{% endfor %}
+}
+
+{% endif %}
+{% endfor %}
