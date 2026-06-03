@@ -58,9 +58,9 @@ class CaplGenerationPipeline:
             log.setLevel(logging.INFO)
 
     def _is_cache_valid(self, cache_path: str, source_file: str) -> bool:
-        """Determines if the JSON cache is valid, stale, or bypassed."""
+        """Determines if the secure cache is valid, stale, or bypassed."""
         
-        if self.no_cache:
+        if getattr(self, 'no_cache', False):
             log.info(f"🧹 --no-cache flag detected. Forcing fresh parse.")
             return False
 
@@ -69,8 +69,7 @@ class CaplGenerationPipeline:
             
         # The User Risk Warning (Cache-Only Mode)
         if not source_file or not os.path.exists(source_file):
-            log.warning(f"⚠️ DANGER: Source file missing or omitted. Blind-loading cache '{os.path.basename(cache_path)}'.")
-            log.warning("⚠️ Generated scripts may be out of sync with actual ARXML/XML definitions if cache is stale!")
+            log.warning(f"⚠️ DANGER: Source file missing. Blind-loading secure cache '{os.path.basename(cache_path)}'.")
             return True
             
         if os.path.getmtime(source_file) > os.path.getmtime(cache_path):
@@ -78,21 +77,28 @@ class CaplGenerationPipeline:
             return False
             
         try:
-            import re
+            import zlib
+            import json
             current_size = os.path.getsize(source_file)
-            with open(cache_path, 'r', encoding='utf-8') as f:
-                head = f.read(1024) 
-                if os.path.basename(source_file) not in head:
-                    log.info(f"🔄 Different source file selected. Invalidating cache '{os.path.basename(cache_path)}'.")
-                    return False
-                size_match = re.search(r'"Source_File_Size_Bytes":\s*(\d+)', head)
-                if size_match:
-                    cached_size = int(size_match.group(1))
-                    if cached_size != current_size:
-                        log.info(f"🔄 File size changed ({cached_size}b -> {current_size}b). Invalidating cache.")
-                        return False
+            
+            # Read and decompress just enough to check the Summary
+            with open(cache_path, 'rb') as f:
+                compressed_blob = f.read()
+                
+            json_str = zlib.decompress(compressed_blob).decode('utf-8')
+            cache_data = json.loads(json_str)
+            summary = cache_data.get("Summary", {})
+            
+            if summary.get("Source_File_Name") != os.path.basename(source_file):
+                log.info(f"🔄 Different source file selected. Invalidating cache.")
+                return False
+                
+            if summary.get("Source_File_Size_Bytes") != current_size:
+                log.info(f"🔄 Source file size changed. Invalidating cache.")
+                return False
+                
         except Exception as e:
-            log.debug(f"Cache validation check failed, defaulting to re-parse: {e}")
+            log.debug(f"Secure cache validation failed, defaulting to re-parse: {e}")
             return False
             
         return True
