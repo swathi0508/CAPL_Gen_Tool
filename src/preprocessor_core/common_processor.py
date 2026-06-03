@@ -86,9 +86,9 @@ class CommonProcessor:
                 search_names = mapping.get(col, [col])
                 found_col = BaseMapper.resolve_column_name(df_in.columns, search_names)
                 df_out[col] = df_in[found_col].fillna("").astype(str) if found_col else ""
-
-            # Seamless sequential hook into the step 2 column initialization layout
-            return self.define_additional_columns(df_out)
+            
+            return df_out
+        
         except Exception as e:
             log.error(f"Step 1 critical failure: {str(e)}")
             raise
