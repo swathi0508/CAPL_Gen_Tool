@@ -13,6 +13,7 @@ from logger import log
 from generator.CaplCampaignGenerator import CaplCampaignGenerator
 from generator.CaplCanToSomeipBasicFuncAndVarsGenerator import CaplCanToSomeipBasicFuncAndVarsGenerator
 from generator.CaplSomeipToCanBasicFuncAndVarsGenerator import CaplSomeipToCanBasicFuncAndVarsGenerator
+from generator.CaplSomeipFFToCanBasicFuncAndVarsGenerator import CaplSomeipFFToCanBasicFuncAndVarsGenerator
 from generator.CaplCanToSomeipAacpBasicFuncAndVarsGenerator import CaplCanToSomeipAacpBasicFuncAndVarsGenerator
 from generator.CaplCanToSomeipFFBasicFuncAndVarsGenerator import CaplCanToSomeipFFBasicFuncAndVarsGenerator
 from generator.CaplSignalValidationLibGenerator import CaplSignalValidationLibGenerator
@@ -25,6 +26,7 @@ class JinjaEngine:
         "CAN->SOMEIP_AACP": CaplCanToSomeipAacpBasicFuncAndVarsGenerator,
         "CAN->SOMEIP_FF": CaplCanToSomeipFFBasicFuncAndVarsGenerator,
         "SOMEIP->CAN": CaplSomeipToCanBasicFuncAndVarsGenerator,
+        "SOMEIP_FF->CAN": CaplSomeipFFToCanBasicFuncAndVarsGenerator,
         "CAN->CAN": CaplCanToCanBasicFuncAndVarsGenerator
     }
 
