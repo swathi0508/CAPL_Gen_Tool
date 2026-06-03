@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 import time
+import tempfile
 from datetime import timedelta
 from pathlib import Path
 
@@ -18,10 +19,10 @@ from signal_parsers.aacp_sysvar_parser import AacpSysVarParser
 class CaplGenerationPipeline:
     """The central brain orchestrating Parsers, Mappers, and Generators strictly in RAM."""
 
-    def __init__(self, can_db_cache: str = "can_db_cache.json", 
-                 someip_db_cache: str = "someip_db_cache.json", 
-                 someip_ff_db_cache: str = "someip_ff_cache.json",
-                 aacp_sysvar_db_cache: str = "aacp_sysvar_cache.json",
+    def __init__(self, can_db_cache: str = str(Path(tempfile.gettempdir()) / ".capl_bolt_cache" / "can_db_cache.json"), 
+                 someip_db_cache: str = str(Path(tempfile.gettempdir()) / ".capl_bolt_cache" / "someip_db_cache.json") , 
+                 someip_ff_db_cache: str = str(Path(tempfile.gettempdir()) / ".capl_bolt_cache" /"someip_ff_cache.json"),
+                 aacp_sysvar_db_cache: str = str(Path(tempfile.gettempdir()) / ".capl_bolt_cache" /"aacp_sysvar_cache.json"),
                  enable_log: bool = False,
                  no_cache: bool = False):
         self.can_db = can_db_cache
