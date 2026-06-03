@@ -96,10 +96,18 @@ class SomeIPFFSysVarMapper(BaseMapper):
                     res["SOMEIP_FF_DB_SIGNAL_VALUESTATE"] = main_sig_name
                 else:
                     vs_candidates = [f"{target_attr}ValueState".lower(), f"{target_attr}value_state".lower(), "valuestate"]
+                    
+                    # 1. Primary check using exact candidate matching
                     for sibling in parent_siblings:
                         if sibling["attr_key"].lower() in vs_candidates:
                             res["SOMEIP_FF_DB_SIGNAL_VALUESTATE"] = sibling.get("Signal_DB_Name")
                             break
+                    else:
+                        # 2. Final Fallback: Grab the first sibling that contains 'valuestate' in its key
+                        for sibling in parent_siblings:
+                            if "valuestate" in sibling["attr_key"].lower():
+                                res["SOMEIP_FF_DB_SIGNAL_VALUESTATE"] = sibling.get("Signal_DB_Name")
+                                break
 
             # --- 5. IS_ENUM Update (Same as someip_mapper) ---
             existing_is_enum = str(r.get("IS_ENUM", "FALSE")).upper() == "TRUE"
