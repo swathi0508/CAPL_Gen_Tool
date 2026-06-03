@@ -1,6 +1,7 @@
 import json
 import os
 import time
+import zlib
 from abc import ABC, abstractmethod
 from typing import Any, Dict
 
@@ -70,19 +71,27 @@ class BaseParser(ABC):
             }
 
         try:
-            with open(output_path, 'w', encoding='utf-8') as f:
-                json.dump(output_data, f, indent=indent, ensure_ascii=False)
-            log.info(f"✅ DEV MODE: Database cached successfully to: {output_path}")
+            # 🔒 OBFUSCATION: Convert to string -> Compress to binary -> Write
+            json_str = json.dumps(output_data, ensure_ascii=False)
+            compressed_blob = zlib.compress(json_str.encode('utf-8'))
+            
+            with open(output_path, 'wb') as f:
+                f.write(compressed_blob)
+            log.info(f"✅ Secure binary cache written to: {output_path}")
         except Exception as e:
-            log.error(f"❌ Failed to write JSON: {e}")
+            log.error(f"❌ Failed to write secure cache: {e}")
 
     def load_from_json(self, input_path: str) -> bool:
-        """Hydrates the parser while safely navigating nested wrappers."""
+        """Hydrates the parser from a zlib compressed binary file."""
         if not os.path.exists(input_path):
             return False
         try:
-            with open(input_path, 'r', encoding='utf-8') as f:
-                raw_cache = json.load(f)
+            # 🔓 DE-OBFUSCATION: Read binary -> Decompress -> Parse JSON
+            with open(input_path, 'rb') as f:
+                compressed_blob = f.read()
+                
+            json_str = zlib.decompress(compressed_blob).decode('utf-8')
+            raw_cache = json.loads(json_str)
 
             # Route data extraction based on structure
             if "Summary" in raw_cache and any(k in raw_cache for k in ["INTERFACES", "AACP_TREE"]):
@@ -95,10 +104,10 @@ class BaseParser(ABC):
             else:
                 self._parsed_data = {k: v for k, v in raw_cache.items() if k != "Summary"}
 
-            log.info(f"🚀 Loaded signals/interfaces from cache successfully.")
+            log.info(f"🚀 Loaded signals from secure cache successfully.")
             return True
         except Exception as e:
-            log.error(f"❌ Cache load failed: {e}")
+            log.debug(f"Secure cache load failed (File missing or corrupted): {e}")
             return False
 
     def to_dataframe(self) -> pd.DataFrame:

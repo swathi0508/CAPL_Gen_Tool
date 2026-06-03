@@ -1,5 +1,6 @@
 import argparse
 import sys
+import tempfile
 from pathlib import Path
 
 from capl_bolt.cli import run_headless_generation
@@ -20,6 +21,9 @@ def global_exception_handler(exc_type, exc_value, exc_traceback):
 
 sys.excepthook = global_exception_handler
 # -------------------------------------------------
+
+# Calculate the cross-platform System Temp Directory
+SYSTEM_TEMP_DIR = Path(tempfile.gettempdir()) / ".capl_bolt_cache"
 
 def main():
     """Universal Entry Point for the CAPL Gen Tool."""
@@ -51,11 +55,11 @@ def main():
     # The Escape Hatch
     parser.add_argument("--no-cache", action="store_true", help="Force a fresh parse (ignores existing caches)")
 
-    # Hidden Cache Overrides (For CI/CD or Advanced Users)
-    parser.add_argument("--can-cache", default=".capl_cache/can_db_cache.json", help=argparse.SUPPRESS)
-    parser.add_argument("--someip-cache", default=".capl_cache/someip_db_cache.json", help=argparse.SUPPRESS)
-    parser.add_argument("--someip-ff-cache", default=".capl_cache/someip_ff_cache.json", help=argparse.SUPPRESS)
-    parser.add_argument("--aacp-cache", default=".capl_cache/aacp_sysvar_cache.json", help=argparse.SUPPRESS)
+    # Hidden Cache Overrides (Disguised as proprietary DBs in the system temp folder)
+    parser.add_argument("--can-cache", default=str(SYSTEM_TEMP_DIR / "can_db.capldb"), help=argparse.SUPPRESS)
+    parser.add_argument("--someip-cache", default=str(SYSTEM_TEMP_DIR / "someip_db.capldb"), help=argparse.SUPPRESS)
+    parser.add_argument("--someip-ff-cache", default=str(SYSTEM_TEMP_DIR / "someip_ff.capldb"), help=argparse.SUPPRESS)
+    parser.add_argument("--aacp-cache", default=str(SYSTEM_TEMP_DIR / "aacp_sysvar.capldb"), help=argparse.SUPPRESS)
 
     args = parser.parse_args()
 
@@ -72,7 +76,7 @@ def main():
         someip_sysvar_xml=args.someip_sysvar,
         aacp_sysvar_vsysvar=args.aacp_sysvar,
         enable_log=args.enable_log,
-        no_cache=args.no_cache                 
+        no_cache=args.no_cache
     )
 
 if __name__ == "__main__":
