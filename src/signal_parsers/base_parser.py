@@ -82,20 +82,22 @@ class BaseParser(ABC):
             log.error(f"❌ Failed to write secure cache: {e}")
 
     def load_from_json(self, input_path: str) -> bool:
-        """Hydrates the parser from a zlib compressed binary file."""
+        """Hydrates the parser from either a zlib compressed binary (.capldb) or plain JSON (.json)."""
         if not os.path.exists(input_path):
             return False
         try:
-            # 🔓 DE-OBFUSCATION: Read binary -> Decompress -> Parse JSON
-            with open(input_path, 'rb') as f:
-                compressed_blob = f.read()
-                
-            json_str = zlib.decompress(compressed_blob).decode('utf-8')
-            raw_cache = json.loads(json_str)
+            # 🔓 DUAL-FORMAT DE-OBFUSCATION
+            if input_path.endswith('.capldb'):
+                with open(input_path, 'rb') as f:
+                    compressed_blob = f.read()
+                json_str = zlib.decompress(compressed_blob).decode('utf-8')
+                raw_cache = json.loads(json_str)
+            else:
+                with open(input_path, 'r', encoding='utf-8') as f:
+                    raw_cache = json.load(f)
 
             # Route data extraction based on structure
             if "Summary" in raw_cache and any(k in raw_cache for k in ["INTERFACES", "AACP_TREE"]):
-                # Complex nested parsers: Keep the entire structure (including Summary) intact
                 self._parsed_data = raw_cache
             elif "SIGNAL_LIST" in raw_cache:
                 self._parsed_data = raw_cache["SIGNAL_LIST"]
@@ -103,10 +105,9 @@ class BaseParser(ABC):
                 self._parsed_data = raw_cache["SOMEIP_SIGNAL"]
             else:
                 self._parsed_data = {k: v for k, v in raw_cache.items() if k != "Summary"}
-            
             return True
         except Exception as e:
-            log.debug(f"Secure cache load failed (File missing or corrupted): {e}")
+            log.debug(f"Cache load failed (File missing, corrupted, or old format): {e}")
             return False
 
     def to_dataframe(self) -> pd.DataFrame:

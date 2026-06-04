@@ -7,10 +7,7 @@ from pipeline.main_pipeline import CaplGenerationPipeline
 def run_headless_generation(
     excel_path: Path, 
     output_dir: Path, 
-    can_db: str, 
-    someip_cache: str,
-    someip_ff_cache: str,   
-    aacp_cache: str,        
+    cache_dir: Path,
     category: str, 
     test_type: str, 
     raw_arxml: str, 
@@ -22,12 +19,9 @@ def run_headless_generation(
     """Executes the complete generation pipeline without a GUI (for CI/CD)."""
 
     pipeline = CaplGenerationPipeline(
-        can_db_cache=can_db, 
-        someip_db_cache=someip_cache,
-        someip_ff_db_cache=someip_ff_cache,  
-        aacp_sysvar_db_cache=aacp_cache,    
+        cache_dir=str(cache_dir),
         enable_log=enable_log,
-        no_cache=no_cache                  
+        no_cache=no_cache
     )
 
     try:

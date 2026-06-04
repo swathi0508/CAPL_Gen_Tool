@@ -19,23 +19,28 @@ from signal_parsers.aacp_sysvar_parser import AacpSysVarParser
 class CaplGenerationPipeline:
     """The central brain orchestrating Parsers, Mappers, and Generators strictly in RAM."""
 
-    def __init__(self, can_db_cache: str = str(Path(tempfile.gettempdir()) / ".capl_bolt_cache" / "can_db_cache.json"), 
-                 someip_db_cache: str = str(Path(tempfile.gettempdir()) / ".capl_bolt_cache" / "someip_db_cache.json") , 
-                 someip_ff_db_cache: str = str(Path(tempfile.gettempdir()) / ".capl_bolt_cache" /"someip_ff_cache.json"),
-                 aacp_sysvar_db_cache: str = str(Path(tempfile.gettempdir()) / ".capl_bolt_cache" /"aacp_sysvar_cache.json"),
-                 enable_log: bool = False,
-                 no_cache: bool = False):
-        self.can_db = can_db_cache
-        self.eth_db = someip_db_cache
-        self.ff_db = someip_ff_db_cache
-        self.aacp_db = aacp_sysvar_db_cache
+    def __init__(self, cache_dir: str = None, enable_log: bool = False, no_cache: bool = False):        
+        # Default to system temp if no directory is explicitly provided
+        self.cache_dir = Path(cache_dir) if cache_dir else Path(tempfile.gettempdir()) / ".capl_bolt_cache"
         self.no_cache = no_cache
         
-        # State Tracking
-        self.can_db_data = {}
-        self.eth_db_data = {}
-        self.someip_ff_db_data = {}
-        self.aacp_db_data = {}
+        # --- AUTO-DISCOVERY LOGIC ---
+        # Checks for .capldb first. If missing, checks for legacy .json. 
+        # Defaults to .capldb if neither exist (for creating new caches).
+        def resolve_cache(base_name: str) -> str:
+            capldb_path = self.cache_dir / f"{base_name}.capldb"
+            json_path = self.cache_dir / f"{base_name}_cache.json" # Handling legacy naming convention
+            
+            if capldb_path.exists(): return str(capldb_path)
+            if json_path.exists(): return str(json_path)
+            return str(capldb_path)
+
+        self.can_db = resolve_cache("can_db")
+        self.eth_db = resolve_cache("someip_db")
+        self.ff_db = resolve_cache("someip_ff")
+        self.aacp_db = resolve_cache("aacp_sysvar")
+        
+        self.can_db_data, self.eth_db_data, self.someip_ff_db_data, self.aacp_db_data = {}, {}, {}, {}
         self.in_memory_dfs = {}
 
         # Security Lock: If running as compiled EXE, forcefully block file dumping
@@ -59,9 +64,8 @@ class CaplGenerationPipeline:
             log.setLevel(logging.INFO)
 
     def _is_cache_valid(self, cache_path: str, source_file: str) -> bool:
-        """Determines if the secure cache is valid, stale, or bypassed."""
-        
-        if getattr(self, 'no_cache', False):
+        """Determines if the secure cache (.capldb or .json) is valid, stale, or bypassed."""
+        if self.no_cache:
             log.info(f"🧹 --no-cache flag detected. Forcing fresh parse.")
             return False
 
@@ -70,7 +74,7 @@ class CaplGenerationPipeline:
             
         # The User Risk Warning (Cache-Only Mode)
         if not source_file or not os.path.exists(source_file):
-            log.warning(f"⚠️ DANGER: Source file missing. Blind-loading secure cache '{os.path.basename(cache_path)}'.")
+            log.warning(f"⚠️ DANGER: Source file missing. Blind-loading cache '{os.path.basename(cache_path)}'.")
             return True
             
         if os.path.getmtime(source_file) > os.path.getmtime(cache_path):
@@ -82,12 +86,16 @@ class CaplGenerationPipeline:
             import json
             current_size = os.path.getsize(source_file)
             
-            # Read and decompress just enough to check the Summary
-            with open(cache_path, 'rb') as f:
-                compressed_blob = f.read()
-                
-            json_str = zlib.decompress(compressed_blob).decode('utf-8')
-            cache_data = json.loads(json_str)
+            # 🔓 DUAL-FORMAT CHECK
+            if cache_path.endswith('.capldb'):
+                with open(cache_path, 'rb') as f:
+                    compressed_blob = f.read()
+                json_str = zlib.decompress(compressed_blob).decode('utf-8')
+                cache_data = json.loads(json_str)
+            else:
+                with open(cache_path, 'r', encoding='utf-8') as f:
+                    cache_data = json.load(f)
+                    
             summary = cache_data.get("Summary", {})
             
             if summary.get("Source_File_Name") != os.path.basename(source_file):
@@ -99,7 +107,7 @@ class CaplGenerationPipeline:
                 return False
                 
         except Exception as e:
-            log.debug(f"Secure cache validation failed, defaulting to re-parse: {e}")
+            log.debug(f"Cache validation failed, defaulting to re-parse: {e}")
             return False
             
         return True
