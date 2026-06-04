@@ -56,20 +56,19 @@ def main():
     parser.add_argument("--no-cache", action="store_true", help="Force a fresh parse (ignores existing caches)")
 
     # Hidden Cache Overrides (Disguised as proprietary DBs in the system temp folder)
-    parser.add_argument("--can-cache", default=str(SYSTEM_TEMP_DIR / "can_db.capldb"), help=argparse.SUPPRESS)
-    parser.add_argument("--someip-cache", default=str(SYSTEM_TEMP_DIR / "someip_db.capldb"), help=argparse.SUPPRESS)
-    parser.add_argument("--someip-ff-cache", default=str(SYSTEM_TEMP_DIR / "someip_ff.capldb"), help=argparse.SUPPRESS)
-    parser.add_argument("--aacp-cache", default=str(SYSTEM_TEMP_DIR / "aacp_sysvar.capldb"), help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--cache-dir", 
+        type=Path, 
+        default=SYSTEM_TEMP_DIR, 
+        help="Path to directory containing .capldb or .json caches. Defaults to system temp."
+    )
 
     args = parser.parse_args()
 
     run_headless_generation(
         excel_path=args.req_excel,
         output_dir=args.out,
-        can_db=args.can_cache,
-        someip_cache=args.someip_cache,
-        someip_ff_cache=args.someip_ff_cache,  
-        aacp_cache=args.aacp_cache,           
+        cache_dir=args.cache_dir,  # Pass the single directory
         category=args.category,
         test_type=args.type,
         raw_arxml=args.arxml,
