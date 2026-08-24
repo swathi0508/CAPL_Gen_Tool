@@ -22,7 +22,9 @@ class CaplGenerationPipeline:
 
     def __init__(self, cache_dir: str = None, enable_log: bool = False, no_cache: bool = False):
         # Default to system temp if no directory is explicitly provided
-        self.cache_dir = Path(cache_dir) if cache_dir else Path(tempfile.gettempdir()) / ".capl_bolt_cache"
+        self.cache_dir = (
+            Path(cache_dir) if cache_dir else Path(tempfile.gettempdir()) / ".capl_bolt_cache"
+        )
         self.no_cache = no_cache
 
         # --- AUTO-DISCOVERY LOGIC ---
@@ -30,10 +32,14 @@ class CaplGenerationPipeline:
         # Defaults to .capldb if neither exist (for creating new caches).
         def resolve_cache(base_name: str) -> str:
             capldb_path = self.cache_dir / f"{base_name}.capldb"
-            json_path = self.cache_dir / f"{base_name}_cache.json" # Handling legacy naming convention
+            json_path = (
+                self.cache_dir / f"{base_name}_cache.json"
+            )  # Handling legacy naming convention
 
-            if capldb_path.exists(): return str(capldb_path)
-            if json_path.exists(): return str(json_path)
+            if capldb_path.exists():
+                return str(capldb_path)
+            if json_path.exists():
+                return str(json_path)
             return str(capldb_path)
 
         self.can_db = resolve_cache("can_db")
@@ -41,11 +47,16 @@ class CaplGenerationPipeline:
         self.ff_db = resolve_cache("someip_ff")
         self.aacp_db = resolve_cache("aacp_sysvar")
 
-        self.can_db_data, self.eth_db_data, self.someip_ff_db_data, self.aacp_db_data = {}, {}, {}, {}
+        self.can_db_data, self.eth_db_data, self.someip_ff_db_data, self.aacp_db_data = (
+            {},
+            {},
+            {},
+            {},
+        )
         self.in_memory_dfs = {}
 
         # Security Lock: If running as compiled EXE, forcefully block file dumping
-        self.is_production = getattr(sys, 'frozen', False)
+        self.is_production = getattr(sys, "frozen", False)
         self.enable_log = enable_log
 
     @property
@@ -58,9 +69,13 @@ class CaplGenerationPipeline:
         if self.enable_log:
             log.setLevel(logging.DEBUG)
             if self.write_to_disk:
-                log.info("🛠️ DEV MODE ACTIVE: High verbosity. Intermediate files WILL be saved to disk.")
+                log.info(
+                    "🛠️ DEV MODE ACTIVE: High verbosity. Intermediate files WILL be saved to disk."
+                )
             else:
-                log.info("🛡️ PROD DEBUG ACTIVE: High verbosity. Intermediate file dumping is LOCKED.")
+                log.info(
+                    "🛡️ PROD DEBUG ACTIVE: High verbosity. Intermediate file dumping is LOCKED."
+                )
         else:
             log.setLevel(logging.INFO)
 
@@ -75,26 +90,31 @@ class CaplGenerationPipeline:
 
         # The User Risk Warning (Cache-Only Mode)
         if not source_file or not os.path.exists(source_file):
-            log.warning(f"⚠️ DANGER: Source file missing. Blind-loading cache '{os.path.basename(cache_path)}'.")
+            log.warning(
+                f"⚠️ DANGER: Source file missing. Blind-loading cache '{os.path.basename(cache_path)}'."
+            )
             return True
 
         if os.path.getmtime(source_file) > os.path.getmtime(cache_path):
-            log.info(f"🔄 Source file timestamp modified. Cache '{os.path.basename(cache_path)}' is stale.")
+            log.info(
+                f"🔄 Source file timestamp modified. Cache '{os.path.basename(cache_path)}' is stale."
+            )
             return False
 
         try:
             import json
             import zlib
+
             current_size = os.path.getsize(source_file)
 
             # 🔓 DUAL-FORMAT CHECK
-            if cache_path.endswith('.capldb'):
-                with open(cache_path, 'rb') as f:
+            if cache_path.endswith(".capldb"):
+                with open(cache_path, "rb") as f:
                     compressed_blob = f.read()
-                json_str = zlib.decompress(compressed_blob).decode('utf-8')
+                json_str = zlib.decompress(compressed_blob).decode("utf-8")
                 cache_data = json.loads(json_str)
             else:
-                with open(cache_path, 'r', encoding='utf-8') as f:
+                with open(cache_path, "r", encoding="utf-8") as f:
                     cache_data = json.load(f)
 
             summary = cache_data.get("Summary", {})
@@ -119,7 +139,9 @@ class CaplGenerationPipeline:
         if parent_dir:
             os.makedirs(parent_dir, exist_ok=True)
 
-    def build_databases(self, raw_arxml_path: str, someip_sysvar_xml: str, aacp_sysvar_vsysvar: str) -> tuple[bool, bool, bool, bool]:
+    def build_databases(
+        self, raw_arxml_path: str, someip_sysvar_xml: str, aacp_sysvar_vsysvar: str
+    ) -> tuple[bool, bool, bool, bool]:
         """Loads databases from JSON cache if valid, otherwise parses from source files."""
         self._configure_logging()
         can_built, eth_built, ff_built, aacp_built = False, False, False, False
@@ -128,7 +150,9 @@ class CaplGenerationPipeline:
             # --- CAN DATABASE ---
             if not self.can_db_data:
                 can_parser = CANSignalParser(raw_arxml_path)
-                if self._is_cache_valid(self.can_db, raw_arxml_path) and can_parser.load_from_json(self.can_db):
+                if self._is_cache_valid(self.can_db, raw_arxml_path) and can_parser.load_from_json(
+                    self.can_db
+                ):
                     log.info(f"✅ Loaded CAN Network from fast cache: {self.can_db}")
                     self.can_db_data = can_parser.to_json_dict()
                 elif os.path.exists(raw_arxml_path):
@@ -141,7 +165,9 @@ class CaplGenerationPipeline:
             # --- SOME/IP EVENT DATABASE ---
             if not self.eth_db_data:
                 eth_parser = SomeIPEventParser(raw_arxml_path)
-                if self._is_cache_valid(self.eth_db, raw_arxml_path) and eth_parser.load_from_json(self.eth_db):
+                if self._is_cache_valid(self.eth_db, raw_arxml_path) and eth_parser.load_from_json(
+                    self.eth_db
+                ):
                     log.info(f"✅ Loaded SOME/IP Network from fast cache: {self.eth_db}")
                     self.eth_db_data = eth_parser.to_json_dict()
                 elif os.path.exists(raw_arxml_path):
@@ -154,7 +180,9 @@ class CaplGenerationPipeline:
             # --- SOME/IP FF (SYSVAR) DATABASE ---
             if not self.someip_ff_db_data:
                 ff_parser = SomeipFFParser(someip_sysvar_xml)
-                if self._is_cache_valid(self.ff_db, someip_sysvar_xml) and ff_parser.load_from_json(self.ff_db):
+                if self._is_cache_valid(self.ff_db, someip_sysvar_xml) and ff_parser.load_from_json(
+                    self.ff_db
+                ):
                     log.info(f"✅ Loaded SOME/IP FF from fast cache: {self.ff_db}")
                     self.someip_ff_db_data = ff_parser.to_json_dict()
                 elif os.path.exists(someip_sysvar_xml):
@@ -167,7 +195,9 @@ class CaplGenerationPipeline:
             # --- AACP SYSVAR DATABASE ---
             if not self.aacp_db_data:
                 aacp_parser = AacpSysVarParser(aacp_sysvar_vsysvar)
-                if self._is_cache_valid(self.aacp_db, aacp_sysvar_vsysvar) and aacp_parser.load_from_json(self.aacp_db):
+                if self._is_cache_valid(
+                    self.aacp_db, aacp_sysvar_vsysvar
+                ) and aacp_parser.load_from_json(self.aacp_db):
                     log.info(f"✅ Loaded AACP SysVar from fast cache: {self.aacp_db}")
                     self.aacp_db_data = aacp_parser.to_json_dict()
                 elif os.path.exists(aacp_sysvar_vsysvar):
@@ -198,7 +228,9 @@ class CaplGenerationPipeline:
         try:
             # --- THE ORCHESTRATION ---
             # We pass the raw dicts; Orchestrator handles the CommonProcessor internally.
-            orchestrator = MapperOrchestrator(self.can_db_data, self.eth_db_data, self.someip_ff_db_data, self.aacp_db_data)
+            orchestrator = MapperOrchestrator(
+                self.can_db_data, self.eth_db_data, self.someip_ff_db_data, self.aacp_db_data
+            )
 
             log.info(f"-> Processing {os.path.basename(input_excel)}...")
             self.in_memory_dfs = orchestrator.process_to_dataframes(input_excel)
@@ -209,7 +241,7 @@ class CaplGenerationPipeline:
                 base_name = Path(input_excel).name.replace(".xlsx", "_Intermediate.xlsx")
                 intermediate_excel = out_path / base_name
                 log.info(f"🛠️  DEV MODE: Dumping intermediate results to: {intermediate_excel}")
-                with pd.ExcelWriter(intermediate_excel, engine='openpyxl') as writer:
+                with pd.ExcelWriter(intermediate_excel, engine="openpyxl") as writer:
                     for sheet_name, df in self.in_memory_dfs.items():
                         df.to_excel(writer, sheet_name=sheet_name, index=False)
 
@@ -236,8 +268,16 @@ class CaplGenerationPipeline:
             log.exception(f"Fatal error during Generation: {e}")
             raise
 
-    def run_full_headless_flow(self, input_excel: str, out_dir: str, category: str, test_type: str,
-                               raw_arxml: str, someip_sysvar_xml: str, aacp_sysvar_vsysvar: str):
+    def run_full_headless_flow(
+        self,
+        input_excel: str,
+        out_dir: str,
+        category: str,
+        test_type: str,
+        raw_arxml: str,
+        someip_sysvar_xml: str,
+        aacp_sysvar_vsysvar: str,
+    ):
         """Used strictly by the CLI to run everything top-to-bottom in RAM."""
         self.build_databases(raw_arxml, someip_sysvar_xml, aacp_sysvar_vsysvar)
         self.run_preprocessing_memory(input_excel, out_dir)

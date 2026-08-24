@@ -60,9 +60,9 @@ class AacpSysVarParser(BaseParser):
                     "Total_Signals_Found": total,
                     "Resolved_With_Paths": resolved,
                     "No_Path_Found": total - resolved,
-                    "Processing_Time_HH_MM_SS": elapsed
+                    "Processing_Time_HH_MM_SS": elapsed,
                 },
-                "AACP_TREE": self.parsed_signals
+                "AACP_TREE": self.parsed_signals,
             }
 
             log.info(f"✅ Successfully extracted {total} signals into nested keys.")
@@ -71,6 +71,7 @@ class AacpSysVarParser(BaseParser):
         except Exception as e:
             log.error(f"❌ AACP Parser failed: {str(e)}")
             import traceback
+
             log.error(traceback.format_exc())
             return {}
 
@@ -79,13 +80,13 @@ class AacpSysVarParser(BaseParser):
         for child in element:
             tag = etree.QName(child).localname
 
-            if tag == 'namespace':
-                name = child.get('name', '')
+            if tag == "namespace":
+                name = child.get("name", "")
                 new_ns = current_ns + [name] if name else current_ns
                 self._cache_struct_definitions(child, new_ns)
 
-            elif tag == 'struct':
-                name_raw = child.get('name', '')
+            elif tag == "struct":
+                name_raw = child.get("name", "")
                 full_struct_key = "::".join(current_ns + [name_raw])
                 self.struct_definitions[full_struct_key] = child
 
@@ -94,14 +95,14 @@ class AacpSysVarParser(BaseParser):
         for child in element:
             tag = etree.QName(child).localname
 
-            if tag == 'namespace':
-                name = child.get('name', '')
+            if tag == "namespace":
+                name = child.get("name", "")
                 new_ns = current_ns + [name] if name else current_ns
                 self._process_variables(child, new_ns, count)
 
-            elif tag == 'variable':
-                var_name = child.get('name', '')
-                var_type = child.get('type', '')
+            elif tag == "variable":
+                var_name = child.get("name", "")
+                var_type = child.get("type", "")
                 var_full_path = "::".join(current_ns + [var_name])
 
                 if var_full_path not in self.parsed_signals:
@@ -110,31 +111,41 @@ class AacpSysVarParser(BaseParser):
                 # Top-level dictionary block context
                 current_container = self.parsed_signals[var_full_path]
 
-                if var_type == 'struct':
-                    struct_def = child.get('structDefinition', '')
+                if var_type == "struct":
+                    struct_def = child.get("structDefinition", "")
                     if struct_def in self.struct_definitions:
                         struct_node = self.struct_definitions[struct_def]
                         # Track the absolute variable path separately for Signal_DB_Name construction
-                        self._resolve_struct_nested(struct_node, current_container, var_full_path, count)
+                        self._resolve_struct_nested(
+                            struct_node, current_container, var_full_path, count
+                        )
                 else:
                     # Flat standalone variables
                     count[0] += 1
-                    self._parse_primitive_metadata(child, current_container, var_name, var_full_path)
+                    self._parse_primitive_metadata(
+                        child, current_container, var_name, var_full_path
+                    )
 
-    def _resolve_struct_nested(self, struct_node: etree.Element, current_container: Dict[str, Any], current_db_path: str, count: List[int]):
+    def _resolve_struct_nested(
+        self,
+        struct_node: etree.Element,
+        current_container: Dict[str, Any],
+        current_db_path: str,
+        count: List[int],
+    ):
         """
         Recursively steps through structural templates.
         Creates inline sub-dictionaries for nested structures, ensuring Signal_DB_Name preserves dots.
         """
-        for member in struct_node.findall('structMember'):
-            member_name = member.get('name', '')
-            member_type = member.get('type', '')
+        for member in struct_node.findall("structMember"):
+            member_name = member.get("name", "")
+            member_type = member.get("type", "")
 
             # The exact dot-notated string track needed for "Signal_DB_Name"
             next_db_path = f"{current_db_path}.{member_name}"
 
-            if member_type == 'struct':
-                struct_def = member.get('structDefinition', '')
+            if member_type == "struct":
+                struct_def = member.get("structDefinition", "")
                 if struct_def in self.struct_definitions:
                     nested_struct_node = self.struct_definitions[struct_def]
 
@@ -143,41 +154,49 @@ class AacpSysVarParser(BaseParser):
                         current_container[member_name] = {}
 
                     # Pass the nested inner dictionary downstream to hold its children
-                    self._resolve_struct_nested(nested_struct_node, current_container[member_name], next_db_path, count)
+                    self._resolve_struct_nested(
+                        nested_struct_node, current_container[member_name], next_db_path, count
+                    )
             else:
                 # Leaf primitive node reached
                 count[0] += 1
                 self._parse_primitive_metadata(member, current_container, member_name, next_db_path)
 
-    def _parse_primitive_metadata(self, node: etree.Element, target_dict: Dict[str, Any], field_name: str, complete_db_path: str):
+    def _parse_primitive_metadata(
+        self,
+        node: etree.Element,
+        target_dict: Dict[str, Any],
+        field_name: str,
+        complete_db_path: str,
+    ):
         """Builds schema values and places them into the current active container."""
-        raw_encoding = node.get('encoding', '65001')
-        is_signed = (raw_encoding == "65000")
-        bit_count = node.get('bitcount')
+        raw_encoding = node.get("encoding", "65001")
+        is_signed = raw_encoding == "65000"
+        bit_count = node.get("bitcount")
 
         target_dict[field_name] = {
             "Signal_DB_Name": complete_db_path,
-            "DataType": node.get('type', 'int'),
+            "DataType": node.get("type", "int"),
             "BitCount": int(bit_count) if bit_count and bit_count.isdigit() else 0,
             "Encoding": raw_encoding,
             "IsSigned": is_signed,
-            "ByteOrder": node.get('byteOrder', '0'),
-            "Enums": self._extract_enums(node)
+            "ByteOrder": node.get("byteOrder", "0"),
+            "Enums": self._extract_enums(node),
         }
 
     def _extract_enums(self, node: etree.Element) -> Dict[str, str]:
         enums = {}
-        vt = node.find('valuetable')
+        vt = node.find("valuetable")
         if vt is not None:
-            for entry in vt.findall('valuetableentry'):
-                val = entry.get('value')
-                desc = entry.get('description') or entry.get('name')
+            for entry in vt.findall("valuetableentry"):
+                val = entry.get("value")
+                desc = entry.get("description") or entry.get("name")
                 if val is not None:
                     enums[val] = desc
         else:
-            for entry in node.findall('enum'):
-                val = entry.get('value')
-                name = entry.get('name')
+            for entry in node.findall("enum"):
+                val = entry.get("value")
+                name = entry.get("name")
                 if val is not None:
                     enums[val] = name
         return enums

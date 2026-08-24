@@ -37,14 +37,14 @@ class JinjaEngine:
         "CAN->SOMEIP_FF": CaplCanToSomeipFFBasicFuncAndVarsGenerator,
         "SOMEIP->CAN": CaplSomeipToCanBasicFuncAndVarsGenerator,
         "SOMEIP_FF->CAN": CaplSomeipFFToCanBasicFuncAndVarsGenerator,
-        "CAN->CAN": CaplCanToCanBasicFuncAndVarsGenerator
+        "CAN->CAN": CaplCanToCanBasicFuncAndVarsGenerator,
     }
 
     def __init__(self, output_root="Output_CAPL_Scripts"):
         current_file = Path(__file__).resolve()
         self.base_src_dir = current_file.parent.parent
 
-        if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
             self.template_dir = Path(sys._MEIPASS) / "templates"
             app_root = Path(sys.executable).resolve().parent
         else:
@@ -83,6 +83,8 @@ class JinjaEngine:
             camp_gen = CaplCampaignGenerator(self.template_dir)
             camp_gen.generate(data_frames, category, test_type, self.output_dir)
 
-            log.info(f"--- TOTAL GENERATION TIME: {str(timedelta(seconds=round(time.time() - overall_start)))} ---")
+            log.info(
+                f"--- TOTAL GENERATION TIME: {str(timedelta(seconds=round(time.time() - overall_start)))} ---"
+            )
         except Exception as e:
             log.exception(f"Engine Failure: {e}")

@@ -48,10 +48,13 @@ class BaseParser(ABC):
             resolved = 0
             for v in data.values():
                 if isinstance(v, dict):
-                    if 'signal_paths' in v:
-                        if len(v['signal_paths']) > 0: resolved += 1
+                    if "signal_paths" in v:
+                        if len(v["signal_paths"]) > 0:
+                            resolved += 1
                     else:
-                        resolved += 1 # Flat SOME/IP signals are automatically "resolved" if present
+                        resolved += (
+                            1  # Flat SOME/IP signals are automatically "resolved" if present
+                        )
 
             try:
                 file_size_bytes = os.path.getsize(self.file_path)
@@ -65,17 +68,17 @@ class BaseParser(ABC):
                     "Total_Signals_Found": total,
                     "Resolved_With_Paths": resolved,
                     "No_Path_Found": total - resolved,
-                    "Processing_Time_HH_MM_SS": self._get_processing_time()
+                    "Processing_Time_HH_MM_SS": self._get_processing_time(),
                 },
-                "SIGNAL_LIST": data
+                "SIGNAL_LIST": data,
             }
 
         try:
             # 🔒 OBFUSCATION: Convert to string -> Compress to binary -> Write
             json_str = json.dumps(output_data, ensure_ascii=False)
-            compressed_blob = zlib.compress(json_str.encode('utf-8'))
+            compressed_blob = zlib.compress(json_str.encode("utf-8"))
 
-            with open(output_path, 'wb') as f:
+            with open(output_path, "wb") as f:
                 f.write(compressed_blob)
             log.info(f"✅ Secure binary cache written to: {output_path}")
         except Exception as e:
@@ -87,13 +90,13 @@ class BaseParser(ABC):
             return False
         try:
             # 🔓 DUAL-FORMAT DE-OBFUSCATION
-            if input_path.endswith('.capldb'):
-                with open(input_path, 'rb') as f:
+            if input_path.endswith(".capldb"):
+                with open(input_path, "rb") as f:
                     compressed_blob = f.read()
-                json_str = zlib.decompress(compressed_blob).decode('utf-8')
+                json_str = zlib.decompress(compressed_blob).decode("utf-8")
                 raw_cache = json.loads(json_str)
             else:
-                with open(input_path, 'r', encoding='utf-8') as f:
+                with open(input_path, "r", encoding="utf-8") as f:
                     raw_cache = json.load(f)
 
             # Route data extraction based on structure
@@ -118,17 +121,19 @@ class BaseParser(ABC):
 
         # --- FIX 2: Safeguard Hierarchical Parsers ---
         if "Summary" in data and any(k in data for k in ["INTERFACES", "AACP_TREE"]):
-            log.warning("⚠️ to_dataframe() bypassed: Hierarchical parsers (AACP/SOMEIP_FF) do not support flat dataframe conversion.")
+            log.warning(
+                "⚠️ to_dataframe() bypassed: Hierarchical parsers (AACP/SOMEIP_FF) do not support flat dataframe conversion."
+            )
             return pd.DataFrame()
 
         df_rows = []
         sample_val = next(iter(data.values()))
 
         # Check if we are dealing with the nested CAN structure
-        if isinstance(sample_val, dict) and 'signal_paths' in sample_val:
+        if isinstance(sample_val, dict) and "signal_paths" in sample_val:
             for sig_name, content in data.items():
-                attrs = content.get('Attributes', {})
-                paths = content.get('signal_paths', [])
+                attrs = content.get("Attributes", {})
+                paths = content.get("signal_paths", [])
 
                 # Base attributes common to all paths of this signal
                 # We pull everything from attrs (Resolution, Offset, etc.)
@@ -141,8 +146,8 @@ class BaseParser(ABC):
                         # Explode path-specific info (Cluster, TX, RX)
                         # and format RX nodes as a string for Excel
                         row = {**base_info, "Status": "Resolved", **path}
-                        if isinstance(row.get('rx'), list):
-                            row['rx'] = ", ".join(row['rx'])
+                        if isinstance(row.get("rx"), list):
+                            row["rx"] = ", ".join(row["rx"])
                         df_rows.append(row)
         else:
             # Flat SOME/IP structure
@@ -151,7 +156,7 @@ class BaseParser(ABC):
         df = pd.DataFrame(df_rows)
 
         # Dynamic safe sorting
-        sort_prio = ['SIF', 'Cluster', 'can_cluster', 'Port', 'tx', 'Method', 'Signal_Name']
+        sort_prio = ["SIF", "Cluster", "can_cluster", "Port", "tx", "Method", "Signal_Name"]
         avail = [c for c in sort_prio if c in df.columns]
         return df.sort_values(by=avail).reset_index(drop=True) if avail else df
 

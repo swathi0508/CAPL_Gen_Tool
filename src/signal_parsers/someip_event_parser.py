@@ -44,14 +44,23 @@ class SomeIPEventParser(BaseParser):
 
         def get_compu_data(app_type_name: str) -> Dict[str, Any]:
             compu_name = app_to_compu.get(app_type_name, app_type_name)
-            return compu_methods.get(compu_name, {
-                "enums": {}, "has_enums": False,
-                "min": None, "max": None, "mid": None,
-                "unit": "N/A", "factor": "N/A", "offset": "N/A"
-            })
+            return compu_methods.get(
+                compu_name,
+                {
+                    "enums": {},
+                    "has_enums": False,
+                    "min": None,
+                    "max": None,
+                    "mid": None,
+                    "unit": "N/A",
+                    "factor": "N/A",
+                    "offset": "N/A",
+                },
+            )
 
         def format_val(v: Any) -> Any:
-            if v is None or v == "N/A": return "N/A"
+            if v is None or v == "N/A":
+                return "N/A"
             return int(v) if float(v).is_integer() else round(v, 4)
 
         self._parsed_data = {}
@@ -64,7 +73,7 @@ class SomeIPEventParser(BaseParser):
 
             mapping_short_name = short_name_elem[0].text.strip()
             # Extract SIF (e.g., 591) and base event name
-            match = re.search(r'^X(\d+)_(.*?)SvcProv', mapping_short_name)
+            match = re.search(r"^X(\d+)_(.*?)SvcProv", mapping_short_name)
             if not match:
                 continue
 
@@ -81,19 +90,19 @@ class SomeIPEventParser(BaseParser):
                     # ONLY PROCESS APPLICATION RECORDS (Struct Unrolling)
                     # -----------------------------------------------------
                     if app_name in records_dict:
-
                         # NEW APPROACH: Look up the exact name from the Interface mapping
                         interface_name = app_to_interface.get(app_name)
 
                         if interface_name:
                             # ARXML Interface names usually end in "Interface".
-                            # We strip it to get the CAPL routing port name (e.g., SomeIpEcoMode...)
-                            someip_port = re.sub(r'Interface$', '', interface_name)
+                            # We strip it to get the CAPL routing port name (e.g., SomeIpEcoMode)
+                            someip_port = re.sub(r"Interface$", "", interface_name)
                             # Extract the event part for your JSON by dropping the "SomeIp" prefix
-                            canonical_event_name = re.sub(r'^SomeIp', '', someip_port)
+                            canonical_event_name = re.sub(r"^SomeIp", "", someip_port)
                         else:
-                            # FALLBACK: Just in case the ARXML mapping is broken for a specific signal
-                            canonical_event_name = re.sub(r'\d+$', '', app_name)
+                            # FALLBACK: Just in case the ARXML mapping is broken
+                            # for a specific signal
+                            canonical_event_name = re.sub(r"\d+$", "", app_name)
                             someip_port = f"SomeIp{canonical_event_name}"
 
                         for element in records_dict[app_name]:
@@ -104,7 +113,11 @@ class SomeIPEventParser(BaseParser):
                             datatype = app_to_basetype.get(tref, "N/A")
 
                             if datatype == "N/A":
-                                clean_match = re.match(r'^(u?s?int(?:8|16|32|64)|float(?:32|64)|boolean|double)', tref, re.IGNORECASE)
+                                clean_match = re.match(
+                                    r"^(u?s?int(?:8|16|32|64)|float(?:32|64)|boolean|double)",
+                                    tref,
+                                    re.IGNORECASE,
+                                )
                                 datatype = clean_match.group(1).lower() if clean_match else "N/A"
 
                             # Check if enums exist, otherwise default to an empty dictionary
@@ -125,7 +138,7 @@ class SomeIPEventParser(BaseParser):
                                 "Max": format_val(c_data["max"]),
                                 "Factor": format_val(c_data["factor"]),
                                 "Offset": format_val(c_data["offset"]),
-                                "Unit": c_data["unit"]
+                                "Unit": c_data["unit"],
                             }
                     else:
                         # Drop primitives that don't belong to a struct mapping.
@@ -139,13 +152,16 @@ class SomeIPEventParser(BaseParser):
         compu_methods = {}
         for cm in root.xpath("//*[local-name()='COMPU-METHOD']"):
             cm_name_elem = cm.xpath("*[local-name()='SHORT-NAME']")
-            if not cm_name_elem: continue
+            if not cm_name_elem:
+                continue
             cm_name = cm_name_elem[0].text.strip()
 
             unit_ref = cm.xpath("*[local-name()='UNIT-REF']")
-            unit = unit_ref[0].text.split("/")[-1].strip() if unit_ref and unit_ref[0].text else "N/A"
+            unit = (
+                unit_ref[0].text.split("/")[-1].strip() if unit_ref and unit_ref[0].text else "N/A"
+            )
 
-            enums, min_val, max_val, factor, offset = {}, float('inf'), float('-inf'), "N/A", "N/A"
+            enums, min_val, max_val, factor, offset = {}, float("inf"), float("-inf"), "N/A", "N/A"
 
             for scale in cm.xpath(".//*[local-name()='COMPU-SCALE']"):
                 ll_node = scale.xpath("*[local-name()='LOWER-LIMIT']")
@@ -159,36 +175,50 @@ class SomeIPEventParser(BaseParser):
                 if ll_text is not None:
                     try:
                         ll_f = float(ll_text)
-                        if ll_f < min_val: min_val = ll_f
-                    except ValueError: pass
+                        if ll_f < min_val:
+                            min_val = ll_f
+                    except ValueError:
+                        pass
 
                 if ul_text is not None:
                     try:
                         ul_f = float(ul_text)
-                        if ul_f > max_val: max_val = ul_f
-                    except ValueError: pass
+                        if ul_f > max_val:
+                            max_val = ul_f
+                    except ValueError:
+                        pass
 
                 if ll_text is not None and vt_node and vt_node[0].text:
                     enums[ll_text] = vt_node[0].text.strip()
 
                 if coeffs_node:
                     try:
-                        num_v = coeffs_node[0].xpath(".//*[local-name()='COMPU-NUMERATOR']/*[local-name()='V']")
-                        den_v = coeffs_node[0].xpath(".//*[local-name()='COMPU-DENOMINATOR']/*[local-name()='V']")
+                        num_v = coeffs_node[0].xpath(
+                            ".//*[local-name()='COMPU-NUMERATOR']/*[local-name()='V']"
+                        )
+                        den_v = coeffs_node[0].xpath(
+                            ".//*[local-name()='COMPU-DENOMINATOR']/*[local-name()='V']"
+                        )
                         n0 = float(num_v[0].text) if len(num_v) > 0 else 0.0
                         n1 = float(num_v[1].text) if len(num_v) > 1 else 1.0
                         d = float(den_v[0].text) if len(den_v) > 0 else 1.0
                         if d != 0:
                             offset, factor = n0 / d, n1 / d
-                    except Exception: pass
+                    except Exception:
+                        pass
 
-            has_limits = min_val != float('inf') and max_val != float('-inf')
+            has_limits = min_val != float("inf") and max_val != float("-inf")
             mid_val = math.floor((min_val + max_val) / 2) if has_limits else None
 
             compu_methods[cm_name] = {
-                "enums": enums, "has_enums": len(enums) > 0,
-                "min": min_val if has_limits else None, "max": max_val if has_limits else None,
-                "mid": mid_val, "unit": unit, "factor": factor, "offset": offset
+                "enums": enums,
+                "has_enums": len(enums) > 0,
+                "min": min_val if has_limits else None,
+                "max": max_val if has_limits else None,
+                "mid": mid_val,
+                "unit": unit,
+                "factor": factor,
+                "offset": offset,
             }
         return compu_methods
 
@@ -205,14 +235,25 @@ class SomeIPEventParser(BaseParser):
 
     def _extract_impl_to_basetype(self, root) -> Dict[str, str]:
         impl_to_basetype = {}
+
         for impl_dt in root.xpath("//*[local-name()='IMPLEMENTATION-DATA-TYPE']"):
             impl_name_elem = impl_dt.xpath("*[local-name()='SHORT-NAME']")
             base_ref = impl_dt.xpath(".//*[local-name()='BASE-TYPE-REF']")
+
             if impl_name_elem and base_ref and base_ref[0].text:
                 impl_name = impl_name_elem[0].text.strip()
                 basetype_raw = base_ref[0].text.split("/")[-1].strip()
-                clean_match = re.match(r'^(u?s?int(?:8|16|32|64)|float(?:32|64)|boolean|double)', basetype_raw, re.IGNORECASE)
-                impl_to_basetype[impl_name] = clean_match.group(1).lower() if clean_match else basetype_raw
+
+                clean_match = re.match(
+                    r"^(u?s?int(?:8|16|32|64)|float(?:32|64)|boolean|double)",
+                    basetype_raw,
+                    re.IGNORECASE,
+                )
+
+                impl_to_basetype[impl_name] = (
+                    clean_match.group(1).lower() if clean_match else basetype_raw
+                )
+
         return impl_to_basetype
 
     def _extract_app_to_basetype(self, root, impl_to_basetype: Dict[str, str]) -> Dict[str, str]:
@@ -232,7 +273,8 @@ class SomeIPEventParser(BaseParser):
         records_dict = {}
         for rec in root.xpath("//*[local-name()='APPLICATION-RECORD-DATA-TYPE']"):
             short_name_elem = rec.xpath("*[local-name()='SHORT-NAME']")
-            if not short_name_elem: continue
+            if not short_name_elem:
+                continue
             rec_name = short_name_elem[0].text.strip()
 
             elements = []
@@ -240,10 +282,12 @@ class SomeIPEventParser(BaseParser):
                 elem_name_node = elem.xpath("*[local-name()='SHORT-NAME']")
                 tref_node = elem.xpath("*[local-name()='TYPE-TREF']")
                 if elem_name_node and tref_node:
-                    elements.append({
-                        "name": elem_name_node[0].text.strip(),
-                        "tref": tref_node[0].text.split("/")[-1].strip()
-                    })
+                    elements.append(
+                        {
+                            "name": elem_name_node[0].text.strip(),
+                            "tref": tref_node[0].text.split("/")[-1].strip(),
+                        }
+                    )
             records_dict[rec_name] = elements
         return records_dict
 

@@ -9,7 +9,9 @@ from preprocessor_core.common_processor import CommonProcessor
 class MapperOrchestrator:
     """Coordinates the 7-step mapping sequence into in-memory DataFrames."""
 
-    def __init__(self, can_db_data: dict, eth_db_data: dict, someip_ff_db_data: dict, aacp_db_data: dict):
+    def __init__(
+        self, can_db_data: dict, eth_db_data: dict, someip_ff_db_data: dict, aacp_db_data: dict
+    ):
         self.processor = CommonProcessor(can_db_data, eth_db_data, someip_ff_db_data, aacp_db_data)
 
     def process_to_dataframes(self, input_excel: str) -> dict:
@@ -19,7 +21,9 @@ class MapperOrchestrator:
         log.info(f"Starting 7-step orchestration for: {os.path.basename(input_excel)}")
 
         xls = pd.ExcelFile(input_excel)
-        sheets_to_process = [s for s in xls.sheet_names if s.strip().upper() in ["E2E_ETH", "E2E_CAN"]]
+        sheets_to_process = [
+            s for s in xls.sheet_names if s.strip().upper() in ["E2E_ETH", "E2E_CAN"]
+        ]
 
         final_results = {}
 

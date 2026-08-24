@@ -15,14 +15,12 @@ def run_headless_generation(
     someip_sysvar_xml: str,
     aacp_sysvar_vsysvar: str,
     enable_log: bool,
-    no_cache: bool
+    no_cache: bool,
 ):
     """Executes the complete generation pipeline without a GUI (for CI/CD)."""
 
     pipeline = CaplGenerationPipeline(
-        cache_dir=str(cache_dir),
-        enable_log=enable_log,
-        no_cache=no_cache
+        cache_dir=str(cache_dir), enable_log=enable_log, no_cache=no_cache
     )
 
     try:
@@ -33,7 +31,7 @@ def run_headless_generation(
             test_type=test_type,
             raw_arxml=raw_arxml,
             someip_sysvar_xml=someip_sysvar_xml,
-            aacp_sysvar_vsysvar=aacp_sysvar_vsysvar
+            aacp_sysvar_vsysvar=aacp_sysvar_vsysvar,
         )
         log.info("✅ HEADLESS GENERATION COMPLETED SUCCESSFULLY")
     except Exception as e:
