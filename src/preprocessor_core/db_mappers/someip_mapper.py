@@ -14,16 +14,21 @@ class SomeIPMapper(BaseMapper):
         for key, data in raw_db.items():
             data["Signal_String"] = key
             self.raw_db_values.append(data)
-            meth = str(data.get('Method', data.get('Attribute_Value', ''))).strip().lower()
+            meth = str(data.get("Method", data.get("Attribute_Value", ""))).strip().lower()
             if meth:
                 clean_db[meth] = data
         return clean_db
 
     def get_signal_data(self, attr_value: str, someip_port: str = None) -> dict:
         cols = [
-            "SOMEIP_DB_SIGNAL_NAME", "SOMEIP_ENUM", "SOMEIP_MIN_PHY",
-            "SOMEIP_MID_PHY", "SOMEIP_MAX_PHY", "SOMEIP_OFFSET",
-            "SOMEIP_RESOLUTION", "SOMEIP_DB_SIGNAL_VALUESTATE"
+            "SOMEIP_DB_SIGNAL_NAME",
+            "SOMEIP_ENUM",
+            "SOMEIP_MIN_PHY",
+            "SOMEIP_MID_PHY",
+            "SOMEIP_MAX_PHY",
+            "SOMEIP_OFFSET",
+            "SOMEIP_RESOLUTION",
+            "SOMEIP_DB_SIGNAL_VALUESTATE",
         ]
 
         if pd.isna(attr_value) or str(attr_value).strip() == "":
@@ -38,7 +43,7 @@ class SomeIPMapper(BaseMapper):
         if "::" in port_val:
             target_event = port_val.split("::")[-1].strip()
         elif len(parts) > 1:
-            target_event = "_".join(parts[math.ceil(len(parts)/2):]).strip()
+            target_event = "_".join(parts[math.ceil(len(parts) / 2) :]).strip()
         else:
             target_event = port_val
 
@@ -47,8 +52,8 @@ class SomeIPMapper(BaseMapper):
         # --- Database Lookup ---
         sig_data = None
         for data in self.raw_db_values:
-            db_attr = str(data.get('Attribute_Value', '')).strip().lower()
-            db_ev = str(data.get('Event', '')).strip().lower()
+            db_attr = str(data.get("Attribute_Value", "")).strip().lower()
+            db_ev = str(data.get("Event", "")).strip().lower()
             # Match Attribute AND the extracted Event name
             if db_attr == attr_lower and (not target_event_lower or target_event_lower == db_ev):
                 sig_data = data
@@ -68,7 +73,7 @@ class SomeIPMapper(BaseMapper):
             stemmed_attr = attr_lower
             for suffix in common_suffixes:
                 if attr_lower.endswith(suffix):
-                    stemmed_attr = attr_lower[:len(attr_lower) - len(suffix)].rstrip("_")
+                    stemmed_attr = attr_lower[: len(attr_lower) - len(suffix)].rstrip("_")
                     break
 
             target_vs_append_1 = f"{attr_str}ValueState".lower()
@@ -82,12 +87,18 @@ class SomeIPMapper(BaseMapper):
                 if data.get("Event") == db_event_exact:
                     curr_attr_lower = str(data.get("Attribute_Value", "")).strip().lower()
 
-                    if curr_attr_lower in [target_vs_append_1, target_vs_append_2, target_vs_stemmed]:
+                    if curr_attr_lower in [
+                        target_vs_append_1,
+                        target_vs_append_2,
+                        target_vs_stemmed,
+                    ]:
                         vs_attr_full_path = data.get("Signal_String")
                         break
 
                     if "valuestate" in curr_attr_lower:
-                        if stemmed_attr in curr_attr_lower or curr_attr_lower.startswith(stemmed_attr[:5]):
+                        if stemmed_attr in curr_attr_lower or curr_attr_lower.startswith(
+                            stemmed_attr[:5]
+                        ):
                             fuzzy_vs_match = data.get("Signal_String")
 
                     if "valuestate" in curr_attr_lower and not any_vs_in_event:
@@ -115,7 +126,7 @@ class SomeIPMapper(BaseMapper):
             "SOMEIP_OFFSET": sig_data.get("Offset"),
             "SOMEIP_RESOLUTION": sig_data.get("Factor"),
             "SOMEIP_DB_SIGNAL_VALUESTATE": vs_attr_full_path,
-            "_HAS_ENUM": bool(raw_enums)
+            "_HAS_ENUM": bool(raw_enums),
         }
 
     def resolve(self, df_subset: pd.DataFrame) -> pd.DataFrame:

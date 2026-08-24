@@ -8,6 +8,7 @@ from signal_parsers.someip_ff_parser import SomeipFFParser
 # Clean __pycache__ at test start to ensure fresh imports
 cleanup_pycache()
 
+
 def test_someip_ff_parsing(xml_path: str, json_cache: str):
     """Tests the SOME/IP FF (SysVar) Parser's ability to extract data from SysVarDef.xml."""
     log.info("🚀 Starting SOME/IP FF Parser Test...")
@@ -37,6 +38,7 @@ def test_someip_ff_parsing(xml_path: str, json_cache: str):
     # 2. Test Disk Dump (Simulating Dev Mode)
     parser.to_json_file(json_cache, write_allowed=True)
     log.info(f"✅ Cache dumped to {json_cache}")
+
 
 if __name__ == "__main__":
     # Ensure this points to your actual SysVar XML file

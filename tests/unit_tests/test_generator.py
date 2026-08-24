@@ -10,7 +10,10 @@ from logger import log
 # Clean __pycache__ at test start
 cleanup_pycache()
 
-def test_generator(excel_path: str, eth_json_path: str, category: str, test_type: str, output_root: str):
+
+def test_generator(
+    excel_path: str, eth_json_path: str, category: str, test_type: str, output_root: str
+):
     """Executes the CAPL Code Generation pipeline from RAM DataFrames."""
     log.info(f"⚙️ STARTING JINJA ENGINE TEST ({category} | {test_type})")
 
@@ -22,11 +25,15 @@ def test_generator(excel_path: str, eth_json_path: str, category: str, test_type
         # 1. Mock the Pipeline by loading Excel into a DataFrame Dictionary
         log.info("Loading Excel into RAM Dictionary...")
         xls = pd.ExcelFile(excel_path)
-        in_memory_dfs = {sheet: pd.read_excel(xls, sheet_name=sheet) for sheet in xls.sheet_names if sheet.endswith("_PARSED")}
+        in_memory_dfs = {
+            sheet: pd.read_excel(xls, sheet_name=sheet)
+            for sheet in xls.sheet_names
+            if sheet.endswith("_PARSED")
+        }
 
         # 2. Mock the Pipeline by loading the ETH Cache into a Dictionary
         log.info("Loading SOME/IP Dictionary...")
-        with open(eth_json_path, 'r', encoding='utf-8') as f:
+        with open(eth_json_path, "r", encoding="utf-8") as f:
             eth_data = json.load(f)
             eth_db_data = eth_data.get("SIGNAL_LIST", eth_data.get("SOMEIP_SIGNAL", eth_data))
 
@@ -37,13 +44,14 @@ def test_generator(excel_path: str, eth_json_path: str, category: str, test_type
             data_frames=in_memory_dfs,
             eth_db_data=eth_db_data,
             category=category,
-            test_type=test_type
+            test_type=test_type,
         )
 
         log.info(f"✅ GENERATION COMPLETE! Check the '{output_root}' folder.")
 
     except Exception as e:
         log.exception(f"❌ Generator encountered a fatal error: {e}")
+
 
 if __name__ == "__main__":
     INTERMEDIATE_EXCEL = r"./output/Requirements_Intermediate.xlsx"
@@ -53,4 +61,6 @@ if __name__ == "__main__":
     TARGET_CATEGORY = "E2E_ETH"
     TARGET_TEST_TYPE = "CAN->SOMEIP_FF"
 
-    test_generator(INTERMEDIATE_EXCEL, SOMEIP_JSON_CACHE, TARGET_CATEGORY, TARGET_TEST_TYPE, OUTPUT_DIRECTORY)
+    test_generator(
+        INTERMEDIATE_EXCEL, SOMEIP_JSON_CACHE, TARGET_CATEGORY, TARGET_TEST_TYPE, OUTPUT_DIRECTORY
+    )

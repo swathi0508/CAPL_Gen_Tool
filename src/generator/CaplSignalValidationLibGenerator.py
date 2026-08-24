@@ -24,7 +24,8 @@ class CaplSignalValidationLibGenerator:
         if isinstance(source, str) and os.path.exists(source):
             try:
                 import json
-                with open(source, 'r', encoding='utf-8') as f:
+
+                with open(source, "r", encoding="utf-8") as f:
                     raw_data = json.load(f)
                     return raw_data.get("SIGNAL_LIST", raw_data.get("SOMEIP_SIGNAL", raw_data))
             except Exception as e:
@@ -36,7 +37,11 @@ class CaplSignalValidationLibGenerator:
         """Searches the JSON structure for the matching event and attribute."""
         if not signal_list:
             log.error(f"Lib Gen: Cannot resolve '{event}' - no signal data loaded.")
-            return {"path": "MISSING_DATA", "enum_name": "MISSING_DATA", "enum_value": "MISSING_DATA"}
+            return {
+                "path": "MISSING_DATA",
+                "enum_name": "MISSING_DATA",
+                "enum_value": "MISSING_DATA",
+            }
 
         for path, details in signal_list.items():
             if details.get("Event") == event and details.get("Attribute_Value") == attribute:
@@ -57,13 +62,17 @@ class CaplSignalValidationLibGenerator:
         try:
             context = {
                 "signals": {
-                    "gadeStatusValueState": self._resolve(self.eth_data, "gadeEvent", "gadeStatusValueState", "VALUE_STATE_VALID"),
-                    "gadeStatus": self._resolve(self.eth_data, "gadeEvent", "gadeStatus", "GADESTATUS_MISSION_MODE_ON")
+                    "gadeStatusValueState": self._resolve(
+                        self.eth_data, "gadeEvent", "gadeStatusValueState", "VALUE_STATE_VALID"
+                    ),
+                    "gadeStatus": self._resolve(
+                        self.eth_data, "gadeEvent", "gadeStatus", "GADESTATUS_MISSION_MODE_ON"
+                    ),
                 }
             }
 
             os.makedirs(output_path, exist_ok=True)
-            with open(Path(output_path) / "SignalValidation_Lib.cin", 'w') as f:
+            with open(Path(output_path) / "SignalValidation_Lib.cin", "w") as f:
                 f.write(self.env.get_template("signalValidationLib_template.j2").render(context))
             log.info("Signal Validation Library generated.")
         except Exception as e:

@@ -8,7 +8,7 @@ def setup_logger(log_file: str = "capl_bolt.log") -> logging.Logger:
     logger = logging.getLogger("CAPL_BOLT")
 
     # 1. SECURITY LOCK: Detect if we are running as a compiled executable
-    is_production = getattr(sys, 'frozen', False)
+    is_production = getattr(sys, "frozen", False)
 
     # 2. DYNAMIC VERBOSITY: Save CPU cycles in production
     logger.setLevel(logging.INFO if is_production else logging.DEBUG)
@@ -17,7 +17,6 @@ def setup_logger(log_file: str = "capl_bolt.log") -> logging.Logger:
 
     # Prevent duplicate handlers if setup_logger is called multiple times
     if not logger.handlers:
-
         # 3. CONSOLE HANDLER: Always active.
         # (When console=False in your .spec file, Windows just silently dev nulls this,
         # preventing the app from crashing while keeping no trace on the screen).
@@ -34,6 +33,7 @@ def setup_logger(log_file: str = "capl_bolt.log") -> logging.Logger:
             logger.addHandler(fh)
 
     return logger
+
 
 # Global logger instance
 log = setup_logger()

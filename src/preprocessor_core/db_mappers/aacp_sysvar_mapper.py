@@ -9,11 +9,16 @@ class AacpSysVarMapper(BaseMapper):
 
     def resolve(self, df_subset: pd.DataFrame) -> pd.DataFrame:
         cols = [
-            "AACP_DB_SIGNAL_NAME", "AACP_DB_SIGNAL_VALUESTATE",
-            "AACP_ENUM", "AACP_DATATYPE",
-            "AACP_SIGNAME_NAMESPACE", "AACP_SIGNAME_VARIABLE",
-            "AACP_SIGVALUESTATE_NAMESPACE", "AACP_SIGVALUESTATE_VARIABLE",
-            "AACP_SIGNAME_DAQ", "IS_ENUM"
+            "AACP_DB_SIGNAL_NAME",
+            "AACP_DB_SIGNAL_VALUESTATE",
+            "AACP_ENUM",
+            "AACP_DATATYPE",
+            "AACP_SIGNAME_NAMESPACE",
+            "AACP_SIGNAME_VARIABLE",
+            "AACP_SIGVALUESTATE_NAMESPACE",
+            "AACP_SIGVALUESTATE_VARIABLE",
+            "AACP_SIGNAME_DAQ",
+            "IS_ENUM",
         ]
 
         # self.db is already the SIGNAL_LIST dict (not wrapped in another dict)
@@ -94,7 +99,7 @@ class AacpSysVarMapper(BaseMapper):
                         base_prefix = clean_attr_lower
                         for suffix in ["_timestamp", "_value", "_raw", "_signal", "_status"]:
                             if clean_attr_lower.endswith(suffix):
-                                base_prefix = clean_attr_lower[:-len(suffix)]
+                                base_prefix = clean_attr_lower[: -len(suffix)]
                                 break
 
                         # TIER 1: Predictable suffix construction
@@ -111,7 +116,9 @@ class AacpSysVarMapper(BaseMapper):
                         if not found_vs_signal and base_prefix != clean_attr_lower:
                             for sibling_key in container.keys():
                                 sib_lower = sibling_key.lower()
-                                if base_prefix in sib_lower and ("value_state" in sib_lower or "valuestate" in sib_lower):
+                                if base_prefix in sib_lower and (
+                                    "value_state" in sib_lower or "valuestate" in sib_lower
+                                ):
                                     found_vs_signal = container[sibling_key].get("Signal_DB_Name")
                                     break
 

@@ -64,7 +64,7 @@ class SomeipFFParser(BaseParser):
                 "Resolved_With_Paths": resolved,
                 "No_Path_Found": total - resolved,
                 "Interfaces_Found": len(self.interfaces),
-                "Processing_Time_HH_MM_SS": elapsed
+                "Processing_Time_HH_MM_SS": elapsed,
             }
             # ---------------------------
 
@@ -73,10 +73,13 @@ class SomeipFFParser(BaseParser):
             self._parsed_data = {
                 "Summary": self.summary_stats,
                 "INTERFACES": self.interfaces,
-                "GENERAL_SIGNALS": self.general_signals
+                "GENERAL_SIGNALS": self.general_signals,
             }
 
-            log.info(f"✅ Successfully extracted {total} signals across {len(self.interfaces)} interfaces.")
+            log.info(
+                f"✅ Successfully extracted {total} signals across"
+                f"{len(self.interfaces)} interfaces."
+            )
             return self._parsed_data
 
         except Exception as e:
@@ -88,11 +91,11 @@ class SomeipFFParser(BaseParser):
         for child in element:
             tag = etree.QName(child).localname
 
-            if tag == 'namespace':
-                name = child.get('name', '')
+            if tag == "namespace":
+                name = child.get("name", "")
                 self._walk_namespace(child, path + [name] if name else path, count)
 
-            elif tag == 'variable':
+            elif tag == "variable":
                 # Only count and process if it belongs to our target cluster
                 if self.CLUSTER_TARGET not in path:
                     continue
@@ -102,58 +105,66 @@ class SomeipFFParser(BaseParser):
 
     def _process_variable_hierarchical(self, var_node: etree.Element, path: List[str]):
         """Nests signals into INTERFACES or GENERAL_SIGNALS with bit metadata."""
-        var_name = var_node.get('name', '')
+        var_name = var_node.get("name", "")
         db_name = "::".join(path + [var_name])
 
-        role = "PROVIDED" if "PROVIDED_SERVICES" in path else "CONSUMED" if "CONSUMED_SERVICES" in path else "N/A"
+        role = (
+            "PROVIDED"
+            if "PROVIDED_SERVICES" in path
+            else "CONSUMED"
+            if "CONSUMED_SERVICES" in path
+            else "N/A"
+        )
         raw_node = path[2] if len(path) > 2 else "GENERAL"
-        node_clean = raw_node.replace('N_', '', 1) if raw_node.startswith('N_') else raw_node
+        node_clean = raw_node.replace("N_", "", 1) if raw_node.startswith("N_") else raw_node
 
         interface_name = "N/A"
         i_type = "GENERAL"
 
         if "METHODS" in path:
             idx = path.index("METHODS")
-            if len(path) > idx + 1: interface_name = path[idx + 1]
+            if len(path) > idx + 1:
+                interface_name = path[idx + 1]
             i_type = "METHOD"
         elif "EVENTGROUPS" in path or "EVENT_GROUPS" in path:
             marker = "EVENTGROUPS" if "EVENTGROUPS" in path else "EVENT_GROUPS"
             idx = path.index(marker)
-            if len(path) > idx + 1: interface_name = path[idx + 1]
+            if len(path) > idx + 1:
+                interface_name = path[idx + 1]
             i_type = "EVENT_GROUP"
 
-        raw_encoding = var_node.get('encoding', '65001')
-        is_signed = (raw_encoding == "65000")
+        raw_encoding = var_node.get("encoding", "65001")
+        is_signed = raw_encoding == "65000"
 
-        raw_bitcount = var_node.get('bitcount') or var_node.get('bitlength')
+        raw_bitcount = var_node.get("bitcount") or var_node.get("bitlength")
         bit_count = int(raw_bitcount) if raw_bitcount and str(raw_bitcount).isdigit() else 0
 
         signal_data = {
             "Signal_DB_Name": db_name,
-            "DataType": var_node.get('type', "N/A"),
+            "DataType": var_node.get("type", "N/A"),
             "BitCount": bit_count,
             "Encoding": raw_encoding,
             "IsSigned": is_signed,
-            "ByteOrder": var_node.get('byteOrder', '0'),
-            "Enums": self._extract_enums(var_node)
+            "ByteOrder": var_node.get("byteOrder", "0"),
+            "Enums": self._extract_enums(var_node),
         }
 
         if i_type != "GENERAL":
             if interface_name not in self.interfaces:
                 sif_ns = next((x for x in path if x.startswith("sif_")), "N/A")
-                parts = sif_ns.split('_')
+                parts = sif_ns.split("_")
                 self.interfaces[interface_name] = {
                     "Type": i_type,
                     "SIF": f"{parts[0]}_{parts[1]}" if len(parts) > 1 else sif_ns,
                     "Version": "_".join(parts[2:]) if len(parts) > 2 else "N/A",
-                    "NODES": {}
+                    "NODES": {},
                 }
 
             if node_clean not in self.interfaces[interface_name]["NODES"]:
                 self.interfaces[interface_name]["NODES"][node_clean] = {
                     "Role": role,
                     "CONTROLS": {},
-                    "PARAMETERS": {}
+                    "PARAMETERS": {},
                 }
 
             category = "CONTROLS" if "CONTROLS" in path else "PARAMETERS"
@@ -165,12 +176,11 @@ class SomeipFFParser(BaseParser):
 
     def _extract_enums(self, var_node: etree.Element) -> Dict[str, str]:
         enums = {}
-        vt = var_node.find('valuetable')
+        vt = var_node.find("valuetable")
         if vt is not None:
-            for entry in vt.findall('valuetableentry'):
-                val = entry.get('value')
-                desc = entry.get('description')
+            for entry in vt.findall("valuetableentry"):
+                val = entry.get("value")
+                desc = entry.get("description")
                 if val is not None:
                     enums[val] = desc
         return enums
-

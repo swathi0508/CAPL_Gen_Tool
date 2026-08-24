@@ -6,7 +6,8 @@ from jinja2 import Environment, FileSystemLoader
 
 from logger import log
 
-pd.set_option('future.no_silent_downcasting', True)
+pd.set_option("future.no_silent_downcasting", True)
+
 
 class CaplCampaignGenerator:
     def __init__(self, template_dir):
@@ -18,12 +19,16 @@ class CaplCampaignGenerator:
             # Force everything to Upper, then specifically replace "_TO_" with "_to_"
             clean_category = category.upper().strip()
             # This ensures CAN->SOMEIP becomes CAN_to_SOMEIP
-            clean_target_type = target_type.replace("->", "_to_").upper().replace("_TO_", "_to_").strip()
+            clean_target_type = (
+                target_type.replace("->", "_to_").upper().replace("_TO_", "_to_").strip()
+            )
 
             target_sheet = f"{clean_category}_PARSED"
 
             # Find sheet case-insensitively
-            sheet_name = next((s for s in data_frames.keys() if s.upper() == target_sheet.upper()), None)
+            sheet_name = next(
+                (s for s in data_frames.keys() if s.upper() == target_sheet.upper()), None
+            )
 
             if not sheet_name:
                 log.error(f"Campaign Gen: Sheet '{target_sheet}' not found in loaded data.")
@@ -35,9 +40,9 @@ class CaplCampaignGenerator:
             # --- FIX STARTS HERE ---
             # Strictly filter rows: ensure both column data and input target_type are stripped of whitespace
             # and compared for an exact match.
-            df['TEST_TYPE'] = df['TEST_TYPE'].astype(str).str.strip()
+            df["TEST_TYPE"] = df["TEST_TYPE"].astype(str).str.strip()
             normalized_target = str(target_type).strip()
-            df = df[df['TEST_TYPE'] == normalized_target].copy()
+            df = df[df["TEST_TYPE"] == normalized_target].copy()
             # --- FIX ENDS HERE ---
 
             if df.empty:
@@ -48,7 +53,7 @@ class CaplCampaignGenerator:
             null_variations = ["", " ", "N/A", "n/a", "nan", "NaN", "None", "none", "NULL"]
             df.replace(null_variations, pd.NA, inplace=True)
 
-            rows = df.fillna("MISSING_DATA").astype(str).to_dict(orient='records')
+            rows = df.fillna("MISSING_DATA").astype(str).to_dict(orient="records")
 
             # 3. Final Filename Construction
             file_name = f"{clean_category}_{clean_target_type}_campaign.can"
@@ -58,11 +63,11 @@ class CaplCampaignGenerator:
 
             # 4. Render
             with open(target_dir / file_name, "w") as f:
-                f.write(self.env.get_template("campaign_template.j2").render(
-                    prefix=clean_category,
-                    t_type=target_type,
-                    rows=rows
-                ))
+                f.write(
+                    self.env.get_template("campaign_template.j2").render(
+                        prefix=clean_category, t_type=target_type, rows=rows
+                    )
+                )
 
             log.info(f"Campaign file generated: {file_name}")
 

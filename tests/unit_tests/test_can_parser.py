@@ -8,6 +8,7 @@ from signal_parsers.can_parser import CANSignalParser
 # Clean __pycache__ at test start
 cleanup_pycache()
 
+
 def test_can_parsing(arxml_path: str, json_cache: str):
     """Tests the CAN Parser's ability to extract data from the Unified ARXML."""
     log.info("🚀 Starting CAN Parser Test...")
@@ -28,6 +29,7 @@ def test_can_parsing(arxml_path: str, json_cache: str):
 
     # 2. Test Disk Dump (Simulating Dev Mode)
     parser.to_json_file(json_cache, write_allowed=True)
+
 
 if __name__ == "__main__":
     ARXML_FILE = "../ETH_CAN.arxml"

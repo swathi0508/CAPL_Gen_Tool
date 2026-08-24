@@ -8,6 +8,7 @@ from signal_parsers.aacp_sysvar_parser import AacpSysVarParser
 # Clean __pycache__ at test start to ensure fresh imports
 cleanup_pycache()
 
+
 def test_aacp_sysvar_parsing(vsysvar_path: str, json_cache: str):
     """Tests the AACP SysVar Parser's ability to extract struct data from .vsysvar files."""
     log.info("🚀 Starting AACP SysVar Parser Test...")
@@ -53,6 +54,7 @@ def test_aacp_sysvar_parsing(vsysvar_path: str, json_cache: str):
         log.info(f"✅ Cache successfully dumped to {json_cache}")
     else:
         log.error("❌ Failed to dump cache to disk.")
+
 
 if __name__ == "__main__":
     # Update these paths based on your local directory structure
