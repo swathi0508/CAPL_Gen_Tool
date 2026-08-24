@@ -197,7 +197,8 @@ class CaplCanToCanBasicFuncAndVarsGenerator:
                 )
 
             log.info(
-                f"Generated {len(func_records)} functions into {func_filename} and variables into {var_filename}."
+                f"Generated {len(func_records)} functions into {func_filename} "
+                f" and variables into {var_filename}."
             )
 
         except Exception as e:

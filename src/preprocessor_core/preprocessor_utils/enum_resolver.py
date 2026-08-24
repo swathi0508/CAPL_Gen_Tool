@@ -321,7 +321,7 @@ class EnumResolver:
         try:
             raw = ast.literal_eval(content) if content.startswith("{") else {"0": content}
             return {str(k): v for k, v in raw.items()}
-        except:
+        except (ValueError, SyntaxError):
             return {"0": str(content)}
 
     def _get_keys_bounds(self, d):

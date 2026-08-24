@@ -106,10 +106,12 @@ class CaplCanToSomeipAacpBasicFuncAndVarsGenerator:
             # 1. Combine and Clean Sheets
             target_sheets = ["E2E_CAN_PARSED", "E2E_ETH_PARSED"]
             valid_dfs = []
-            for s in target_sheets:
-                if s in data_frames:
-                    df_temp = data_frames[s].copy()
+
+            for sheet_name in target_sheets:
+                if sheet_name in data_frames:
+                    df_temp = data_frames[sheet_name].copy()
                     df_temp.columns = df_temp.columns.str.strip()
+
                     # Apply test_type filter immediately per sheet
                     df_filtered = df_temp[df_temp["TEST_TYPE"].astype(str).str.strip() == test_type]
                     valid_dfs.append(df_filtered)
@@ -128,71 +130,92 @@ class CaplCanToSomeipAacpBasicFuncAndVarsGenerator:
 
             # 2. STRICT FILTER: Remove all ValueState metadata rows
             actual_value_rows = full_df[
-                ~full_df["ATTRIBUTE_VALUE"].str.contains("ValueState", case=False)
+                ~full_df["ATTRIBUTE_VALUE"].str.contains(
+                    "ValueState",
+                    case=False,
+                )
             ].copy()
 
             if actual_value_rows.empty:
                 log.error(f"No actual value rows found after filtering ValueState for {test_type}.")
                 return
 
-            # --- FIX: Ensure AACP values map to SOMEIP columns for variables_template.j2 ---
-            # This perfectly resolves the Enums = 0 issue!
+            # --- FIX: Ensure AACP values map to SOMEIP columns ---
+            # This resolves the Enums = 0 issue.
             for stat in ["MIN", "MID", "MAX"]:
                 someip_col = f"COMPUTED_SOMEIP_VALUE_{stat}"
                 aacp_col = f"COMPUTED_AACP_VALUE_{stat}"
 
-                if aacp_col in actual_value_rows.columns:
-                    if someip_col not in actual_value_rows.columns:
-                        actual_value_rows[someip_col] = actual_value_rows[aacp_col]
-                    else:
-                        actual_value_rows[someip_col] = actual_value_rows.apply(
-                            lambda row: row[aacp_col]
-                            if pd.isna(row[someip_col])
-                            or str(row[someip_col]).strip() in ["", "MISSING_DATA"]
-                            else row[someip_col],
-                            axis=1,
-                        )
-            # --------------------------------------------------------------------------------
+                if aacp_col not in actual_value_rows.columns:
+                    continue
 
-            # 3. GENERATE UNIQUE MASTER FUNCTIONS (Strict Duplicate Removal Added Here)
+                if someip_col not in actual_value_rows.columns:
+                    actual_value_rows[someip_col] = actual_value_rows[aacp_col]
+                    continue
+
+                # Preserve existing SOMEIP values unless they are
+                # missing, empty, or explicitly marked as MISSING_DATA.
+                missing_mask = actual_value_rows[someip_col].isna() | actual_value_rows[
+                    someip_col
+                ].astype(str).str.strip().isin(["", "MISSING_DATA"])
+
+                actual_value_rows.loc[missing_mask, someip_col] = actual_value_rows.loc[
+                    missing_mask, aacp_col
+                ]
+
+            # 3. GENERATE UNIQUE MASTER FUNCTIONS
             # Ensure safe stripping to catch whitespace variations
             actual_value_rows["BASIC_FUNCTION_NAME"] = (
                 actual_value_rows["BASIC_FUNCTION_NAME"].astype(str).str.strip()
             )
+
             actual_value_rows = actual_value_rows.sort_values(
                 by=["BASIC_FUNCTION_NAME", "CAN_PORT"]
             )
 
-            # Drop duplicates by BASIC_FUNCTION_NAME, keeping only the first one
+            # Drop duplicates by BASIC_FUNCTION_NAME,
+            # keeping only the first one
             func_df = actual_value_rows.drop_duplicates(
-                subset=["BASIC_FUNCTION_NAME"], keep="first"
+                subset=["BASIC_FUNCTION_NAME"],
+                keep="first",
             )
             func_records = func_df.to_dict(orient="records")
 
             # 4. GENERATE VARIABLES
-            # Force IS_ENUM to uppercase string to safely check True/False without typing issues
+            # Force IS_ENUM to uppercase string to safely check
+            # True/False without typing issues
             actual_value_rows["IS_ENUM_STR"] = actual_value_rows["IS_ENUM"].astype(str).str.upper()
 
-            # --- Physical/Standard Variables (Where IS_ENUM is False or Missing) ---
+            # --- Physical/Standard Variables ---
+            # Where IS_ENUM is False or Missing
             std_vars_df = actual_value_rows[actual_value_rows["IS_ENUM_STR"] != "TRUE"].copy()
+
             std_vars = std_vars_df.drop_duplicates(subset=["CAN_PORT"]).to_dict(orient="records")
 
-            # --- Enum Variables (Where IS_ENUM is True) ---
+            # --- Enum Variables ---
+            # Where IS_ENUM is True
             enum_base = actual_value_rows[actual_value_rows["IS_ENUM_STR"] == "TRUE"].copy()
+
             can_enums = enum_base.drop_duplicates(subset=["CAN_PORT"]).to_dict(orient="records")
+
             eth_enums = enum_base.drop_duplicates(
                 subset=["SOMEIP_PORT", "ATTRIBUTE_VALUE"]
             ).to_dict(orient="records")
 
             # --- UNIQUE ETHERNET SIGNALS ---
             all_signals = pd.concat(
-                [full_df["SOMEIP_DB_SIGNAL_NAME"], full_df["SOMEIP_DB_SIGNAL_VALUESTATE"]]
+                [
+                    full_df["SOMEIP_DB_SIGNAL_NAME"],
+                    full_df["SOMEIP_DB_SIGNAL_VALUESTATE"],
+                ]
             )
-            unique_signals = sorted([s for s in all_signals.unique() if s != "MISSING_DATA"])
+
+            unique_signals = sorted(s for s in all_signals.unique() if s != "MISSING_DATA")
 
             # 5. RENDER OUTPUTS
             f_dir = Path(output_root) / "BASIC_FUNCTIONS"
             v_dir = Path(output_root) / "VARIABLES"
+
             os.makedirs(f_dir, exist_ok=True)
             os.makedirs(v_dir, exist_ok=True)
 
@@ -214,8 +237,9 @@ class CaplCanToSomeipAacpBasicFuncAndVarsGenerator:
                 )
 
             log.info(
-                f"Generated {len(func_records)} functions into {func_filename} and variables into {var_filename}."
+                f"Generated {len(func_records)} functions into "
+                f"{func_filename} and variables into {var_filename}."
             )
 
         except Exception as e:
-            log.exception(f"Logic Gen failed: {e}")
+            log.exception(f"Failed to render CAN-to-SOMEIP AACP output: {e}")

@@ -6,19 +6,24 @@ from jinja2 import Environment, FileSystemLoader
 
 from logger import log
 
+pd.set_option("future.no_silent_downcasting", True)
 
-class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
+
+class CaplSomeipFFToCanBasicFuncAndVarsGenerator:
     def __init__(self, template_dir: str = "."):
         """
         Initializes the generator and sets up the Jinja2 environment.
         """
-        self.env = Environment(loader=FileSystemLoader(template_dir))
+        self.env = Environment(
+            loader=FileSystemLoader(template_dir), trim_blocks=True, lstrip_blocks=True
+        )
         self.var_template = "variables_template.j2"
-        self.func_template = "can_to_someipff_basic_functions_template.j2"
+        self.func_template = "someipff_to_can_basic_functions_template.j2"
 
     def render(self, data_frames: dict, test_type: str, output_root: str):
         """
-        Reads from provided dataframes, processes target rows matching test_type, and renders the CAPL files.
+        Reads from provided dataframes, processes target rows
+        matching test_type, and renders the CAPL files.
         """
         log.info(f"Processing data for {test_type}...")
 
@@ -60,6 +65,9 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
             is_enum_str = str(row.get("IS_ENUM", "FALSE")).strip().upper()
             is_enum = is_enum_str == "TRUE"
 
+            is_topic_attr_str = str(row.get("SOMEIP_TOPIC_ATTRIBUTE", "FALSE")).strip().lower()
+            is_topic_attr = is_topic_attr_str == "value_state"
+
             # Safely extract CAN limits
             can_min = row.get("COMPUTED_CAN_VALUE_MIN", 0.0)
             can_mid = row.get("COMPUTED_CAN_VALUE_MID", 0.0)
@@ -79,7 +87,8 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
             can_offset = row.get("CAN_OFFSET", 0)
             can_res = row.get("CAN_RESOLUTION", 1)
 
-            # --- FIX: Ensure SOMEIP FF values map to generic SOMEIP columns for variables_template.j2 ---
+            # --- FIX: Ensure SOMEIP FF values map to generic SOMEIP columns
+            #    for variables_template.j2 ---
             mapped_eth_min = (
                 eth_min if not pd.isna(eth_min) else row.get("COMPUTED_SOMEIP_VALUE_MIN", 0.0)
             )
@@ -89,7 +98,13 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
             mapped_eth_max = (
                 eth_max if not pd.isna(eth_max) else row.get("COMPUTED_SOMEIP_VALUE_MAX", 0.0)
             )
-            # ---------------------------------------------------------------------------------------------
+            # -----------------------------------------------------------------------------------
+
+            # Datatype from SOMEIP_FF_DATATYPE column
+            datatype = str(row.get("SOMEIP_FF_DATATYPE", "")).strip().lower()
+            if not datatype or datatype == "nan" or datatype == "missing_data":
+                resolution = str(row.get("SOMEIP_RESOLUTION", "1"))
+                datatype = "float" if "." in resolution else "int"
 
             # Store unique variables required for the 'variables' block template
             if not is_enum:
@@ -106,22 +121,23 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
                         "COMPUTED_SOMEIP_VALUE_MAX": mapped_eth_max,
                     }
             else:
-                if can_port not in can_enums_dict:
-                    can_enums_dict[can_port] = {
-                        "CAN_PORT": can_port,
-                        "COMPUTED_CAN_VALUE_MIN": can_min,
-                        "COMPUTED_CAN_VALUE_MID": can_mid,
-                        "COMPUTED_CAN_VALUE_MAX": can_max,
-                    }
-                eth_key = f"{someip_port}_{attr_val}"
-                if eth_key not in eth_enums_dict:
-                    eth_enums_dict[eth_key] = {
-                        "SOMEIP_PORT": someip_port,
-                        "ATTRIBUTE_VALUE": attr_val,
-                        "COMPUTED_SOMEIP_VALUE_MIN": mapped_eth_min,
-                        "COMPUTED_SOMEIP_VALUE_MID": mapped_eth_mid,
-                        "COMPUTED_SOMEIP_VALUE_MAX": mapped_eth_max,
-                    }
+                if not is_topic_attr:
+                    if can_port not in can_enums_dict:
+                        can_enums_dict[can_port] = {
+                            "CAN_PORT": can_port,
+                            "COMPUTED_CAN_VALUE_MIN": can_min,
+                            "COMPUTED_CAN_VALUE_MID": can_mid,
+                            "COMPUTED_CAN_VALUE_MAX": can_max,
+                        }
+                    eth_key = f"{someip_port}_{attr_val}"
+                    if eth_key not in eth_enums_dict:
+                        eth_enums_dict[eth_key] = {
+                            "SOMEIP_PORT": someip_port,
+                            "ATTRIBUTE_VALUE": attr_val,
+                            "COMPUTED_SOMEIP_VALUE_MIN": mapped_eth_min,
+                            "COMPUTED_SOMEIP_VALUE_MID": mapped_eth_mid,
+                            "COMPUTED_SOMEIP_VALUE_MAX": mapped_eth_max,
+                        }
 
             # Extracting specific Signal Name and Namespace details robustly
             full_sysvar = str(row.get("SOMEIP_DB_SIGNAL_NAME", "Namespace::SignalName"))
@@ -136,6 +152,7 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
 
             # Extracting the ValueState parameters
             someip_ff_valuestate = str(row.get("SOMEIP_FF_DB_SIGNAL_VALUESTATE", "")).strip()
+            someip_ff_control = str(row.get("SOMEIP_FF_DB_SIGNAL_CONTROL", "")).strip()
 
             # --- NEW: Extracting the specific Namespace and Variable parameters ---
             someip_ff_signame_namespace = str(row.get("SOMEIP_FF_SIGNAME_NAMESPACE", "")).strip()
@@ -146,12 +163,8 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
             someip_ff_sigvaluestate_variable = str(
                 row.get("SOMEIP_FF_SIGVALUESTATE_VARIABLE", "")
             ).strip()
-
-            # Datatype from SOMEIP_FF_DATATYPE column
-            datatype = str(row.get("SOMEIP_FF_DATATYPE", "")).strip().lower()
-            if not datatype or datatype == "nan" or datatype == "missing_data":
-                resolution = str(row.get("SOMEIP_RESOLUTION", "1"))
-                datatype = "float" if "." in resolution else "int"
+            someip_ff_control_namespace = str(row.get("SOMEIP_FF_CONTROL_NAMESPACE", "")).strip()
+            someip_ff_control_variable = str(row.get("SOMEIP_FF_CONTROL_VARIABLE", "")).strip()
 
             # Preparing requirement object for the basic function template
             requirements.append(
@@ -162,19 +175,23 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
                     "ATTRIBUTE_VALUE": attr_val,
                     "CAN_DB_SIGNAL_NAME": str(row.get("CAN_DB_SIGNAL_NAME", "Unknown_CAN_Signal")),
                     "IS_ENUM": is_enum_str,
+                    "SOMEIP_TOPIC_ATTRIBUTE": is_topic_attr_str,
                     "SOMEIP_DB_SIGNAL_NAME": full_sysvar,
                     "SOMEIP_FF_DB_SIGNAL_NAME": someip_ff_signal_name,
                     "SOMEIP_NS": ns,
                     "SOMEIP_NAME": name,
-                    "DATATYPE": datatype,
+                    "SOMEIP_FF_DATATYPE": datatype,
                     "COMPUTED_SOMEIP_FF_VALUE_MIN": eth_min,
                     "COMPUTED_SOMEIP_FF_VALUE_MID": eth_mid,
                     "COMPUTED_SOMEIP_FF_VALUE_MAX": eth_max,
                     "SOMEIP_FF_DB_SIGNAL_VALUESTATE": someip_ff_valuestate,
+                    "SOMEIP_FF_DB_SIGNAL_CONTROL": someip_ff_control,
                     "SOMEIP_FF_SIGNAME_NAMESPACE": someip_ff_signame_namespace,
                     "SOMEIP_FF_SIGNAME_VARIABLE": someip_ff_signame_variable,
                     "SOMEIP_FF_SIGVALUESTATE_NAMESPACE": someip_ff_sigvaluestate_namespace,
                     "SOMEIP_FF_SIGVALUESTATE_VARIABLE": someip_ff_sigvaluestate_variable,
+                    "SOMEIP_FF_CONTROL_NAMESPACE": someip_ff_control_namespace,
+                    "SOMEIP_FF_CONTROL_VARIABLE": someip_ff_control_variable,
                     "labels": ["Mid", "Min", "Max"],
                 }
             )
@@ -200,8 +217,8 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
         os.makedirs(f_dir, exist_ok=True)
         os.makedirs(v_dir, exist_ok=True)
 
-        func_filename = "can_to_someip_ff_basic_functions.cin"
-        var_filename = "can_to_someip_ff_Variables.cin"
+        func_filename = "someip_ff_to_can_basic_functions.cin"
+        var_filename = "someip_ff_to_can_Variables.cin"
 
         output_path = str(f_dir / func_filename)
         var_output_file = str(v_dir / var_filename)
@@ -227,7 +244,8 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
                 f_funcs.write(rendered_funcs)
 
             log.info(
-                f"Generated {len(unique_requirements)} functions into {func_filename} and variables into {var_filename}."
+                f"Generated {len(unique_requirements)} functions into {func_filename} "
+                f"and variables into {var_filename}."
             )
 
         except Exception as e:

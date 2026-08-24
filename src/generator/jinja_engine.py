@@ -3,31 +3,37 @@ import time
 from datetime import timedelta
 from pathlib import Path
 
+from logger import log
+
 # Ensure the src path is in sys.path for relative imports
 current_file = Path(__file__).resolve()
 src_path = current_file.parent.parent
+
 if str(src_path) not in sys.path:
     sys.path.append(str(src_path))
 
-from generator.CaplCampaignGenerator import CaplCampaignGenerator
-from generator.CaplCanToCanBasicFuncAndVarsGenerator import CaplCanToCanBasicFuncAndVarsGenerator
-from generator.CaplCanToSomeipAacpBasicFuncAndVarsGenerator import (
+from generator.capl_campaign_generator import CaplCampaignGenerator  # noqa: E402
+from generator.capl_can_to_can_basic_func_and_vars_generator import (  # noqa: E402
+    CaplCanToCanBasicFuncAndVarsGenerator,
+)
+from generator.capl_can_to_someip_aacp_basic_func_and_vars_generator import (  # noqa: E402
     CaplCanToSomeipAacpBasicFuncAndVarsGenerator,
 )
-from generator.CaplCanToSomeipBasicFuncAndVarsGenerator import (
+from generator.capl_can_to_someip_basic_func_and_vars_generator import (  # noqa: E402
     CaplCanToSomeipBasicFuncAndVarsGenerator,
 )
-from generator.CaplCanToSomeipFFBasicFuncAndVarsGenerator import (
+from generator.capl_can_to_someip_ff_basic_func_and_vars_generator import (  # noqa: E402
     CaplCanToSomeipFFBasicFuncAndVarsGenerator,
 )
-from generator.CaplSignalValidationLibGenerator import CaplSignalValidationLibGenerator
-from generator.CaplSomeipFFToCanBasicFuncAndVarsGenerator import (
+from generator.capl_signal_validation_lib_generator import (  # noqa: E402
+    CaplSignalValidationLibGenerator,
+)
+from generator.capl_someip_ff_to_can_basic_func_and_vars_generator import (  # noqa: E402
     CaplSomeipFFToCanBasicFuncAndVarsGenerator,
 )
-from generator.CaplSomeipToCanBasicFuncAndVarsGenerator import (
+from generator.capl_someip_to_can_basic_func_and_vars_generator import (  # noqa: E402
     CaplSomeipToCanBasicFuncAndVarsGenerator,
 )
-from logger import log
 
 
 class JinjaEngine:
@@ -84,7 +90,9 @@ class JinjaEngine:
             camp_gen.generate(data_frames, category, test_type, self.output_dir)
 
             log.info(
-                f"--- TOTAL GENERATION TIME: {str(timedelta(seconds=round(time.time() - overall_start)))} ---"
+                f"--- TOTAL GENERATION TIME: {
+                    str(timedelta(seconds=round(time.time() - overall_start)))
+                } ---"
             )
         except Exception as e:
             log.exception(f"Engine Failure: {e}")

@@ -56,7 +56,8 @@ class CommonProcessor:
         except (ValueError, TypeError):
             return {k: "N/A" for k in ["MIN", "MID", "MAX"]}
 
-    # --- STEP 1: Copy all necessary columns from Original requirements sheet into intermediate sheet ---
+    # --- STEP 1: Copy all necessary columns from Original requirements sheet
+    #    into intermediate sheet ---
     def copy_requirement_columns(self, df_in: pd.DataFrame, sheet_name: str) -> pd.DataFrame:
         log.info(f"Step 1: Extracting requirement columns for sheet '{sheet_name}'")
         try:

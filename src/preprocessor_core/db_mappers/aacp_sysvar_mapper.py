@@ -89,7 +89,8 @@ class AacpSysVarMapper(BaseMapper):
                     clean_attr_lower = matched_attr_key.lower()
 
                     if "value_state" in clean_attr_lower or "valuestate" in clean_attr_lower:
-                        # If searching specifically for a value_state attribute, the main name IS the value_state
+                        # If searching specifically for a value_state attribute,
+                        # the main name is the value_state
                         res["AACP_DB_SIGNAL_VALUESTATE"] = signal_db_name
                     else:
                         # Dynamic sibling matching strategy for non-valuestate attributes
