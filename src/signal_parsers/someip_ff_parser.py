@@ -1,11 +1,13 @@
 import os
 import time
-from typing import Any, Dict, List
-from lxml import etree
 from datetime import timedelta
+from typing import Any, Dict, List
 
-from signal_parsers.base_parser import BaseParser
+from lxml import etree
+
 from logger import log
+from signal_parsers.base_parser import BaseParser
+
 
 class SomeipFFParser(BaseParser):
     """
@@ -13,7 +15,7 @@ class SomeipFFParser(BaseParser):
     Structure: Summary, INTERFACES, and GENERAL_SIGNALS.
     Includes IsSigned metadata based on encoding ID.
     """
-    
+
     CLUSTER_TARGET = "IL_EthernetCluster"
 
     def __init__(self, file_path: str):
@@ -29,7 +31,7 @@ class SomeipFFParser(BaseParser):
         """
         start_time = time.time()
         log.info(f"🚀 Parsing SOME/IP FF XML (Hierarchical Mode): {self.file_path}")
-        
+
         if not os.path.exists(self.file_path):
             log.error(f"❌ File not found: {self.file_path}")
             return {}
@@ -43,17 +45,17 @@ class SomeipFFParser(BaseParser):
             # Reset internal containers
             self.interfaces = {}
             self.general_signals = {}
-            total_vars = [0] 
+            total_vars = [0]
 
             self._walk_namespace(root, [], total_vars)
 
             # --- Fixed Summary Logic ---
             elapsed = str(timedelta(seconds=int(time.time() - start_time))).zfill(8)
             total = total_vars[0]
-            
-            # In this parser, if a signal is counted, it has been successfully 
+
+            # In this parser, if a signal is counted, it has been successfully
             # placed into either INTERFACES or GENERAL_SIGNALS.
-            resolved = total 
+            resolved = total
 
             self.summary_stats = {
                 "Source_File_Name": os.path.basename(self.file_path),
@@ -73,7 +75,7 @@ class SomeipFFParser(BaseParser):
                 "INTERFACES": self.interfaces,
                 "GENERAL_SIGNALS": self.general_signals
             }
-            
+
             log.info(f"✅ Successfully extracted {total} signals across {len(self.interfaces)} interfaces.")
             return self._parsed_data
 
@@ -85,16 +87,16 @@ class SomeipFFParser(BaseParser):
         """Recursive walk through XML namespaces."""
         for child in element:
             tag = etree.QName(child).localname
-            
+
             if tag == 'namespace':
                 name = child.get('name', '')
                 self._walk_namespace(child, path + [name] if name else path, count)
-            
+
             elif tag == 'variable':
                 # Only count and process if it belongs to our target cluster
                 if self.CLUSTER_TARGET not in path:
                     continue
-                
+
                 count[0] += 1
                 self._process_variable_hierarchical(child, path)
 
@@ -102,14 +104,14 @@ class SomeipFFParser(BaseParser):
         """Nests signals into INTERFACES or GENERAL_SIGNALS with bit metadata."""
         var_name = var_node.get('name', '')
         db_name = "::".join(path + [var_name])
-        
+
         role = "PROVIDED" if "PROVIDED_SERVICES" in path else "CONSUMED" if "CONSUMED_SERVICES" in path else "N/A"
         raw_node = path[2] if len(path) > 2 else "GENERAL"
         node_clean = raw_node.replace('N_', '', 1) if raw_node.startswith('N_') else raw_node
 
         interface_name = "N/A"
         i_type = "GENERAL"
-        
+
         if "METHODS" in path:
             idx = path.index("METHODS")
             if len(path) > idx + 1: interface_name = path[idx + 1]
@@ -122,7 +124,7 @@ class SomeipFFParser(BaseParser):
 
         raw_encoding = var_node.get('encoding', '65001')
         is_signed = (raw_encoding == "65000")
-        
+
         raw_bitcount = var_node.get('bitcount') or var_node.get('bitlength')
         bit_count = int(raw_bitcount) if raw_bitcount and str(raw_bitcount).isdigit() else 0
 
@@ -146,14 +148,14 @@ class SomeipFFParser(BaseParser):
                     "Version": "_".join(parts[2:]) if len(parts) > 2 else "N/A",
                     "NODES": {}
                 }
-            
+
             if node_clean not in self.interfaces[interface_name]["NODES"]:
                 self.interfaces[interface_name]["NODES"][node_clean] = {
                     "Role": role,
                     "CONTROLS": {},
                     "PARAMETERS": {}
                 }
-            
+
             category = "CONTROLS" if "CONTROLS" in path else "PARAMETERS"
             self.interfaces[interface_name]["NODES"][node_clean][category][var_name] = signal_data
         else:

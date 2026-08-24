@@ -134,26 +134,26 @@ class CaplGenGUI(QMainWindow):
     def _create_input_row(self, label_text, edit_obj, btn_obj):
         row = QWidget()
         # 1. Let the row expand horizontally, but keep the height consistent
-        row.setMinimumHeight(32) 
-        
+        row.setMinimumHeight(32)
+
         layout = QHBoxLayout(row)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(self.SP_H)
-        
+
         # 2. The Label: Use MinimumWidth instead of FixedSize
         lbl = QLabel(label_text)
         lbl.setMinimumWidth(self.LBL_W) # Allows Linux fonts to push the boundary wider if needed
         lbl.setFixedHeight(32)
         layout.addWidget(lbl)
-        
+
         # 3. The LineEdit: Use stretch=1 so it acts like a spring and fills all remaining space
         edit_obj.setFixedHeight(32)
         layout.addWidget(edit_obj, stretch=1)
-        
+
         # 4. The Button: Buttons are usually safe to keep fixed so they don't look warped
         btn_obj.setFixedSize(self.BROWSE_W, 32)
         layout.addWidget(btn_obj)
-        
+
         return row
 
     def _build_input_section(self):
@@ -198,36 +198,36 @@ class CaplGenGUI(QMainWindow):
     def _build_config_section(self):
         container = QWidget()
         container.setMinimumHeight(40) # Allow horizontal stretch, fix vertical
-        
+
         layout = QHBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        
+
         config_left = QWidget()
         config_left.setMinimumHeight(32)
-        
+
         c_layout = QHBoxLayout(config_left)
         c_layout.setContentsMargins(0, 0, 0, 0)
         c_layout.setSpacing(self.SP_H)
-        
+
         # --- Label 1: Let it size itself naturally ---
         lbl_cat = QLabel("Test Category:")
         lbl_cat.setFixedHeight(32)
         c_layout.addWidget(lbl_cat)
-        
+
         # --- Combo 1: Add stretch=1 to consume leftover space ---
         self.cat_combo = QComboBox()
         self.cat_combo.addItems(["E2E_CAN", "E2E_ETH"])
         self.cat_combo.setFixedHeight(32)
         c_layout.addWidget(self.cat_combo, stretch=1)
-        
+
         # --- Label 2: Add a small spacer before it, let it size naturally ---
-        c_layout.addSpacing(15) 
+        c_layout.addSpacing(15)
         lbl_typ = QLabel("Test Type:")
         lbl_typ.setFixedHeight(32)
         lbl_typ.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         c_layout.addWidget(lbl_typ)
-        
+
         # --- Combo 2: Add stretch=1 to consume leftover space ---
         self.typ_combo = QComboBox()
         self.typ_combo.setFixedHeight(32)
@@ -237,9 +237,9 @@ class CaplGenGUI(QMainWindow):
         self._update_test_types(self.cat_combo.currentText())
 
         # Give the left configuration block a stretch factor so it pushes the Generate button to the right
-        layout.addWidget(config_left, stretch=1) 
+        layout.addWidget(config_left, stretch=1)
         layout.addSpacing(self.ACTION_GAP)
-        
+
         # Generate Button (Safe to keep FixedSize so it doesn't warp)
         self.btn_gen = QPushButton("GENERATE SCRIPTS")
         self.btn_gen.setEnabled(False)
@@ -248,7 +248,7 @@ class CaplGenGUI(QMainWindow):
         self.btn_gen.setStyleSheet("background-color: #3b3e40; color: #94a3b8; border-radius: 4px; border: none;")
         self.btn_gen.clicked.connect(self.run_generation)
         layout.addWidget(self.btn_gen, alignment=Qt.AlignmentFlag.AlignVCenter)
-        
+
         self.main_layout.addWidget(container)
 
     def _update_test_types(self, category):
@@ -302,7 +302,7 @@ class CaplGenGUI(QMainWindow):
 
                 pre_time = self._format_time(time.time() - pre_start)
                 self.signals.log_signal.emit(f"✅ Requirements mapping complete. (Time: {pre_time})")
-                
+
                 total_time = self._format_time(time.time() - total_start_time)
                 self.signals.log_signal.emit(f"🏁 Pre-Processing Complete. (Total Elapsed Time: {total_time})")
                 self.signals.finished_signal.emit()

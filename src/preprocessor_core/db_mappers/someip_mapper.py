@@ -1,6 +1,9 @@
-import pandas as pd
 import math
+
+import pandas as pd
+
 from preprocessor_core.db_mappers.base_mapper import BaseMapper
+
 
 class SomeIPMapper(BaseMapper):
     def _load_database(self) -> dict:
@@ -19,7 +22,7 @@ class SomeIPMapper(BaseMapper):
     def get_signal_data(self, attr_value: str, someip_port: str = None) -> dict:
         cols = [
             "SOMEIP_DB_SIGNAL_NAME", "SOMEIP_ENUM", "SOMEIP_MIN_PHY",
-            "SOMEIP_MID_PHY", "SOMEIP_MAX_PHY", "SOMEIP_OFFSET", 
+            "SOMEIP_MID_PHY", "SOMEIP_MAX_PHY", "SOMEIP_OFFSET",
             "SOMEIP_RESOLUTION", "SOMEIP_DB_SIGNAL_VALUESTATE"
         ]
 
@@ -38,7 +41,7 @@ class SomeIPMapper(BaseMapper):
             target_event = "_".join(parts[math.ceil(len(parts)/2):]).strip()
         else:
             target_event = port_val
-        
+
         target_event_lower = target_event.lower()
 
         # --- Database Lookup ---
@@ -67,22 +70,22 @@ class SomeIPMapper(BaseMapper):
                 if attr_lower.endswith(suffix):
                     stemmed_attr = attr_lower[:len(attr_lower) - len(suffix)].rstrip("_")
                     break
-            
+
             target_vs_append_1 = f"{attr_str}ValueState".lower()
             target_vs_append_2 = f"{attr_str}value_state".lower()
             target_vs_stemmed = f"{stemmed_attr}valuestate"
-            
+
             any_vs_in_event = None
             fuzzy_vs_match = None
 
             for data in self.raw_db_values:
                 if data.get("Event") == db_event_exact:
                     curr_attr_lower = str(data.get("Attribute_Value", "")).strip().lower()
-                    
+
                     if curr_attr_lower in [target_vs_append_1, target_vs_append_2, target_vs_stemmed]:
                         vs_attr_full_path = data.get("Signal_String")
                         break
-                    
+
                     if "valuestate" in curr_attr_lower:
                         if stemmed_attr in curr_attr_lower or curr_attr_lower.startswith(stemmed_attr[:5]):
                             fuzzy_vs_match = data.get("Signal_String")
@@ -98,7 +101,7 @@ class SomeIPMapper(BaseMapper):
         min_val = sig_data.get("Min")
         max_val = sig_data.get("Max")
         mid_val = sig_data.get("Mid")
-        
+
         is_bool = str(sig_data.get("DataType", "")).lower() == "boolean"
         if is_bool and str(min_val).upper() == "N/A" and str(max_val).upper() == "N/A":
             min_val, mid_val, max_val = 0, 1, 1

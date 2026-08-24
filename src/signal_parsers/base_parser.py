@@ -36,14 +36,14 @@ class BaseParser(ABC):
 
         data = self.to_json_dict()
 
-        # SMART WRAPPER: If a custom parser (AACP/SomeipFF) already built a Summary, 
+        # SMART WRAPPER: If a custom parser (AACP/SomeipFF) already built a Summary,
         # dump it directly to avoid double-wrapping it!
         if "Summary" in data:
             output_data = data
         else:
             # Standard generic wrapping for flat dictionaries (CAN/SOMEIP)
             total = len(data)
-            
+
             # --- FIX 1: Smart Resolved Counter ---
             resolved = 0
             for v in data.values():
@@ -74,7 +74,7 @@ class BaseParser(ABC):
             # 🔒 OBFUSCATION: Convert to string -> Compress to binary -> Write
             json_str = json.dumps(output_data, ensure_ascii=False)
             compressed_blob = zlib.compress(json_str.encode('utf-8'))
-            
+
             with open(output_path, 'wb') as f:
                 f.write(compressed_blob)
             log.info(f"✅ Secure binary cache written to: {output_path}")

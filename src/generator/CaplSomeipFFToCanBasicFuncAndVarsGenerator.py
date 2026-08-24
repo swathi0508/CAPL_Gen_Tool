@@ -14,8 +14,8 @@ class CaplSomeipFFToCanBasicFuncAndVarsGenerator:
         Initializes the generator and sets up the Jinja2 environment.
         """
         self.env = Environment(
-            loader=FileSystemLoader(template_dir), 
-            trim_blocks=True, 
+            loader=FileSystemLoader(template_dir),
+            trim_blocks=True,
             lstrip_blocks=True
         )
         self.var_template = "variables_template.j2"
@@ -26,7 +26,7 @@ class CaplSomeipFFToCanBasicFuncAndVarsGenerator:
         Reads from provided dataframes, processes target rows matching test_type, and renders the CAPL files.
         """
         log.info(f"Processing data for {test_type}...")
-        
+
         # 1. Combine and Extract DataFrames from the dictionary
         target_sheets = ['E2E_CAN_PARSED', 'E2E_ETH_PARSED']
         valid_dfs = []
@@ -43,7 +43,7 @@ class CaplSomeipFFToCanBasicFuncAndVarsGenerator:
         df = pd.concat(valid_dfs, ignore_index=True)
 
         requirements = []
-        
+
         # Dictionaries to filter out duplicate variables across requirements
         standard_vars_dict = {}
         can_enums_dict = {}
@@ -57,7 +57,7 @@ class CaplSomeipFFToCanBasicFuncAndVarsGenerator:
             # ----------------------------------------------------------------
 
             basic_func_name = str(row.get('BASIC_FUNCTION_NAME', f'Test_{index}')).strip()
-            
+
             can_port = str(row.get('CAN_PORT', f'UnknownCAN_{index}')).strip()
             someip_port = str(row.get('SOMEIP_PORT', f'UnknownETH_{index}')).strip()
             attr_val = str(row.get('ATTRIBUTE_VALUE', f'UnknownAttr_{index}')).strip()
@@ -72,7 +72,7 @@ class CaplSomeipFFToCanBasicFuncAndVarsGenerator:
             can_min = row.get('COMPUTED_CAN_VALUE_MIN', 0.0)
             can_mid = row.get('COMPUTED_CAN_VALUE_MID', 0.0)
             can_max = row.get('COMPUTED_CAN_VALUE_MAX', 0.0)
-            
+
             # Safely extract SOMEIP FF explicit limits from the updated columns
             eth_min = row.get('COMPUTED_SOMEIP_FF_VALUE_MIN', row.get('COMPUTED_SOMEIP_VALUE_MIN', 0.0))
             eth_mid = row.get('COMPUTED_SOMEIP_FF_VALUE_MID', row.get('COMPUTED_SOMEIP_VALUE_MID', 0.0))
@@ -121,12 +121,12 @@ class CaplSomeipFFToCanBasicFuncAndVarsGenerator:
             sysvar_parts = full_sysvar.split('::')
             ns = "::".join(sysvar_parts[:-1]) if len(sysvar_parts) > 1 else "EthernetCluster"
             name = sysvar_parts[-1]
-            
+
             # Extracting the FF explicit DB signal name
             someip_ff_signal_name = str(row.get('SOMEIP_FF_DB_SIGNAL_NAME', '')).strip()
             if not someip_ff_signal_name or someip_ff_signal_name == 'nan':
                 someip_ff_signal_name = full_sysvar # Safe fallback if empty
-                
+
             # Extracting the ValueState parameters
             someip_ff_valuestate = str(row.get('SOMEIP_FF_DB_SIGNAL_VALUESTATE', '')).strip()
             someip_ff_control = str(row.get('SOMEIP_FF_DB_SIGNAL_CONTROL', '')).strip()
@@ -149,13 +149,13 @@ class CaplSomeipFFToCanBasicFuncAndVarsGenerator:
                 'IS_ENUM': is_enum_str,
                 'SOMEIP_TOPIC_ATTRIBUTE': is_topic_attr_str,
                 'SOMEIP_DB_SIGNAL_NAME': full_sysvar,
-                'SOMEIP_FF_DB_SIGNAL_NAME': someip_ff_signal_name, 
+                'SOMEIP_FF_DB_SIGNAL_NAME': someip_ff_signal_name,
                 'SOMEIP_NS': ns,
                 'SOMEIP_NAME': name,
-                'SOMEIP_FF_DATATYPE': datatype, 
-                'COMPUTED_SOMEIP_FF_VALUE_MIN': eth_min, 
-                'COMPUTED_SOMEIP_FF_VALUE_MID': eth_mid, 
-                'COMPUTED_SOMEIP_FF_VALUE_MAX': eth_max, 
+                'SOMEIP_FF_DATATYPE': datatype,
+                'COMPUTED_SOMEIP_FF_VALUE_MIN': eth_min,
+                'COMPUTED_SOMEIP_FF_VALUE_MID': eth_mid,
+                'COMPUTED_SOMEIP_FF_VALUE_MAX': eth_max,
                 'SOMEIP_FF_DB_SIGNAL_VALUESTATE': someip_ff_valuestate,
                 'SOMEIP_FF_DB_SIGNAL_CONTROL': someip_ff_control,
                 'SOMEIP_FF_SIGNAME_NAMESPACE': someip_ff_signame_namespace,
@@ -212,7 +212,7 @@ class CaplSomeipFFToCanBasicFuncAndVarsGenerator:
             # 3. Save to separate files (Variables in one, Functions in the other)
             with open(var_output_file, 'w') as f_vars:
                 f_vars.write(rendered_vars)
-                
+
             with open(output_path, 'w') as f_funcs:
                 f_funcs.write(rendered_funcs)
 

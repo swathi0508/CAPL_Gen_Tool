@@ -1,13 +1,16 @@
-import pandas as pd
 import math
+
+import pandas as pd
+
 from preprocessor_core.db_mappers.base_mapper import BaseMapper
+
 
 class SomeIPFFSysVarMapper(BaseMapper):
     def _load_database(self) -> dict:
         """Flatten the nested INTERFACES DB into a flat list for searching."""
         raw_db = super()._load_database()
         self.raw_db_values = []
-        
+
         interfaces = raw_db.get("INTERFACES", {})
         for iface_name, iface_data in interfaces.items():
             nodes = iface_data.get("NODES", {})
@@ -15,7 +18,7 @@ class SomeIPFFSysVarMapper(BaseMapper):
                 role = str(node_data.get("Role", "")).strip().upper()
                 params = node_data.get("PARAMETERS", {})
                 controls = node_data.get("CONTROLS", {})
-                
+
                 # Pre-fetch Control Signal
                 ctrl_sig = next((c.get("Signal_DB_Name") for c in controls.values() if c.get("Signal_DB_Name")), None)
 
@@ -33,10 +36,10 @@ class SomeIPFFSysVarMapper(BaseMapper):
 
     def resolve(self, df_subset: pd.DataFrame) -> pd.DataFrame:
         cols = [
-            "SOMEIP_FF_DB_SIGNAL_NAME", "SOMEIP_FF_DB_SIGNAL_VALUESTATE", 
+            "SOMEIP_FF_DB_SIGNAL_NAME", "SOMEIP_FF_DB_SIGNAL_VALUESTATE",
             "SOMEIP_FF_DB_SIGNAL_CONTROL", "SOMEIP_FF_ENUM", "SOMEIP_FF_DATATYPE",
-            "SOMEIP_FF_SIGNAME_NAMESPACE", "SOMEIP_FF_SIGNAME_VARIABLE", 
-            "SOMEIP_FF_SIGVALUESTATE_NAMESPACE", "SOMEIP_FF_SIGVALUESTATE_VARIABLE", 
+            "SOMEIP_FF_SIGNAME_NAMESPACE", "SOMEIP_FF_SIGNAME_VARIABLE",
+            "SOMEIP_FF_SIGVALUESTATE_NAMESPACE", "SOMEIP_FF_SIGVALUESTATE_VARIABLE",
             "SOMEIP_FF_CONTROL_NAMESPACE", "SOMEIP_FF_CONTROL_VARIABLE", "IS_ENUM"
         ]
 
@@ -56,34 +59,34 @@ class SomeIPFFSysVarMapper(BaseMapper):
                 target_iface = port_val
 
             target_role = "PROVIDED" if "->SOMEIP_FF" in str(r.get("TEST_TYPE", "")) else "CONSUMED"
-            
+
             target_node = str(r.get("RUNTIME_ENV_RECEIVER", "")).strip().lower()
             if target_node == "piu_master": target_node = "piu_mst"
-            
+
             target_attr = str(r.get("ATTRIBUTE_VALUE", "")).strip()
 
             # --- 2. Database Lookup Context ---
             sig_data = None
-            parent_siblings = [] 
-            
+            parent_siblings = []
+
             for data in self.raw_db_values:
-                if (data["iface_key"] == target_iface and 
-                    data["node_key"] == target_node and 
+                if (data["iface_key"] == target_iface and
+                    data["node_key"] == target_node and
                     data["role_key"] == target_role):
-                    
+
                     parent_siblings.append(data)
-                    
+
                     if data["attr_key"] == target_attr:
                         sig_data = data
 
             res = {col: "ETH_NOT_FOUND" for col in cols}
-            
+
             # --- 3. Enum logic using _HAS_ENUM style ---
             db_has_enum = False
             if sig_data:
                 raw_enums = sig_data.get("Enums", {})
                 db_has_enum = bool(raw_enums)
-                
+
                 # Found the primary signal
                 main_sig_name = sig_data.get("Signal_DB_Name")
                 res["SOMEIP_FF_DB_SIGNAL_NAME"] = main_sig_name
@@ -96,7 +99,7 @@ class SomeIPFFSysVarMapper(BaseMapper):
                     res["SOMEIP_FF_DB_SIGNAL_VALUESTATE"] = main_sig_name
                 else:
                     vs_candidates = [f"{target_attr}ValueState".lower(), f"{target_attr}value_state".lower(), "valuestate"]
-                    
+
                     # 1. Primary check using exact candidate matching
                     for sibling in parent_siblings:
                         if sibling["attr_key"].lower() in vs_candidates:
@@ -114,8 +117,8 @@ class SomeIPFFSysVarMapper(BaseMapper):
             res["IS_ENUM"] = True if (db_has_enum or existing_is_enum) else False
 
             # --- 6. Namespace and Variable Extraction ---
-            for pre, db_col in [("SIGNAME", "SOMEIP_FF_DB_SIGNAL_NAME"), 
-                                ("SIGVALUESTATE", "SOMEIP_FF_DB_SIGNAL_VALUESTATE"), 
+            for pre, db_col in [("SIGNAME", "SOMEIP_FF_DB_SIGNAL_NAME"),
+                                ("SIGVALUESTATE", "SOMEIP_FF_DB_SIGNAL_VALUESTATE"),
                                 ("CONTROL", "SOMEIP_FF_DB_SIGNAL_CONTROL")]:
                 val = res.get(db_col)
                 if val and val != "ETH_NOT_FOUND":

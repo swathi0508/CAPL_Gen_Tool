@@ -1,11 +1,13 @@
 import os
 import time
-from typing import Any, Dict, List
-from lxml import etree
 from datetime import timedelta
+from typing import Any, Dict, List
 
-from signal_parsers.base_parser import BaseParser
+from lxml import etree
+
 from logger import log
+from signal_parsers.base_parser import BaseParser
+
 
 class AacpSysVarParser(BaseParser):
     """
@@ -22,7 +24,7 @@ class AacpSysVarParser(BaseParser):
         """Parses the vsysvar XML, caches structures, and builds nested variable trees."""
         start_time = time.time()
         log.info(f"🚀 Parsing AACP SysVar XML: {self.file_path}")
-        
+
         if not os.path.exists(self.file_path):
             log.error(f"❌ File not found: {self.file_path}")
             return {}
@@ -49,7 +51,7 @@ class AacpSysVarParser(BaseParser):
             elapsed = str(timedelta(seconds=int(time.time() - start_time))).zfill(8)
             total = total_signals[0]
             resolved = total if self.parsed_signals else 0
-            
+
             # CRITICAL FIX: Explicitly assign to self._parsed_data using a unique key
             self._parsed_data = {
                 "Summary": {
@@ -62,7 +64,7 @@ class AacpSysVarParser(BaseParser):
                 },
                 "AACP_TREE": self.parsed_signals
             }
-            
+
             log.info(f"✅ Successfully extracted {total} signals into nested keys.")
             return self._parsed_data
 
@@ -76,12 +78,12 @@ class AacpSysVarParser(BaseParser):
         """Collects standalone struct declarations to use as type templates."""
         for child in element:
             tag = etree.QName(child).localname
-            
+
             if tag == 'namespace':
                 name = child.get('name', '')
                 new_ns = current_ns + [name] if name else current_ns
                 self._cache_struct_definitions(child, new_ns)
-                
+
             elif tag == 'struct':
                 name_raw = child.get('name', '')
                 full_struct_key = "::".join(current_ns + [name_raw])
@@ -91,20 +93,20 @@ class AacpSysVarParser(BaseParser):
         """Processes actual active system variable instantiations."""
         for child in element:
             tag = etree.QName(child).localname
-            
+
             if tag == 'namespace':
                 name = child.get('name', '')
                 new_ns = current_ns + [name] if name else current_ns
                 self._process_variables(child, new_ns, count)
-                
+
             elif tag == 'variable':
                 var_name = child.get('name', '')
                 var_type = child.get('type', '')
                 var_full_path = "::".join(current_ns + [var_name])
-                
+
                 if var_full_path not in self.parsed_signals:
                     self.parsed_signals[var_full_path] = {}
-                
+
                 # Top-level dictionary block context
                 current_container = self.parsed_signals[var_full_path]
 
@@ -121,25 +123,25 @@ class AacpSysVarParser(BaseParser):
 
     def _resolve_struct_nested(self, struct_node: etree.Element, current_container: Dict[str, Any], current_db_path: str, count: List[int]):
         """
-        Recursively steps through structural templates. 
+        Recursively steps through structural templates.
         Creates inline sub-dictionaries for nested structures, ensuring Signal_DB_Name preserves dots.
         """
         for member in struct_node.findall('structMember'):
             member_name = member.get('name', '')
             member_type = member.get('type', '')
-            
+
             # The exact dot-notated string track needed for "Signal_DB_Name"
             next_db_path = f"{current_db_path}.{member_name}"
-            
+
             if member_type == 'struct':
                 struct_def = member.get('structDefinition', '')
                 if struct_def in self.struct_definitions:
                     nested_struct_node = self.struct_definitions[struct_def]
-                    
+
                     # Create a sub-dictionary block for this inner structure if it doesn't exist yet
                     if member_name not in current_container:
                         current_container[member_name] = {}
-                    
+
                     # Pass the nested inner dictionary downstream to hold its children
                     self._resolve_struct_nested(nested_struct_node, current_container[member_name], next_db_path, count)
             else:

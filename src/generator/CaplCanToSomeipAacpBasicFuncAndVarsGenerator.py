@@ -21,7 +21,7 @@ class CaplCanToSomeipAacpBasicFuncAndVarsGenerator:
             'CAN_OFFSET', 'CAN_RESOLUTION', 'IS_ENUM',
             'COMPUTED_CAN_VALUE_MIN', 'COMPUTED_CAN_VALUE_MID', 'COMPUTED_CAN_VALUE_MAX',
             'COMPUTED_SOMEIP_VALUE_MIN', 'COMPUTED_SOMEIP_VALUE_MID', 'COMPUTED_SOMEIP_VALUE_MAX',
-            
+
             # --- NEW AACP SPECIFIC COLUMNS ADDED HERE ---
             'AACP_SIGNAME_DAQ',
             'AACP_DATATYPE',
@@ -29,10 +29,10 @@ class CaplCanToSomeipAacpBasicFuncAndVarsGenerator:
             'AACP_SIGNAME_NAMESPACE',
             'AACP_SIGNAME_VARIABLE',
             'AACP_DB_SIGNAL_VALUESTATE',
-            'AACP_SIGVALUESTATE_NAMESPACE', 
+            'AACP_SIGVALUESTATE_NAMESPACE',
             'AACP_SIGVALUESTATE_VARIABLE',
-            'COMPUTED_AACP_VALUE_MIN', 
-            'COMPUTED_AACP_VALUE_MID', 
+            'COMPUTED_AACP_VALUE_MIN',
+            'COMPUTED_AACP_VALUE_MID',
             'COMPUTED_AACP_VALUE_MAX'
         ]
 
@@ -125,7 +125,7 @@ class CaplCanToSomeipAacpBasicFuncAndVarsGenerator:
             for stat in ['MIN', 'MID', 'MAX']:
                 someip_col = f'COMPUTED_SOMEIP_VALUE_{stat}'
                 aacp_col = f'COMPUTED_AACP_VALUE_{stat}'
-                
+
                 if aacp_col in actual_value_rows.columns:
                     if someip_col not in actual_value_rows.columns:
                         actual_value_rows[someip_col] = actual_value_rows[aacp_col]
@@ -140,7 +140,7 @@ class CaplCanToSomeipAacpBasicFuncAndVarsGenerator:
             # Ensure safe stripping to catch whitespace variations
             actual_value_rows['BASIC_FUNCTION_NAME'] = actual_value_rows['BASIC_FUNCTION_NAME'].astype(str).str.strip()
             actual_value_rows = actual_value_rows.sort_values(by=['BASIC_FUNCTION_NAME', 'CAN_PORT'])
-            
+
             # Drop duplicates by BASIC_FUNCTION_NAME, keeping only the first one
             func_df = actual_value_rows.drop_duplicates(subset=['BASIC_FUNCTION_NAME'], keep='first')
             func_records = func_df.to_dict(orient='records')

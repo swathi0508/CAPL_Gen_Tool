@@ -7,6 +7,7 @@ from capl_bolt.cli import run_headless_generation
 from capl_bolt.gui.tool_gui import launch_gui
 from logger import log
 
+
 # --- SECURITY SHIELD: Global Exception Handler ---
 def global_exception_handler(exc_type, exc_value, exc_traceback):
     """Intercepts unhandled crashes to prevent leaking source code paths to users."""
@@ -40,26 +41,26 @@ def main():
     parser = argparse.ArgumentParser(description="CAPL Generation Tool Pipeline.")
     parser.add_argument("--cli", action="store_true", help="Run in headless CLI mode")
     parser.add_argument("--enable-log", action="store_true")
-    
+
     # Core Inputs (Required inputs first)
     parser.add_argument("--req_excel", type=Path, required=True, help="Path to Input Requirements.xlsx")
     parser.add_argument("--out", type=Path, default=Path("./Output_CAPL_Scripts"), help="Output directory for generated CAPL Scripts")
     parser.add_argument("--category", default="E2E_CAN", required=True, help="Target Category - E2E_CAN | E2E_ETH")
     parser.add_argument("--type", default="CAN->SOMEIP", required=True, help="Target Test Type")
-    
+
     # Raw File Inputs (Optional now, to allow Cache-Only mode)
     parser.add_argument("--arxml", type=str, default="", help="Path to the ETH_CAN.arxml File (Optional if cached)")
     parser.add_argument("--aacp-sysvar", type=str, default="", help="Path to the AACP sysvar (Optional if cached)")
     parser.add_argument("--someip-sysvar", type=str, default="", help="Path to the SOMEIP_FF sysvar (Optional if cached)")
-    
+
     # The Escape Hatch
     parser.add_argument("--no-cache", action="store_true", help="Force a fresh parse (ignores existing caches)")
 
     # Hidden Cache Overrides (Disguised as proprietary DBs in the system temp folder)
     parser.add_argument(
-        "--cache-dir", 
-        type=Path, 
-        default=SYSTEM_TEMP_DIR, 
+        "--cache-dir",
+        type=Path,
+        default=SYSTEM_TEMP_DIR,
         help="Path to directory containing .capldb or .json caches. Defaults to system temp."
     )
 

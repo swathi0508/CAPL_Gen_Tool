@@ -3,6 +3,7 @@ import tempfile
 from pathlib import Path
 
 from cache_cleanup import cleanup_pycache
+
 from logger import log
 from pipeline.main_pipeline import CaplGenerationPipeline
 
@@ -10,16 +11,16 @@ from pipeline.main_pipeline import CaplGenerationPipeline
 SYSTEM_TEMP_DIR = Path(tempfile.gettempdir()) / ".capl_bolt_cache"
 
 def test_full_pipeline(
-    input_excel: Path, 
-    output_dir: Path, 
-    category: str, 
-    test_type: str, 
-    raw_arxml: Path, 
-    someip_sysvar_xml: Path, 
+    input_excel: Path,
+    output_dir: Path,
+    category: str,
+    test_type: str,
+    raw_arxml: Path,
+    someip_sysvar_xml: Path,
     aacp_sysvar_vsysvar: Path
 ):
     """Tests the entire unified pipeline using secure OS-level temp caching."""
-    
+
     log.info("==================================================")
     log.info("🚀 STARTING UNIFIED PIPELINE INTEGRATION TEST")
     log.info("==================================================")
@@ -65,24 +66,24 @@ if __name__ == "__main__":
     cleanup_pycache()
 
     TEST_DIR = Path(__file__).parent.resolve()
-    WORKSPACE_DIR = TEST_DIR.parent 
+    WORKSPACE_DIR = TEST_DIR.parent
 
     RAW_ARXML = WORKSPACE_DIR / "ETH_CAN.arxml"
     SOMEIP_SYSVAR_XML = WORKSPACE_DIR / "SysVarDef.xml"
     AACP_SYSVAR_VSYSVAR = WORKSPACE_DIR / "aacp.vsysvar"
-    REQUIREMENTS_EXCEL = WORKSPACE_DIR / "Requirements.xlsx" 
-    
+    REQUIREMENTS_EXCEL = WORKSPACE_DIR / "Requirements.xlsx"
+
     OUTPUT_DIR = TEST_DIR / "output"
-    
-    CATEGORY = "E2E_CAN"            
+
+    CATEGORY = "E2E_CAN"
     TEST_TYPE = "CAN->SOMEIP_AACP"
 
     test_full_pipeline(
-        REQUIREMENTS_EXCEL, 
-        OUTPUT_DIR, 
-        CATEGORY, 
-        TEST_TYPE, 
-        RAW_ARXML, 
-        SOMEIP_SYSVAR_XML, 
+        REQUIREMENTS_EXCEL,
+        OUTPUT_DIR,
+        CATEGORY,
+        TEST_TYPE,
+        RAW_ARXML,
+        SOMEIP_SYSVAR_XML,
         AACP_SYSVAR_VSYSVAR
     )

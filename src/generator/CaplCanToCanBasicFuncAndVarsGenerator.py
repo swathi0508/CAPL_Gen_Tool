@@ -29,7 +29,7 @@ class CaplCanToCanBasicFuncAndVarsGenerator:
 
         # Fill missing required columns safely
         missing_cols = [c for c in self.j2_columns if c not in df.columns]
-        for c in missing_cols: 
+        for c in missing_cols:
             df[c] = pd.NA
 
         # 1. Cleaner for MIN, MID, MAX, and ENUMS (Forces Integers)

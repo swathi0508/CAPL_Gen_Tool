@@ -1,7 +1,9 @@
-import re
 import ast
 import difflib
+import re
+
 import pandas as pd
+
 
 class EnumResolver:
     """
@@ -17,14 +19,14 @@ class EnumResolver:
             f'COMPUTED_{p2}_VALUE_MIN', f'COMPUTED_{p2}_VALUE_MID', f'COMPUTED_{p2}_VALUE_MAX'
         ]
 
-        mask = df["IS_ENUM"] == True
+        mask = df["IS_ENUM"] is True
         if mask.any():
             for col in res_cols:
                 if col not in df.columns:
                     df[col] = "N/A"
 
             res = df.loc[mask].apply(
-                lambda r: self._resolve_mapping_logic(r, p1, sig1_col, p2, sig2_col), 
+                lambda r: self._resolve_mapping_logic(r, p1, sig1_col, p2, sig2_col),
                 axis=1, result_type='expand'
             )
             df.loc[mask, res_cols] = res[res_cols].values
@@ -35,14 +37,14 @@ class EnumResolver:
         prefix = sig_enum_col.replace('_ENUM', '')
         res_cols = [f'COMPUTED_{prefix}_VALUE_MIN', f'COMPUTED_{prefix}_VALUE_MID', f'COMPUTED_{prefix}_VALUE_MAX']
 
-        mask = df["IS_ENUM"] == True
+        mask = df["IS_ENUM"] is True
         if mask.any():
             for col in res_cols:
                 if col not in df.columns:
                     df[col] = "N/A"
 
             res = df.loc[mask].apply(
-                lambda r: self._resolve_single_row_logic(r, prefix, sig_enum_col), 
+                lambda r: self._resolve_single_row_logic(r, prefix, sig_enum_col),
                 axis=1, result_type='expand'
             )
             df.loc[mask, res_cols] = res[res_cols].values
@@ -65,7 +67,7 @@ class EnumResolver:
     def _resolve_mapping_logic(self, row, p1, col1, p2, col2):
         d1 = self.extract_dict(row.get(col1, {}))
         d2 = self.extract_dict(row.get(col2, {}))
-        
+
         f1 = {k: v for k, v in d1.items() if not self.is_strictly_excluded(v)}
         f2 = {k: v for k, v in d2.items() if not self.is_strictly_excluded(v)}
 
@@ -75,10 +77,10 @@ class EnumResolver:
 
         # 1. ATTEMPT MAPPING
         if f1 and f2:
-            context = (str(row.get('SOMEIP_TOPIC_ATTRIBUTE', '')) + " " + 
-                       " ".join(map(str, f1.values())) + " " + 
+            context = (str(row.get('SOMEIP_TOPIC_ATTRIBUTE', '')) + " " +
+                       " ".join(map(str, f1.values())) + " " +
                        " ".join(map(str, f2.values()))).lower()
-            
+
             is_gear = any(x in context for x in ['gear', 'lever', 'pnrdb'])
             is_binary = (len(f1) == 2 and len(f2) == 2)
 
@@ -89,7 +91,7 @@ class EnumResolver:
                     match_pool.append({'id1': id1, 'id2': id2, 'score': score})
 
             match_pool.sort(key=lambda x: x['score'], reverse=True)
-            
+
             final_map, used2 = {}, set()
             for m in match_pool:
                 if m['id1'] not in final_map and m['id2'] not in used2:
@@ -99,7 +101,7 @@ class EnumResolver:
 
             sorted_f1_keys = sorted(f1.keys(), key=lambda x: int(float(x)))
             valid_results = [{'id1': k, 'id2': final_map[k]} for k in sorted_f1_keys if k in final_map]
-            
+
             if len(valid_results) >= 2:
                 min1, mid1, max1 = self._pick_boundaries_from_list([v['id1'] for v in valid_results])
                 min2, mid2, max2 = self._pick_boundaries_from_list([v['id2'] for v in valid_results])
@@ -136,7 +138,7 @@ class EnumResolver:
         if n == 0: return "N/A", "N/A", "N/A"
         if n == 1: return items[0], items[0], items[0]
         if n == 2: return items[0], items[1], items[1] # Rule: mid == max
-        
+
         # Rule: If n > 3, min is 1st index (index 1)
         idx_min = 1 if n > 3 else 0
         idx_mid = n // 2
@@ -214,6 +216,6 @@ class EnumResolver:
         except: return {'0': str(content)}
 
     def _get_keys_bounds(self, d):
-        keys = sorted([str(k) for k in d.keys() if str(k).lstrip('-').replace('.','',1).isdigit()], 
+        keys = sorted([str(k) for k in d.keys() if str(k).lstrip('-').replace('.','',1).isdigit()],
                       key=lambda x: int(float(x)))
         return self._pick_boundaries_from_list(keys)
