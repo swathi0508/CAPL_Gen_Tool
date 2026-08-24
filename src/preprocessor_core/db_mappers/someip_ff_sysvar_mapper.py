@@ -124,7 +124,8 @@ class SomeIPFFSysVarMapper(BaseMapper):
                             res["SOMEIP_FF_DB_SIGNAL_VALUESTATE"] = sibling.get("Signal_DB_Name")
                             break
                     else:
-                        # 2. Final Fallback: Grab the first sibling that contains 'valuestate' in its key
+                        # 2. Final Fallback: Grab the first sibling that contains
+                        # 'valuestate' in its key
                         for sibling in parent_siblings:
                             if "valuestate" in sibling["attr_key"].lower():
                                 res["SOMEIP_FF_DB_SIGNAL_VALUESTATE"] = sibling.get(

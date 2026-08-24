@@ -89,7 +89,7 @@ class CaplGenGUI(QMainWindow):
         bg_path = get_asset_path("background.png")
         self.bg_pixmap = QPixmap(str(bg_path)) if bg_path.exists() else None
 
-    def paintEvent(self, event):
+    def paintEvent(self, event):  # noqa: N802
         painter = QPainter(self)
         if self.bg_pixmap:
             painter.drawPixmap(self.rect(), self.bg_pixmap)
@@ -266,7 +266,8 @@ class CaplGenGUI(QMainWindow):
         self.cat_combo.currentTextChanged.connect(self._update_test_types)
         self._update_test_types(self.cat_combo.currentText())
 
-        # Give the left configuration block a stretch factor so it pushes the Generate button to the right
+        # Give the left configuration block a stretch factor so
+        # it pushes the Generate button to the right
         layout.addWidget(config_left, stretch=1)
         layout.addSpacing(self.ACTION_GAP)
 
@@ -305,7 +306,8 @@ class CaplGenGUI(QMainWindow):
                     "CAN->SOMEIP_FF",
                     "SOMEIP->CAN",
                     "SOMEIP_FF->CAN",
-                    # , "SOMEIP->SWC", "SOMEIP_FF->SWC", "SWC->SOMEIP", "SWC->SOMEIP_AACP", "SWC->SOMEIP_FF", "CAROS->SWC"
+                    # , "SOMEIP->SWC", "SOMEIP_FF->SWC", "SWC->SOMEIP",
+                    #  "SWC->SOMEIP_AACP", "SWC->SOMEIP_FF", "CAROS->SWC"
                 ]
             )
 
@@ -336,7 +338,8 @@ class CaplGenGUI(QMainWindow):
                 # --- PHASE 1: PARSING / CACHE VALIDATION ---
                 parse_start = time.time()
                 self.signals.log_signal.emit(
-                    "⚙️ Pre-Processing Started: Validating and Parsing ARXML, AACP, and SOMEIP_FF Databases..."
+                    "⚙️ Pre-Processing Started: Validating and Parsing ARXML,"
+                    " AACP, and SOMEIP_FF Databases..."
                 )
 
                 # Unpacking all 4 return values from the pipeline
@@ -459,7 +462,8 @@ class CaplGenGUI(QMainWindow):
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
         self.log_text.setStyleSheet(
-            "background-color: #000000; color: #cbd5e1; font-family: Consolas; border: 1px solid #2d3748; border-radius: 4px;"
+            "background-color: #000000; color: #cbd5e1; font-family: Consolas; \
+             border: 1px solid #2d3748; border-radius: 4px;"
         )
         layout.addWidget(self.log_text)
         self.main_layout.addWidget(container, 1)
@@ -489,7 +493,8 @@ class CaplGenGUI(QMainWindow):
         if all(p.strip() for p in paths):
             self.btn_preprocess.setEnabled(True)
             self.btn_preprocess.setStyleSheet(
-                "background-color: #1e8449; color: white; border-radius: 4px; font-weight: bold; border: none;"
+                "background-color: #1e8449; color: white; border-radius: 4px;"
+                " font-weight: bold; border: none;"
             )
         else:
             self.btn_preprocess.setEnabled(False)
@@ -501,7 +506,8 @@ class CaplGenGUI(QMainWindow):
         if self.pre_process_done:
             self.btn_gen.setEnabled(True)
             self.btn_gen.setStyleSheet(
-                "background-color: #1e8449; color: white; border-radius: 4px; font-weight: bold; border: none;"
+                "background-color: #1e8449; color: white; border-radius: 4px;"
+                " font-weight: bold; border: none;"
             )
 
     def run_generation(self):
@@ -514,7 +520,8 @@ class CaplGenGUI(QMainWindow):
                 "GeneratedTestScripts", self.cat_combo.currentText(), self.typ_combo.currentText()
             )
             self.write_log(
-                f"✅ CAPL Scripts Generated Successfully. (Time: {self._format_time(time.time() - ts)})"
+                f"✅ CAPL Scripts Generated Successfully."
+                f" (Time: {self._format_time(time.time() - ts)})"
             )
         except Exception as e:
             self.write_log(f"❌ Generation failed: {e}")

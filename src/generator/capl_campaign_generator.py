@@ -38,8 +38,8 @@ class CaplCampaignGenerator:
             df.columns = df.columns.str.strip()
 
             # --- FIX STARTS HERE ---
-            # Strictly filter rows: ensure both column data and input target_type are stripped of whitespace
-            # and compared for an exact match.
+            # Strictly filter rows: ensure both column data and input target_type
+            #  are stripped of whitespace and compared for an exact match.
             df["TEST_TYPE"] = df["TEST_TYPE"].astype(str).str.strip()
             normalized_target = str(target_type).strip()
             df = df[df["TEST_TYPE"] == normalized_target].copy()

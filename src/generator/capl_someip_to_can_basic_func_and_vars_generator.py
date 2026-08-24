@@ -9,10 +9,10 @@ from logger import log
 pd.set_option("future.no_silent_downcasting", True)
 
 
-class CaplCanToSomeipBasicFuncAndVarsGenerator:
+class CaplSomeipToCanBasicFuncAndVarsGenerator:
     def __init__(self, template_dir):
         self.env = Environment(loader=FileSystemLoader(template_dir))
-        self.func_template = "can_to_someip_basic_functions_template.j2"
+        self.func_template = "someip_to_can_basic_functions_template.j2"
         self.var_template = "variables_template.j2"
 
         # --- UPDATED TO MATCH NEW UNIFIED COLUMN NAMES ---
@@ -158,8 +158,8 @@ class CaplCanToSomeipBasicFuncAndVarsGenerator:
             os.makedirs(f_dir, exist_ok=True)
             os.makedirs(v_dir, exist_ok=True)
 
-            func_filename = "can_to_someip_basic_functions.cin"
-            var_filename = "can_to_someip_variables.cin"
+            func_filename = "someip_to_can_basic_functions.cin"
+            var_filename = "someip_to_can_variables.cin"
 
             # Render Functions File
             with open(f_dir / func_filename, "w") as f:
@@ -177,7 +177,8 @@ class CaplCanToSomeipBasicFuncAndVarsGenerator:
                 )
 
             log.info(
-                f"Generated {len(func_records)} functions into {func_filename} and variables into {var_filename}. ValueState metadata excluded."
+                f"Generated {len(func_records)} functions into {func_filename} "
+                f"and variables into {var_filename}."
             )
 
         except Exception as e:

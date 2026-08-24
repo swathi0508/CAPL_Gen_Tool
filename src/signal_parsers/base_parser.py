@@ -85,7 +85,8 @@ class BaseParser(ABC):
             log.error(f"❌ Failed to write secure cache: {e}")
 
     def load_from_json(self, input_path: str) -> bool:
-        """Hydrates the parser from either a zlib compressed binary (.capldb) or plain JSON (.json)."""
+        """Hydrates the parser from either a zlib compressed binary
+        (.capldb) or plain JSON (.json)."""
         if not os.path.exists(input_path):
             return False
         try:
@@ -122,7 +123,8 @@ class BaseParser(ABC):
         # --- FIX 2: Safeguard Hierarchical Parsers ---
         if "Summary" in data and any(k in data for k in ["INTERFACES", "AACP_TREE"]):
             log.warning(
-                "⚠️ to_dataframe() bypassed: Hierarchical parsers (AACP/SOMEIP_FF) do not support flat dataframe conversion."
+                "⚠️ to_dataframe() bypassed: Hierarchical parsers (AACP/SOMEIP_FF) "
+                "do not support flat dataframe conversion."
             )
             return pd.DataFrame()
 

@@ -115,7 +115,8 @@ class AacpSysVarParser(BaseParser):
                     struct_def = child.get("structDefinition", "")
                     if struct_def in self.struct_definitions:
                         struct_node = self.struct_definitions[struct_def]
-                        # Track the absolute variable path separately for Signal_DB_Name construction
+                        # Track the absolute variable path separately
+                        # for Signal_DB_Name construction
                         self._resolve_struct_nested(
                             struct_node, current_container, var_full_path, count
                         )
@@ -135,7 +136,8 @@ class AacpSysVarParser(BaseParser):
     ):
         """
         Recursively steps through structural templates.
-        Creates inline sub-dictionaries for nested structures, ensuring Signal_DB_Name preserves dots.
+        Creates inline sub-dictionaries for nested structures,
+        ensuring Signal_DB_Name preserves dots.
         """
         for member in struct_node.findall("structMember"):
             member_name = member.get("name", "")

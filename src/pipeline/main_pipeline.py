@@ -91,13 +91,15 @@ class CaplGenerationPipeline:
         # The User Risk Warning (Cache-Only Mode)
         if not source_file or not os.path.exists(source_file):
             log.warning(
-                f"⚠️ DANGER: Source file missing. Blind-loading cache '{os.path.basename(cache_path)}'."
+                f"⚠️ DANGER: Source file missing. Blind-loading cache "
+                f"'{os.path.basename(cache_path)}'."
             )
             return True
 
         if os.path.getmtime(source_file) > os.path.getmtime(cache_path):
             log.info(
-                f"🔄 Source file timestamp modified. Cache '{os.path.basename(cache_path)}' is stale."
+                f"🔄 Source file timestamp modified. Cache '{os.path.basename(cache_path)}'"
+                f" is stale."
             )
             return False
 
