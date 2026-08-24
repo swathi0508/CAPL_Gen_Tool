@@ -9,15 +9,25 @@ src_path = current_file.parent.parent
 if str(src_path) not in sys.path:
     sys.path.append(str(src_path))
 
-from logger import log
 from generator.CaplCampaignGenerator import CaplCampaignGenerator
-from generator.CaplCanToSomeipBasicFuncAndVarsGenerator import CaplCanToSomeipBasicFuncAndVarsGenerator
-from generator.CaplSomeipToCanBasicFuncAndVarsGenerator import CaplSomeipToCanBasicFuncAndVarsGenerator
-from generator.CaplSomeipFFToCanBasicFuncAndVarsGenerator import CaplSomeipFFToCanBasicFuncAndVarsGenerator
-from generator.CaplCanToSomeipAacpBasicFuncAndVarsGenerator import CaplCanToSomeipAacpBasicFuncAndVarsGenerator
-from generator.CaplCanToSomeipFFBasicFuncAndVarsGenerator import CaplCanToSomeipFFBasicFuncAndVarsGenerator
-from generator.CaplSignalValidationLibGenerator import CaplSignalValidationLibGenerator
 from generator.CaplCanToCanBasicFuncAndVarsGenerator import CaplCanToCanBasicFuncAndVarsGenerator
+from generator.CaplCanToSomeipAacpBasicFuncAndVarsGenerator import (
+    CaplCanToSomeipAacpBasicFuncAndVarsGenerator,
+)
+from generator.CaplCanToSomeipBasicFuncAndVarsGenerator import (
+    CaplCanToSomeipBasicFuncAndVarsGenerator,
+)
+from generator.CaplCanToSomeipFFBasicFuncAndVarsGenerator import (
+    CaplCanToSomeipFFBasicFuncAndVarsGenerator,
+)
+from generator.CaplSignalValidationLibGenerator import CaplSignalValidationLibGenerator
+from generator.CaplSomeipFFToCanBasicFuncAndVarsGenerator import (
+    CaplSomeipFFToCanBasicFuncAndVarsGenerator,
+)
+from generator.CaplSomeipToCanBasicFuncAndVarsGenerator import (
+    CaplSomeipToCanBasicFuncAndVarsGenerator,
+)
+from logger import log
 
 
 class JinjaEngine:

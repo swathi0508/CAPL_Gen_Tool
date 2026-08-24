@@ -84,7 +84,7 @@ class BaseMapper:
         if not enums: return ""
         if isinstance(enums, dict): return str(enums) # Preserves dict string format
         return str(enums)
-    
+
     @staticmethod
     def split_namespace_variable(full_path: str) -> tuple:
         """
@@ -93,10 +93,10 @@ class BaseMapper:
         """
         if not full_path or pd.isna(full_path) or "ETH_NOT_FOUND" in str(full_path):
             return None, None
-            
+
         full_path = str(full_path).strip()
         if "::" in full_path:
             parts = full_path.rsplit("::", 1)
             return parts[0], parts[1]
-        
+
         return "", full_path # Fallback if no separator found

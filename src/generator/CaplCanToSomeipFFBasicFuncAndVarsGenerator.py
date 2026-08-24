@@ -1,8 +1,11 @@
 import os
 from pathlib import Path
+
 import pandas as pd
 from jinja2 import Environment, FileSystemLoader
+
 from logger import log
+
 
 class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
     def __init__(self, template_dir: str = "."):
@@ -18,7 +21,7 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
         Reads from provided dataframes, processes target rows matching test_type, and renders the CAPL files.
         """
         log.info(f"Processing data for {test_type}...")
-        
+
         # 1. Combine and Extract DataFrames from the dictionary
         target_sheets = ['E2E_CAN_PARSED', 'E2E_ETH_PARSED']
         valid_dfs = []
@@ -35,7 +38,7 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
         df = pd.concat(valid_dfs, ignore_index=True)
 
         requirements = []
-        
+
         # Dictionaries to filter out duplicate variables across requirements
         standard_vars_dict = {}
         can_enums_dict = {}
@@ -49,19 +52,19 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
             # ----------------------------------------------------------------
 
             basic_func_name = str(row.get('BASIC_FUNCTION_NAME', f'Test_{index}')).strip()
-            
+
             can_port = str(row.get('CAN_PORT', f'UnknownCAN_{index}')).strip()
             someip_port = str(row.get('SOMEIP_PORT', f'UnknownETH_{index}')).strip()
             attr_val = str(row.get('ATTRIBUTE_VALUE', f'UnknownAttr_{index}')).strip()
 
             is_enum_str = str(row.get('IS_ENUM', 'FALSE')).strip().upper()
             is_enum = (is_enum_str == 'TRUE')
-            
+
             # Safely extract CAN limits
             can_min = row.get('COMPUTED_CAN_VALUE_MIN', 0.0)
             can_mid = row.get('COMPUTED_CAN_VALUE_MID', 0.0)
             can_max = row.get('COMPUTED_CAN_VALUE_MAX', 0.0)
-            
+
             # Safely extract SOMEIP FF explicit limits from the updated columns
             eth_min = row.get('COMPUTED_SOMEIP_FF_VALUE_MIN', row.get('COMPUTED_SOMEIP_VALUE_MIN', 0.0))
             eth_mid = row.get('COMPUTED_SOMEIP_FF_VALUE_MID', row.get('COMPUTED_SOMEIP_VALUE_MID', 0.0))
@@ -103,15 +106,15 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
             sysvar_parts = full_sysvar.split('::')
             ns = "::".join(sysvar_parts[:-1]) if len(sysvar_parts) > 1 else "EthernetCluster"
             name = sysvar_parts[-1]
-            
+
             # Extracting the FF explicit DB signal name
             someip_ff_signal_name = str(row.get('SOMEIP_FF_DB_SIGNAL_NAME', '')).strip()
             if not someip_ff_signal_name or someip_ff_signal_name == 'nan':
                 someip_ff_signal_name = full_sysvar # Safe fallback if empty
-                
+
             # Extracting the ValueState parameters
             someip_ff_valuestate = str(row.get('SOMEIP_FF_DB_SIGNAL_VALUESTATE', '')).strip()
-            
+
             # --- NEW: Extracting the specific Namespace and Variable parameters ---
             someip_ff_signame_namespace = str(row.get('SOMEIP_FF_SIGNAME_NAMESPACE', '')).strip()
             someip_ff_signame_variable = str(row.get('SOMEIP_FF_SIGNAME_VARIABLE', '')).strip()
@@ -133,13 +136,13 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
                 'CAN_DB_SIGNAL_NAME': str(row.get('CAN_DB_SIGNAL_NAME', 'Unknown_CAN_Signal')),
                 'IS_ENUM': is_enum_str,
                 'SOMEIP_DB_SIGNAL_NAME': full_sysvar,
-                'SOMEIP_FF_DB_SIGNAL_NAME': someip_ff_signal_name, 
+                'SOMEIP_FF_DB_SIGNAL_NAME': someip_ff_signal_name,
                 'SOMEIP_NS': ns,
                 'SOMEIP_NAME': name,
-                'DATATYPE': datatype, 
-                'COMPUTED_SOMEIP_FF_VALUE_MIN': eth_min, 
-                'COMPUTED_SOMEIP_FF_VALUE_MID': eth_mid, 
-                'COMPUTED_SOMEIP_FF_VALUE_MAX': eth_max, 
+                'DATATYPE': datatype,
+                'COMPUTED_SOMEIP_FF_VALUE_MIN': eth_min,
+                'COMPUTED_SOMEIP_FF_VALUE_MID': eth_mid,
+                'COMPUTED_SOMEIP_FF_VALUE_MAX': eth_max,
                 'SOMEIP_FF_DB_SIGNAL_VALUESTATE': someip_ff_valuestate,
                 'SOMEIP_FF_SIGNAME_NAMESPACE': someip_ff_signame_namespace,
                 'SOMEIP_FF_SIGNAME_VARIABLE': someip_ff_signame_variable,
@@ -193,11 +196,11 @@ class CaplCanToSomeipFFBasicFuncAndVarsGenerator:
             # 3. Save to separate files (Variables in one, Functions in the other)
             with open(var_output_file, 'w') as f_vars:
                 f_vars.write(rendered_vars)
-                
+
             with open(output_path, 'w') as f_funcs:
                 f_funcs.write(rendered_funcs)
 
             log.info(f"Generated {len(unique_requirements)} functions into {func_filename} and variables into {var_filename}.")
-            
+
         except Exception as e:
             log.exception(f"Logic Gen failed during template generation: {e}")

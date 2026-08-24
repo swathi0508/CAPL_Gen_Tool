@@ -15,10 +15,10 @@ def load_json_cache(path: str) -> dict:
     """Helper to mock the pipeline loading caches for testing."""
     if not os.path.exists(path):
         raise FileNotFoundError(f"Cache file not found: {path}")
-        
+
     with open(path, 'r', encoding='utf-8') as f:
         data = json.load(f)
-    
+
     # Handle different JSON structures from the parsers
     if "SIGNAL_LIST" in data:
         return data["SIGNAL_LIST"]
@@ -35,7 +35,7 @@ def test_mapper_orchestration(input_excel: str, output_dir: str, can_cache: str,
 
     out_path = Path(output_dir)
     out_path.mkdir(parents=True, exist_ok=True)
-    
+
     # Define output file for manual verification
     base_name = Path(input_excel).name.replace(".xlsx", "_Intermediate.xlsx")
     output_verification_file = out_path / base_name
@@ -44,7 +44,7 @@ def test_mapper_orchestration(input_excel: str, output_dir: str, can_cache: str,
         # 1. Load Caches to Mock Database State
         log.info(f"Loading CAN cache: {can_cache}")
         can_db = load_json_cache(can_cache)
-        
+
         log.info(f"Loading ETH cache: {eth_cache}")
         eth_db = load_json_cache(eth_cache)
 
@@ -96,9 +96,9 @@ if __name__ == "__main__":
     # Ensure the input files exist before starting
     if os.path.exists(INPUT_REQ_FILE):
         test_mapper_orchestration(
-            INPUT_REQ_FILE, 
-            OUTPUT_DIRECTORY, 
-            CAN_JSON_CACHE, 
+            INPUT_REQ_FILE,
+            OUTPUT_DIRECTORY,
+            CAN_JSON_CACHE,
             ETH_JSON_CACHE,
             SOMEIP_FF_JSON_CACHE,
             AACP_JSON_CACHE

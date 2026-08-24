@@ -81,12 +81,12 @@ class SomeIPEventParser(BaseParser):
                     # ONLY PROCESS APPLICATION RECORDS (Struct Unrolling)
                     # -----------------------------------------------------
                     if app_name in records_dict:
-                        
+
                         # NEW APPROACH: Look up the exact name from the Interface mapping
                         interface_name = app_to_interface.get(app_name)
 
                         if interface_name:
-                            # ARXML Interface names usually end in "Interface". 
+                            # ARXML Interface names usually end in "Interface".
                             # We strip it to get the CAPL routing port name (e.g., SomeIpEcoMode...)
                             someip_port = re.sub(r'Interface$', '', interface_name)
                             # Extract the event part for your JSON by dropping the "SomeIp" prefix
@@ -254,14 +254,14 @@ class SomeIPEventParser(BaseParser):
             if_name_elem = sr_if.xpath("*[local-name()='SHORT-NAME']")
             if not if_name_elem:
                 continue
-            
+
             if_name = if_name_elem[0].text.strip()
-            
+
             # Find the Data Elements pointing to an App Data Type
             for data_elem in sr_if.xpath(".//*[local-name()='VARIABLE-DATA-PROTOTYPE']"):
                 tref = data_elem.xpath("*[local-name()='TYPE-TREF']")
                 if tref and tref[0].text:
                     app_name = tref[0].text.split("/")[-1].strip()
                     app_to_interface[app_name] = if_name
-                    
+
         return app_to_interface

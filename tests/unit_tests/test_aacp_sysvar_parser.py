@@ -1,7 +1,9 @@
 import os
-from signal_parsers.aacp_sysvar_parser import AacpSysVarParser
-from logger import log
+
 from cache_cleanup import cleanup_pycache
+
+from logger import log
+from signal_parsers.aacp_sysvar_parser import AacpSysVarParser
 
 # Clean __pycache__ at test start to ensure fresh imports
 cleanup_pycache()
@@ -17,7 +19,7 @@ def test_aacp_sysvar_parsing(vsysvar_path: str, json_cache: str):
     # 1. Initialize and Parse into RAM
     parser = AacpSysVarParser(vsysvar_path)
     aacp_dict = parser.parse()
-    
+
     if not aacp_dict or "Summary" not in aacp_dict:
         log.error("❌ Parsing failed. AACP Dictionary is empty or malformed.")
         return
@@ -33,10 +35,10 @@ def test_aacp_sysvar_parsing(vsysvar_path: str, json_cache: str):
         # Get a sample struct path (the keys in DATA)
         sample_struct_path = list(data.keys())[0]
         struct_content = data[sample_struct_path]
-        
+
         log.info(f"🔍 Validating Sample Struct: {sample_struct_path}")
         log.debug(f"📂 Struct contains {len(struct_content)} members.")
-        
+
         # Log the first member details to verify BitCount and Encoding
         if struct_content:
             first_member = list(struct_content.keys())[0]
@@ -46,7 +48,7 @@ def test_aacp_sysvar_parsing(vsysvar_path: str, json_cache: str):
 
     # 3. Test Disk Dump (Simulating Dev Mode)
     parser.to_json_file(json_cache, write_allowed=True)
-    
+
     if os.path.exists(json_cache):
         log.info(f"✅ Cache successfully dumped to {json_cache}")
     else:
@@ -56,5 +58,5 @@ if __name__ == "__main__":
     # Update these paths based on your local directory structure
     AACP_VSYSVAR_FILE = "../aacp.vsysvar"
     CACHE_FILE = "aacp_sysvar_cache.json"
-    
+
     test_aacp_sysvar_parsing(AACP_VSYSVAR_FILE, CACHE_FILE)

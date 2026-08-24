@@ -1,7 +1,9 @@
 import os
-from signal_parsers.someip_ff_parser import SomeipFFParser
-from logger import log
+
 from cache_cleanup import cleanup_pycache
+
+from logger import log
+from signal_parsers.someip_ff_parser import SomeipFFParser
 
 # Clean __pycache__ at test start to ensure fresh imports
 cleanup_pycache()
@@ -17,7 +19,7 @@ def test_someip_ff_parsing(xml_path: str, json_cache: str):
     # 1. Initialize and Parse into RAM
     parser = SomeipFFParser(xml_path)
     ff_dict = parser.parse()
-    
+
     if not ff_dict or "Summary" not in ff_dict:
         log.error("❌ Parsing failed. FF Dictionary is empty or malformed.")
         return
@@ -40,5 +42,5 @@ if __name__ == "__main__":
     # Ensure this points to your actual SysVar XML file
     SOMEIP_SYSVAR_XML = "../SysVarDef.xml"
     CACHE_FILE = "someip_ff_cache.json"
-    
+
     test_someip_ff_parsing(SOMEIP_SYSVAR_XML, CACHE_FILE)

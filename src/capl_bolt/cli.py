@@ -4,15 +4,16 @@ from pathlib import Path
 from logger import log
 from pipeline.main_pipeline import CaplGenerationPipeline
 
+
 def run_headless_generation(
-    excel_path: Path, 
-    output_dir: Path, 
+    excel_path: Path,
+    output_dir: Path,
     cache_dir: Path,
-    category: str, 
-    test_type: str, 
-    raw_arxml: str, 
-    someip_sysvar_xml: str, 
-    aacp_sysvar_vsysvar: str, 
+    category: str,
+    test_type: str,
+    raw_arxml: str,
+    someip_sysvar_xml: str,
+    aacp_sysvar_vsysvar: str,
     enable_log: bool,
     no_cache: bool
 ):

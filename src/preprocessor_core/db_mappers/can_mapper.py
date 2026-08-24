@@ -1,5 +1,7 @@
 import pandas as pd
+
 from preprocessor_core.db_mappers.base_mapper import BaseMapper
+
 
 class CANMapper(BaseMapper):
     def _load_database(self) -> dict:
@@ -50,8 +52,8 @@ class CANMapper(BaseMapper):
     def resolve(self, df_subset: pd.DataFrame) -> pd.DataFrame:
         base_cols = ["CAN_DB_SIGNAL_NAME", "CAN_ENUM", "CAN_MIN_RAW", "CAN_MAX_RAW",
                      "CAN_PERIODICITY", "CAN_OFFSET", "CAN_RESOLUTION"]
-                     
-        can2_cols = ["CAN2_DB_SIGNAL_NAME", "CAN2_PERIODICITY", "CAN2_ENUM", 
+
+        can2_cols = ["CAN2_DB_SIGNAL_NAME", "CAN2_PERIODICITY", "CAN2_ENUM",
                      "CAN2_MIN_RAW", "CAN2_MAX_RAW", "CAN2_OFFSET", "CAN2_RESOLUTION"]
 
         # Fix: Create explicit new empty series keys to break the slice view warnings cleanly
@@ -61,34 +63,34 @@ class CANMapper(BaseMapper):
 
         # 1. Batch execute primary CAN signal lookups
         can1_results = pd.DataFrame(
-            [self.get_signal_data(p, c) for p, c in zip(df_subset["CAN_PORT"], df_subset["CAN_CLUSTER"])],
+            [self.get_signal_data(p, c) for p, c in zip(df_subset["CAN_PORT"], df_subset["CAN_CLUSTER"], strict=False)],
             index=df_subset.index
         )
-        
+
         for col in base_cols:
             df_subset.loc[:, col] = can1_results[col]
 
         # 2. Batch execute secondary CAN2 signal lookups (Only for CAN->CAN rows)
         is_can_to_can = df_subset["TEST_TYPE"].astype(str).str.strip().str.upper() == "CAN->CAN"
         db2_has_enum = pd.Series(False, index=df_subset.index)
-        
+
         if is_can_to_can.any():
             can2_subset = df_subset[is_can_to_can]
             can2_results = pd.DataFrame(
-                [self.get_signal_data(p, c) for p, c in zip(can2_subset["CAN_TO_CAN_MAPPING"], can2_subset["CAN2_CLUSTER"])],
+                [self.get_signal_data(p, c) for p, c in zip(can2_subset["CAN_TO_CAN_MAPPING"], can2_subset["CAN2_CLUSTER"], strict=False)],
                 index=can2_subset.index
             )
-            
+
             for col in can2_cols:
                 source_col = col.replace("CAN2_", "CAN_")
                 df_subset.loc[is_can_to_can, col] = can2_results[source_col]
-                
+
             db2_has_enum.loc[is_can_to_can] = can2_results["_HAS_ENUM"].astype(bool)
 
         # 3. Holistic vectorized update for the generic IS_ENUM tracking flag
         db1_has_enum = can1_results["_HAS_ENUM"].astype(bool)
         existing_is_enum = df_subset["IS_ENUM"].astype(str).str.upper() == "TRUE"
-        
+
         df_subset.loc[:, "IS_ENUM"] = db1_has_enum | db2_has_enum | existing_is_enum
 
         return df_subset
