@@ -1,4 +1,5 @@
 """Utility to clean __pycache__ folders from the entire repository."""
+
 import shutil
 from pathlib import Path
 

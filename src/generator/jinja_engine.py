@@ -3,21 +3,37 @@ import time
 from datetime import timedelta
 from pathlib import Path
 
+from logger import log
+
 # Ensure the src path is in sys.path for relative imports
 current_file = Path(__file__).resolve()
 src_path = current_file.parent.parent
+
 if str(src_path) not in sys.path:
     sys.path.append(str(src_path))
 
-from logger import log
-from generator.CaplCampaignGenerator import CaplCampaignGenerator
-from generator.CaplCanToSomeipBasicFuncAndVarsGenerator import CaplCanToSomeipBasicFuncAndVarsGenerator
-from generator.CaplSomeipToCanBasicFuncAndVarsGenerator import CaplSomeipToCanBasicFuncAndVarsGenerator
-from generator.CaplSomeipFFToCanBasicFuncAndVarsGenerator import CaplSomeipFFToCanBasicFuncAndVarsGenerator
-from generator.CaplCanToSomeipAacpBasicFuncAndVarsGenerator import CaplCanToSomeipAacpBasicFuncAndVarsGenerator
-from generator.CaplCanToSomeipFFBasicFuncAndVarsGenerator import CaplCanToSomeipFFBasicFuncAndVarsGenerator
-from generator.CaplSignalValidationLibGenerator import CaplSignalValidationLibGenerator
-from generator.CaplCanToCanBasicFuncAndVarsGenerator import CaplCanToCanBasicFuncAndVarsGenerator
+from generator.capl_campaign_generator import CaplCampaignGenerator  # noqa: E402
+from generator.capl_can_to_can_basic_func_and_vars_generator import (  # noqa: E402
+    CaplCanToCanBasicFuncAndVarsGenerator,
+)
+from generator.capl_can_to_someip_aacp_basic_func_and_vars_generator import (  # noqa: E402
+    CaplCanToSomeipAacpBasicFuncAndVarsGenerator,
+)
+from generator.capl_can_to_someip_basic_func_and_vars_generator import (  # noqa: E402
+    CaplCanToSomeipBasicFuncAndVarsGenerator,
+)
+from generator.capl_can_to_someip_ff_basic_func_and_vars_generator import (  # noqa: E402
+    CaplCanToSomeipFFBasicFuncAndVarsGenerator,
+)
+from generator.capl_signal_validation_lib_generator import (  # noqa: E402
+    CaplSignalValidationLibGenerator,
+)
+from generator.capl_someip_ff_to_can_basic_func_and_vars_generator import (  # noqa: E402
+    CaplSomeipFFToCanBasicFuncAndVarsGenerator,
+)
+from generator.capl_someip_to_can_basic_func_and_vars_generator import (  # noqa: E402
+    CaplSomeipToCanBasicFuncAndVarsGenerator,
+)
 
 
 class JinjaEngine:
@@ -27,14 +43,14 @@ class JinjaEngine:
         "CAN->SOMEIP_FF": CaplCanToSomeipFFBasicFuncAndVarsGenerator,
         "SOMEIP->CAN": CaplSomeipToCanBasicFuncAndVarsGenerator,
         "SOMEIP_FF->CAN": CaplSomeipFFToCanBasicFuncAndVarsGenerator,
-        "CAN->CAN": CaplCanToCanBasicFuncAndVarsGenerator
+        "CAN->CAN": CaplCanToCanBasicFuncAndVarsGenerator,
     }
 
     def __init__(self, output_root="Output_CAPL_Scripts"):
         current_file = Path(__file__).resolve()
         self.base_src_dir = current_file.parent.parent
 
-        if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
             self.template_dir = Path(sys._MEIPASS) / "templates"
             app_root = Path(sys.executable).resolve().parent
         else:
@@ -73,6 +89,10 @@ class JinjaEngine:
             camp_gen = CaplCampaignGenerator(self.template_dir)
             camp_gen.generate(data_frames, category, test_type, self.output_dir)
 
-            log.info(f"--- TOTAL GENERATION TIME: {str(timedelta(seconds=round(time.time() - overall_start)))} ---")
+            log.info(
+                f"--- TOTAL GENERATION TIME: {
+                    str(timedelta(seconds=round(time.time() - overall_start)))
+                } ---"
+            )
         except Exception as e:
             log.exception(f"Engine Failure: {e}")

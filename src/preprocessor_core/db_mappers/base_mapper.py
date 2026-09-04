@@ -33,7 +33,7 @@ class BaseMapper:
             return {}
 
         try:
-            with open(self.cache_path, 'r', encoding='utf-8') as f:
+            with open(self.cache_path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
             log.error(f"Failed to load Database Cache '{self.cache_path}': {e}")
@@ -57,7 +57,7 @@ class BaseMapper:
         val_str = str(val).strip()
         if val_str.lower() == "valuestate":
             return None
-        clean_val = re.sub(r'(valuestate|value state)$', '', val_str, flags=re.IGNORECASE).strip()
+        clean_val = re.sub(r"(valuestate|value state)$", "", val_str, flags=re.IGNORECASE).strip()
         if not clean_val or clean_val.lower() in ["nan", "unknown"]:
             return None
         return clean_val
@@ -66,9 +66,16 @@ class BaseMapper:
     def extract_cluster(path_val) -> str:
         if pd.isna(path_val) or str(path_val).strip() == "":
             return ""
-        clusters = ["CAN_FD_CHASSIS", "CAN_FD_PT", "CAN_ITS3_FD", "CAN_ITS5_FD",
-                    "PCU4_CAN", "CAN_EXT", "CAN_FD_ACCESS2"]
-        tokens = re.split(r'\s*=>\s*|\s*::\s*', str(path_val))
+        clusters = [
+            "CAN_FD_CHASSIS",
+            "CAN_FD_PT",
+            "CAN_ITS3_FD",
+            "CAN_ITS5_FD",
+            "PCU4_CAN",
+            "CAN_EXT",
+            "CAN_FD_ACCESS2",
+        ]
+        tokens = re.split(r"\s*=>\s*|\s*::\s*", str(path_val))
         for token in tokens:
             token_upper = str(token).upper()
             for c in clusters:
@@ -81,10 +88,12 @@ class BaseMapper:
 
     @staticmethod
     def format_enum_to_string(enums) -> str:
-        if not enums: return ""
-        if isinstance(enums, dict): return str(enums) # Preserves dict string format
+        if not enums:
+            return ""
+        if isinstance(enums, dict):
+            return str(enums)  # Preserves dict string format
         return str(enums)
-    
+
     @staticmethod
     def split_namespace_variable(full_path: str) -> tuple:
         """
@@ -93,10 +102,10 @@ class BaseMapper:
         """
         if not full_path or pd.isna(full_path) or "ETH_NOT_FOUND" in str(full_path):
             return None, None
-            
+
         full_path = str(full_path).strip()
         if "::" in full_path:
             parts = full_path.rsplit("::", 1)
             return parts[0], parts[1]
-        
-        return "", full_path # Fallback if no separator found
+
+        return "", full_path  # Fallback if no separator found
